@@ -1,0 +1,10 @@
+{
+  "name": "rapid-squares",
+  "private": true,
+  "description": "Rapid Squares website + backend. Hosting runs `npm start` from here; the code is in server/.",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node --env-file-if-exists=server/.env server/src/server.js",
+    "check": "node --env-file-if-exists=server/.env server/scripts/check.js"
+  }
+}

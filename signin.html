@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sign in · Rapid Squares</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#16222C">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body data-page="signin">
+<main class="auth-page">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <svg width="30" height="30" viewBox="0 0 30 30" fill="none" stroke="#B03A0A" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M3 16 L15 5 L27 16"/><path d="M7 13 V25 H23 V13"/><path d="M15 5 V25"/></svg>
+      <b>Rapid Squares</b>
+    </div>
+
+    <section class="card">
+      <p class="auth-invite hidden" id="invite-banner"></p>
+
+      <!-- Sample-data mode: there's no real sign-in -->
+      <div class="hidden" data-view="sample">
+        <h1 style="margin:0;font-size:24px;">Sign-in isn’t on here</h1>
+        <p class="lede">This copy of the site is running on sample data, so there’s nothing to sign in to. Start the Rapid Squares server (<span class="mono">npm start</span> in the server folder) to use real accounts.</p>
+        <a class="btn btn-primary" href="index.html">Go to the sample site</a>
+      </div>
+
+      <form class="hidden" data-view="signin" novalidate>
+        <h1 style="margin:0;font-size:24px;">Sign in</h1>
+        <div class="fld"><label for="si-email">Email</label><input id="si-email" type="email" autocomplete="email" required></div>
+        <div class="fld"><label for="si-pass">Password</label><input id="si-pass" type="password" autocomplete="current-password" required></div>
+        <p class="form-error hidden" role="alert"></p>
+        <button class="btn btn-primary" type="submit">Sign in</button>
+        <p class="auth-switch"><button type="button" class="linkbtn" data-go="reset">Forgot your password?</button></p>
+        <p class="auth-switch">New to Rapid Squares? <button type="button" class="linkbtn" data-go="signup">Create an account</button></p>
+      </form>
+
+      <form class="hidden" data-view="signup" novalidate>
+        <h1 style="margin:0;font-size:24px;">Create your account</h1>
+        <div class="fld"><label for="su-email">Email</label><input id="su-email" type="email" autocomplete="email" required></div>
+        <div class="fld"><label for="su-pass">Password</label><input id="su-pass" type="password" autocomplete="new-password" minlength="8" required><span class="hint">At least 8 characters.</span></div>
+        <p class="form-error hidden" role="alert"></p>
+        <button class="btn btn-primary" type="submit">Create account</button>
+        <p class="auth-switch">Already have an account? <button type="button" class="linkbtn" data-go="signin">Sign in</button></p>
+      </form>
+
+      <div class="hidden" data-view="confirm">
+        <h1 style="margin:0;font-size:24px;">Check your email</h1>
+        <p class="lede" id="confirm-text">We sent you a link to confirm your email. Open it on this device to finish setting up.</p>
+        <p class="auth-switch"><button type="button" class="linkbtn" data-go="signin">Back to sign in</button></p>
+      </div>
+
+      <form class="hidden" data-view="reset" novalidate>
+        <h1 style="margin:0;font-size:24px;">Reset your password</h1>
+        <p class="lede">Enter your email and we’ll send you a link to choose a new password.</p>
+        <div class="fld"><label for="rs-email">Email</label><input id="rs-email" type="email" autocomplete="email" required></div>
+        <p class="form-error hidden" role="alert"></p>
+        <p class="form-ok hidden" role="status"></p>
+        <button class="btn btn-primary" type="submit">Send reset link</button>
+        <p class="auth-switch"><button type="button" class="linkbtn" data-go="signin">Back to sign in</button></p>
+      </form>
+
+      <form class="hidden" data-view="newpass" novalidate>
+        <h1 style="margin:0;font-size:24px;">Choose a new password</h1>
+        <div class="fld"><label for="np-pass">New password</label><input id="np-pass" type="password" autocomplete="new-password" minlength="8" required><span class="hint">At least 8 characters.</span></div>
+        <p class="form-error hidden" role="alert"></p>
+        <button class="btn btn-primary" type="submit">Save password</button>
+      </form>
+
+      <form class="hidden" data-view="company" novalidate>
+        <h1 style="margin:0;font-size:24px;">Set up your company</h1>
+        <p class="lede">This name goes on your reports. You can add your logo and license number afterward.</p>
+        <div class="fld"><label for="co-name">Company name</label><input id="co-name" type="text" autocomplete="organization" required></div>
+        <div class="fld"><label for="co-you">Your name</label><input id="co-you" type="text" autocomplete="name" required></div>
+        <p class="form-error hidden" role="alert"></p>
+        <button class="btn btn-primary" type="submit">Continue</button>
+        <p class="auth-switch">Were you invited by your company? Open the link in that email instead.</p>
+        <p class="auth-switch"><button type="button" class="linkbtn" data-signout>Use a different account</button></p>
+      </form>
+
+      <form class="hidden" data-view="accept" novalidate>
+        <h1 style="margin:0;font-size:24px;" id="accept-h">Join your team</h1>
+        <div class="fld"><label for="ac-name">Your name</label><input id="ac-name" type="text" autocomplete="name" required></div>
+        <p class="form-error hidden" role="alert"></p>
+        <button class="btn btn-primary" type="submit">Accept invite</button>
+        <p class="auth-switch"><button type="button" class="linkbtn" data-signout>Use a different account</button></p>
+      </form>
+
+      <div class="hidden" data-view="problem">
+        <h1 style="margin:0;font-size:24px;">That didn’t work</h1>
+        <p class="lede" id="problem-text"></p>
+        <p class="auth-switch"><button type="button" class="linkbtn" data-signout>Sign out</button> · <a href="index.html">Go to reports</a></p>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script src="runtime-config.js"></script>
+<script src="config.js"></script>
+<script src="api.js"></script>
+<script src="auth.js"></script>
+<script src="signin.js"></script>
+</body>
+</html>

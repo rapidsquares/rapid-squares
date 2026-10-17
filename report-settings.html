@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Report Settings · Rapid Squares</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#16222C">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Rapid Squares">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body data-page="report-settings">
+
+<header class="topbar">
+  <div class="brand">
+    <svg width="30" height="30" viewBox="0 0 30 30" fill="none" stroke="#F08A4B" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M3 16 L15 5 L27 16"/><path d="M7 13 V25 H23 V13"/><path d="M15 5 V25"/></svg>
+    <span class="brand-name">Rapid Squares</span>
+    <span class="brand-sub">Aerial Roof Reports</span>
+  </div>
+  <nav class="topnav" aria-label="Primary">
+    <a href="new-sketch.html">Place order</a>
+    <a href="report-settings.html" aria-current="page">Report settings</a>
+    <a href="index.html">Order history</a>
+    <a href="team.html">Team</a>
+    <a href="account.html">Account</a>
+</nav>
+</header>
+
+<main class="page" style="max-width: 980px;">
+  <div class="page-head">
+    <div>
+      <p class="eyebrow">Report branding</p>
+      <h1>Set up your roof reports</h1>
+      <p class="lede">Everything here appears on every aerial roof sketch report you send to homeowners and adjusters.</p>
+    </div>
+    <div class="actions">
+      <button type="button" class="btn btn-outline" id="save-company">Save settings</button>
+      <a href="new-sketch.html" class="btn btn-primary">Order a report</a>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-main">
+
+      <section class="card" aria-labelledby="sec-co">
+        <div class="card-title"><span class="num">01</span><h2 id="sec-co">Company</h2></div>
+        <div class="grid-fields">
+          <div class="fld"><label for="co-name">Company name</label><input id="co-name" type="text" placeholder="e.g. Summit Roofing &amp; Exteriors" data-field="name"></div>
+          <div class="fld"><label for="co-lic">License number</label><input id="co-lic" type="text" placeholder="e.g. TX-RC-000000" data-field="license_number"><span class="hint">Shown in the report header and footer.</span></div>
+        </div>
+        <div class="fld">
+          <span class="label">Company logo</span>
+          <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center;">
+            <div style="width: 112px; height: 112px; border-radius: 8px; background: var(--ground); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; overflow: hidden;">
+              <img class="logo-img hidden" alt="Company logo preview" style="max-height: 100%; object-fit: contain;">
+              <span class="logo-empty hint" style="text-align: center; padding: 8px;">No logo yet</span>
+            </div>
+            <label class="drop" style="flex: 1 1 260px; min-height: 112px; padding: 16px;">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#B03A0A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 16v4h16v-4"/></svg>
+              <strong>Upload logo</strong>
+              <span class="hint">PNG, JPG or SVG · transparent background works best</span>
+              <input id="logo-input" class="sr" type="file" accept="image/*">
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="sec-ct">
+        <div class="card-title"><span class="num">02</span><h2 id="sec-ct">Contact info</h2></div>
+        <div class="grid-fields">
+          <div class="fld"><label for="ct-person">Contact name</label><input id="ct-person" type="text" placeholder="e.g. Jordan Reyes" data-field="contact_name"></div>
+          <div class="fld"><label for="ct-phone">Phone</label><input id="ct-phone" type="tel" placeholder="(000) 000-0000" data-field="phone"></div>
+          <div class="fld"><label for="ct-email">Email</label><input id="ct-email" type="email" placeholder="estimates@yourcompany.com" data-field="email"></div>
+          <div class="fld"><label for="ct-web">Website</label><input id="ct-web" type="text" inputmode="url" placeholder="yourcompany.com" data-field="website"></div>
+        </div>
+        <div class="fld"><label for="ct-addr">Business address</label><input id="ct-addr" type="text" placeholder="Street, City, State ZIP" data-field="address"></div>
+      </section>
+
+      <section class="card" aria-labelledby="sec-ph">
+        <div class="split" style="align-items: baseline;">
+          <div class="card-title"><span class="num">03</span><h2 id="sec-ph">Roof photos</h2></div>
+          <span class="hint"><span id="photo-count">0 photos</span> added · include aerial, each slope and any damage</span>
+        </div>
+        <p class="hint" style="margin: 0;">Photos will attach to a report order once ordering is connected. For now they preview here and aren’t saved.</p>
+        <div hidden>
+        </div>
+        <label class="drop" style="min-height: 120px; background: var(--paper-2);">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#B03A0A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 8"/></svg>
+          <strong>Drop roof photos here or browse</strong>
+          <span class="hint">JPG, PNG or HEIC · drone and satellite images welcome</span>
+          <input id="photo-input" class="sr" type="file" accept="image/*" multiple>
+        </label>
+        <div class="thumbs" id="photo-grid"></div>
+      </section>
+    </div>
+
+  </div>
+</main>
+
+<nav class="tabbar" aria-label="Primary (mobile)">
+  <a href="new-sketch.html"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>Place order</a>
+  <a href="report-settings.html" aria-current="page"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>Branding</a>
+  <a href="index.html"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg>Order history</a>
+  <a href="team.html"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.8c2 .8 3.2 2.6 3.6 5.2"/></svg>Team</a>
+  <a href="account.html"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>Account</a>
+</nav>
+
+<script src="runtime-config.js"></script>
+<script src="config.js"></script>
+<script src="api.js"></script>
+<script src="auth.js"></script>
+<script src="mock-api.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

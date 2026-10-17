@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Account Settings · Rapid Squares</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#16222C">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Rapid Squares">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body data-page="account">
+
+<header class="topbar">
+  <div class="brand">
+    <svg width="30" height="30" viewBox="0 0 30 30" fill="none" stroke="#F08A4B" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M3 16 L15 5 L27 16"/><path d="M7 13 V25 H23 V13"/><path d="M15 5 V25"/></svg>
+    <span class="brand-name">Rapid Squares</span>
+    <span class="brand-sub">Aerial Roof Reports</span>
+  </div>
+  <nav class="topnav" aria-label="Primary">
+    <a href="new-sketch.html">Place order</a>
+    <a href="report-settings.html">Report settings</a>
+    <a href="index.html">Order history</a>
+    <a href="team.html">Team</a>
+    <a href="account.html" aria-current="page">Account</a>
+</nav>
+</header>
+
+<main class="page" style="max-width: 1180px;">
+  <div class="page-head">
+    <div>
+      <p class="eyebrow">Your account</p>
+      <h1>Settings</h1>
+    </div>
+    <div class="actions">
+      <button type="button" class="btn btn-outline" id="acct-cancel">Cancel</button>
+      <button type="button" class="btn btn-primary" id="acct-save">Save changes</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <nav class="sidenav" aria-label="Settings sections">
+      <a href="#profile" class="current">Profile</a>
+      <a href="#contact">Contact info</a>
+      <a href="#billing" id="nav-billing">Billing</a>
+      <a href="#security">Password &amp; security</a>
+    </nav>
+
+    <div class="col-main">
+      <section class="card" aria-label="Company" style="gap: 8px;">
+        <div class="fld">
+          <label for="org">Company</label>
+          <div class="locked">
+            <input id="org" type="text" value="[Company Name]" disabled aria-describedby="org-hint">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#56616B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+          </div>
+          <span id="org-hint" class="hint">Managed by your company admin. Contact them to change companies.</span>
+        </div>
+      </section>
+
+      <section id="profile" class="card" aria-labelledby="sec-pr">
+        <h2 id="sec-pr">Profile</h2>
+        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px;">
+          <div style="width: 80px; height: 80px; border-radius: 50%; overflow: hidden; background: var(--line-2); display: flex; align-items: center; justify-content: center; flex: 0 0 80px;">
+            <img id="avatar-img" class="hidden" alt="Profile photo" style="width: 100%; height: 100%; object-fit: cover;">
+            <svg id="avatar-empty" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#56616B" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>
+          </div>
+          <label class="btn drop" style="border-style: solid; border-width: 1px; padding: 0 16px; flex-direction: row;">Upload photo<input id="avatar-input" class="sr" type="file" accept="image/*"></label>
+          <span class="hint">Shown on reports you prepare.</span>
+        </div>
+        <div class="grid-fields" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+          <div class="fld"><label for="fn">First name</label><input id="fn" type="text" placeholder="First name"></div>
+          <div class="fld"><label for="ln">Last name</label><input id="ln" type="text" placeholder="Last name"></div>
+          <div class="fld"><label for="ti">Job title</label><input id="ti" type="text" placeholder="e.g. Estimator"></div>
+          <div class="fld"><label for="tz">Time zone</label>
+            <select id="tz"><option>Central Time (CT)</option><option>Eastern Time (ET)</option><option>Mountain Time (MT)</option><option>Pacific Time (PT)</option></select></div>
+        </div>
+      </section>
+
+      <section id="contact" class="card" aria-labelledby="sec-ct">
+        <h2 id="sec-ct">Contact info</h2>
+        <div class="grid-fields" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+          <div class="fld"><label for="em">Email</label><input id="em" type="email" placeholder="you@yourcompany.com"></div>
+          <div class="fld"><label for="ph">Mobile phone</label><input id="ph" type="tel" placeholder="(000) 000-0000"></div>
+          <div class="fld"><label for="op">Office phone</label><input id="op" type="tel" placeholder="(000) 000-0000"></div>
+          <div class="fld"><label for="ct">Preferred contact</label>
+            <select id="ct"><option>Email</option><option>Text message</option><option>Phone call</option></select></div>
+        </div>
+      </section>
+
+      <section id="billing" class="card" aria-labelledby="sec-bl">
+        <h2 id="sec-bl">Billing</h2>
+        <div class="split" style="gap: 16px; padding: 18px; border-radius: 8px; background: var(--ground);">
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <span class="mono" style="font-size: 11px; letter-spacing: 0.1em; color: var(--accent);">SUBSCRIPTION</span>
+            <span class="display" id="bill-plan" style="font-size: 22px; font-weight: 800;">—</span>
+            <span class="hint" id="bill-plan-detail"></span>
+          </div>
+          <div class="actions">
+            <button type="button" class="btn" data-portal>Cancel subscription</button>
+            <button type="button" class="btn btn-dark" data-portal>Change plan</button>
+          </div>
+        </div>
+        <div class="stats">
+          <div><span class="hint">Reports this month</span><b id="bill-count">—</b></div>
+          <div><span class="hint">Spent this month</span><b id="bill-spend">—</b></div>
+          <div><span class="hint">Free reports left</span><b id="bill-free">—</b></div>
+        </div>
+        <div class="split" style="padding: 16px 0; border-top: 1px solid var(--line-2); border-bottom: 1px solid var(--line-2);">
+          <div style="display: flex; align-items: center; gap: 14px;">
+            <div style="width: 48px; height: 32px; border-radius: 4px; border: 1px solid var(--field); display: flex; align-items: center; justify-content: center;">
+              <svg width="22" height="16" viewBox="0 0 22 16" fill="none" stroke="#3E4A54" stroke-width="1.5" aria-hidden="true"><rect x="1" y="1" width="20" height="14" rx="2"/><path d="M1 5h20"/></svg>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 2px;"><b style="font-size: 14px;" id="bill-card">—</b><span class="hint" id="bill-card-exp"></span></div>
+          </div>
+          <button type="button" class="btn" data-portal>Update payment method</button>
+        </div>
+        <div class="grid-fields" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+          <div class="fld"><label for="bem">Billing email</label><input id="bem" type="email" placeholder="billing@yourcompany.com" disabled></div>
+          <div class="fld"><label for="bad">Billing address</label><input id="bad" type="text" placeholder="Street, City, State ZIP" disabled></div>
+        </div>
+        <span class="hint">Billing email and address are changed on Stripe’s secure billing page.</span>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <b style="font-size: 14px;">Recent charges</b>
+          <div class="table-wrap">
+            <table class="stack" style="min-width: 440px;">
+              <thead><tr><th style="padding-left: 0; background: none;">Date</th><th style="background: none;">Description</th><th style="background: none;">Amount</th><th style="padding-right: 0; background: none;">Receipt</th></tr></thead>
+              <tbody id="invoice-rows"><tr class="loading-row"><td colspan="4" class="hint" style="padding-left: 0;">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="security" class="card" aria-labelledby="sec-sc" style="gap: 16px;">
+        <h2 id="sec-sc">Password &amp; security</h2>
+        <div class="split" style="padding-bottom: 16px; border-bottom: 1px solid var(--line-2);">
+          <div style="display: flex; flex-direction: column; gap: 2px;"><b style="font-size: 14px;">Password</b><span class="hint">Last changed [date]</span></div>
+          <button type="button" class="btn">Change password</button>
+        </div>
+        <div class="split">
+          <div style="display: flex; flex-direction: column; gap: 2px;"><b style="font-size: 14px;">Two-step verification</b><span class="hint">Add a code from your phone when signing in.</span></div>
+          <button type="button" class="btn">Turn on</button>
+        </div>
+      </section>
+
+      <div class="split" style="padding: 4px 4px 0;">
+        <span class="hint">Want to leave [Company Name]? Ask your admin to remove you.</span>
+        <button type="button" class="btn" id="sign-out" style="border: 0; background: transparent; color: var(--danger); text-decoration: underline; padding: 0 4px;">Sign out</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<nav class="tabbar" aria-label="Primary (mobile)">
+  <a href="new-sketch.html"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>Place order</a>
+  <a href="report-settings.html"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>Branding</a>
+  <a href="index.html"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg>Order history</a>
+  <a href="team.html"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.8c2 .8 3.2 2.6 3.6 5.2"/></svg>Team</a>
+  <a href="account.html" aria-current="page"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>Account</a>
+</nav>
+
+<script src="runtime-config.js"></script>
+<script src="config.js"></script>
+<script src="api.js"></script>
+<script src="auth.js"></script>
+<script src="mock-api.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

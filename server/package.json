@@ -1,0 +1,13 @@
+{
+  "name": "rapid-squares-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Rapid Squares backend: serves the website and the /api routes. No third-party packages — uses only Node.js built-ins.",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env src/server.js",
+    "dev": "node --watch --env-file-if-exists=.env src/server.js",
+    "check": "node --env-file-if-exists=.env scripts/check.js"
+  }
+}

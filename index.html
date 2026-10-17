@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Order History · Rapid Squares</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#16222C">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Rapid Squares">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body data-page="reports">
+
+<header class="topbar">
+  <div class="brand">
+    <svg width="30" height="30" viewBox="0 0 30 30" fill="none" stroke="#F08A4B" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M3 16 L15 5 L27 16"/><path d="M7 13 V25 H23 V13"/><path d="M15 5 V25"/></svg>
+    <span class="brand-name">Rapid Squares</span>
+    <span class="brand-sub">Aerial Roof Reports</span>
+  </div>
+  <nav class="topnav" aria-label="Primary">
+    <a href="new-sketch.html">Place order</a>
+    <a href="report-settings.html">Report settings</a>
+    <a href="index.html" aria-current="page">Order history</a>
+    <a href="team.html">Team</a>
+    <a href="account.html">Account</a>
+</nav>
+</header>
+
+<main class="page" style="max-width: 1280px; display: flex; flex-direction: column; gap: 24px;">
+  <div class="page-head" style="margin-bottom: 0;">
+    <div>
+      <p class="eyebrow">Reports</p>
+      <h1>Order history</h1>
+      <p class="lede">Every aerial roof report you've ordered, newest first.</p>
+    </div>
+    <a href="new-sketch.html" class="btn btn-primary">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      Order new report
+    </a>
+  </div>
+
+  <div class="split">
+    <div class="tabs" role="tablist" aria-label="Filter by status">
+      <button type="button" class="tab" role="tab" data-filter="all" aria-selected="true">All<span class="count"></span></button>
+      <button type="button" class="tab" role="tab" data-filter="ready" aria-selected="false">Ready<span class="count"></span></button>
+      <button type="button" class="tab" role="tab" data-filter="processing" aria-selected="false">Processing<span class="count"></span></button>
+      <button type="button" class="tab" role="tab" data-filter="ordered" aria-selected="false">Ordered<span class="count"></span></button>
+      <button type="button" class="tab" role="tab" data-filter="needs" aria-selected="false">Needs info<span class="count"></span></button>
+    </div>
+    <div style="position: relative; flex: 0 1 320px; min-width: 220px;" class="fld search-box">
+      <label for="q" class="sr">Search reports</label>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#56616B" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="position: absolute; left: 14px; top: 14px;"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+      <input id="q" type="search" placeholder="Search address or report #" style="padding-left: 40px; font-size: 14px;">
+    </div>
+  </div>
+
+  <div class="card" style="padding: 0; gap: 0;">
+    <div class="table-wrap">
+      <table class="stack" style="min-width: 860px;">
+        <thead>
+          <tr><th>Report #</th><th>Property</th><th>Report type</th><th>Ordered</th><th>Status</th><th>Actions</th></tr>
+        </thead>
+        <tbody id="report-rows">
+          <tr class="loading-row"><td colspan="6" class="hint">Loading reports…</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p id="no-results" class="hidden" style="margin: 0; padding: 40px 20px; text-align: center; color: #56616B;">No reports match.</p>
+    <p id="scope-note" class="hint hidden" style="margin: 0; padding: 0 24px 16px;">You’re seeing only reports you ordered.</p>
+  </div>
+
+  <div class="split">
+    <span class="hint" id="showing"></span>
+    <div class="actions" style="gap: 6px;">
+      <button type="button" class="btn" id="prev-page" disabled>Previous</button>
+      <button type="button" class="btn" id="next-page" disabled>Next</button>
+    </div>
+  </div>
+</main>
+
+<nav class="tabbar" aria-label="Primary (mobile)">
+  <a href="new-sketch.html"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>Place order</a>
+  <a href="report-settings.html"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>Branding</a>
+  <a href="index.html" aria-current="page"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg>Order history</a>
+  <a href="team.html"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.8c2 .8 3.2 2.6 3.6 5.2"/></svg>Team</a>
+  <a href="account.html"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>Account</a>
+</nav>
+
+<script src="runtime-config.js"></script>
+<script src="config.js"></script>
+<script src="api.js"></script>
+<script src="auth.js"></script>
+<script src="mock-api.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
