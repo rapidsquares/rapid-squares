@@ -28,7 +28,8 @@
     if (code === 'email_not_confirmed' || /not confirmed/i.test(msg)) return 'Confirm your email first: open the link we sent you, then sign in.';
     if (code === 'user_already_exists' || /already registered/i.test(msg)) return 'There’s already an account with that email. Sign in instead.';
     if (code === 'weak_password' || /password should/i.test(msg)) return 'Choose a stronger password: at least 8 characters.';
-    if (code === 'over_email_send_rate_limit' || status === 429) return 'Too many tries. Wait a minute and try again.';
+    if (code === 'over_email_send_rate_limit' || /email rate limit/i.test(msg)) return 'We’ve sent too many sign-up or reset emails in the last hour. Try again later.';
+    if (status === 429) return 'Too many tries. Wait a few minutes and try again.';
     if (/email.*invalid|invalid.*email/i.test(msg)) return 'Enter a valid email address.';
     return msg || 'Sign-in didn’t work. Try again.';
   }
@@ -70,7 +71,7 @@
   }
   var urlType = takeSessionFromUrl();
 
-  function here() { return (location.pathname.split('/').pop() || 'index.html') + location.search; }
+  function here() { return (location.pathname.split('/').pop() || 'orders.html') + location.search; }
 
   RS.auth = {
     linkType: urlType,  // 'signup', 'recovery', 'invite' … when the page was opened from an email link

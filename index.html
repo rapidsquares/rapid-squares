@@ -3,101 +3,177 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Order History · Rapid Squares</title>
+<title>Rapid Squares · Aerial Roof Reports</title>
+<meta name="description" content="Look up any address, see the roof from above, and order an aerial roof measurement report. Premium reports are delivered in under 2 hours.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
 <meta name="theme-color" content="#16222C">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Rapid Squares">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="stylesheet" href="styles.css">
 </head>
-<body data-page="reports">
+<body data-page="landing" class="lp">
 
-<header class="topbar">
-  <div class="brand">
+<header class="topbar lp-top">
+  <a class="brand" href="index.html" aria-label="Rapid Squares home">
     <svg width="30" height="30" viewBox="0 0 30 30" fill="none" stroke="#F08A4B" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M3 16 L15 5 L27 16"/><path d="M7 13 V25 H23 V13"/><path d="M15 5 V25"/></svg>
     <span class="brand-name">Rapid Squares</span>
     <span class="brand-sub">Aerial Roof Reports</span>
-  </div>
-  <nav class="topnav" aria-label="Primary">
-    <a href="new-sketch.html">Place order</a>
-    <a href="report-settings.html">Report settings</a>
-    <a href="index.html" aria-current="page">Order history</a>
-    <a href="team.html">Team</a>
-    <a href="account.html">Account</a>
-</nav>
+  </a>
+  <nav class="lp-nav" aria-label="Primary">
+    <a href="#how" class="lp-hide-sm">How it works</a>
+    <a href="#faq" class="lp-hide-sm">FAQ</a>
+    <a href="#contact" class="lp-hide-sm">Contact</a>
+    <a href="signin.html" id="lp-account">Sign in</a>
+    <a href="new-sketch.html" class="nav-cta">Order a report</a>
+  </nav>
 </header>
 
-<main class="page" style="max-width: 1280px; display: flex; flex-direction: column; gap: 24px;">
-  <div class="page-head" style="margin-bottom: 0;">
-    <div>
-      <p class="eyebrow">Reports</p>
-      <h1>Order history</h1>
-      <p class="lede">Every aerial roof report you've ordered, newest first.</p>
+<main>
+  <!-- Hero -->
+  <section class="lp-hero" aria-labelledby="lp-h1">
+    <div class="lp-wrap lp-hero-in">
+      <div class="lp-hero-copy">
+        <p class="lp-eyebrow">Aerial roof measurements</p>
+        <h1 id="lp-h1">Roof reports from above, without the ladder.</h1>
+        <p class="lp-lede">Look up any address, see the roof from the sky, and order a measurement report. Premium reports are delivered in under 2 hours.</p>
+        <form class="lp-search" action="new-sketch.html" method="get" role="search">
+          <label for="lp-addr" class="sr">Property address</label>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#56616B" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+          <input id="lp-addr" name="address" type="text" placeholder="Enter a property address" autocomplete="street-address" required>
+          <button type="submit" class="btn btn-primary">Look up roof</button>
+        </form>
+        <p class="lp-small">No account needed to look up a roof or order. Create a free account and your first <b>3 Premium reports are free</b>.</p>
+      </div>
+      <figure class="lp-hero-art" aria-hidden="true">
+        <svg viewBox="0 0 420 340" fill="none">
+          <rect x="1" y="1" width="418" height="338" rx="14" fill="#1F2E3A" stroke="#2F4150"/>
+          <g stroke="#3A4C5B" stroke-width="1">
+            <path d="M0 60H420M0 120H420M0 180H420M0 240H420M0 300H420M70 0V340M140 0V340M210 0V340M280 0V340M350 0V340"/>
+          </g>
+          <g stroke="#F08A4B" stroke-width="2.5" stroke-linejoin="round">
+            <path d="M70 80H350V260H70Z" fill="#26394A"/>
+            <path d="M70 80L150 170H270L350 80" />
+            <path d="M70 260L150 170M350 260L270 170" />
+            <path d="M150 170H270" stroke-width="3.5"/>
+          </g>
+          <g fill="#F08A4B"><circle cx="150" cy="170" r="4"/><circle cx="270" cy="170" r="4"/></g>
+          <g font-family="IBM Plex Mono, monospace" font-size="12" fill="#D3DAE0">
+            <text x="196" y="72">42' 6"</text>
+            <text x="186" y="164">ridge 24'</text>
+            <text x="358" y="174">36'</text>
+            <text x="98" y="128">6/12</text>
+            <text x="300" y="128">6/12</text>
+            <text x="198" y="226">6/12</text>
+          </g>
+          <g transform="translate(250 270)">
+            <rect width="150" height="50" rx="8" fill="#F3F1EC"/>
+            <text x="14" y="21" font-family="IBM Plex Sans, sans-serif" font-size="11" fill="#56616B">Total roof area</text>
+            <text x="14" y="40" font-family="Archivo, sans-serif" font-weight="800" font-size="17" fill="#1B2630">[00.0] squares</text>
+          </g>
+        </svg>
+      </figure>
     </div>
-    <a href="new-sketch.html" class="btn btn-primary">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-      Order new report
-    </a>
-  </div>
+  </section>
 
-  <div class="split">
-    <div class="tabs" role="tablist" aria-label="Filter by status">
-      <button type="button" class="tab" role="tab" data-filter="all" aria-selected="true">All<span class="count"></span></button>
-      <button type="button" class="tab" role="tab" data-filter="ready" aria-selected="false">Ready<span class="count"></span></button>
-      <button type="button" class="tab" role="tab" data-filter="processing" aria-selected="false">Processing<span class="count"></span></button>
-      <button type="button" class="tab" role="tab" data-filter="ordered" aria-selected="false">Ordered<span class="count"></span></button>
-      <button type="button" class="tab" role="tab" data-filter="needs" aria-selected="false">Needs info<span class="count"></span></button>
+  <!-- How it works -->
+  <section id="how" class="lp-section" aria-labelledby="how-h">
+    <div class="lp-wrap">
+      <p class="lp-eyebrow">How it works</p>
+      <h2 id="how-h">Three steps from address to report</h2>
+      <ol class="lp-steps">
+        <li>
+          <span class="lp-num">01</span>
+          <h3>Look up the address</h3>
+          <p>Type the property address and see a satellite view of the roof, so you know you've got the right building.</p>
+        </li>
+        <li>
+          <span class="lp-num">02</span>
+          <h3>Choose your report</h3>
+          <p>Pick Premium Residential or Commercial and add the Xactimate (ESX) file if you need it. You see the price before you order.</p>
+        </li>
+        <li>
+          <span class="lp-num">03</span>
+          <h3>Get your report</h3>
+          <p>You get a full report with PDF and full sketch. Premium Residential reports are delivered in under 2 hours.</p>
+        </li>
+      </ol>
+      <a href="new-sketch.html" class="btn btn-primary">Look up a roof</a>
     </div>
-    <div style="position: relative; flex: 0 1 320px; min-width: 220px;" class="fld search-box">
-      <label for="q" class="sr">Search reports</label>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#56616B" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="position: absolute; left: 14px; top: 14px;"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
-      <input id="q" type="search" placeholder="Search address or report #" style="padding-left: 40px; font-size: 14px;">
-    </div>
-  </div>
+  </section>
 
-  <div class="card" style="padding: 0; gap: 0;">
-    <div class="table-wrap">
-      <table class="stack" style="min-width: 860px;">
-        <thead>
-          <tr><th>Report #</th><th>Property</th><th>Report type</th><th>Ordered</th><th>Status</th><th>Actions</th></tr>
-        </thead>
-        <tbody id="report-rows">
-          <tr class="loading-row"><td colspan="6" class="hint">Loading reports…</td></tr>
-        </tbody>
-      </table>
+  <!-- FAQ -->
+  <section id="faq" class="lp-section lp-alt" aria-labelledby="faq-h">
+    <div class="lp-wrap lp-narrow">
+      <p class="lp-eyebrow">FAQ</p>
+      <h2 id="faq-h">Common questions</h2>
+      <div class="lp-faq">
+        <details>
+          <summary>Do I need an account to order?</summary>
+          <p>No. You can look up an address and order as a guest; we email the report to you. A free account gives you your first 3 Premium reports free, keeps your order history, and lets you add your company branding and invite your team.</p>
+        </details>
+        <details>
+          <summary>What's in a report?</summary>
+          <p>A Premium Residential report is a full report with a PDF and full sketch of the roof. You can add the Xactimate (ESX) file for $5.</p>
+        </details>
+        <details>
+          <summary>How fast will I get it?</summary>
+          <p>Premium Residential reports are delivered in under 2 hours. Commercial delivery times: [delivery time].</p>
+        </details>
+        <details>
+          <summary>How much does it cost?</summary>
+          <p>You see the exact price for each report type before you order. Subscribers get lower prices on every report.</p>
+        </details>
+        <details>
+          <summary>Can my whole team use one account?</summary>
+          <p>Yes. Invite your team, choose who can order, who can see every report, and set monthly order limits for each person.</p>
+        </details>
+      </div>
     </div>
-    <p id="no-results" class="hidden" style="margin: 0; padding: 40px 20px; text-align: center; color: #56616B;">No reports match.</p>
-    <p id="scope-note" class="hint hidden" style="margin: 0; padding: 0 24px 16px;">You’re seeing only reports you ordered.</p>
-  </div>
+  </section>
 
-  <div class="split">
-    <span class="hint" id="showing"></span>
-    <div class="actions" style="gap: 6px;">
-      <button type="button" class="btn" id="prev-page" disabled>Previous</button>
-      <button type="button" class="btn" id="next-page" disabled>Next</button>
+  <!-- Contact -->
+  <section id="contact" class="lp-section" aria-labelledby="contact-h">
+    <div class="lp-wrap lp-contact">
+      <div>
+        <p class="lp-eyebrow">Contact</p>
+        <h2 id="contact-h">Questions? Get in touch.</h2>
+        <p class="lp-lede lp-lede-dark">We're happy to help with an order, a report, or setting up your team.</p>
+      </div>
+      <ul class="lp-contact-list">
+        <li><span>Email</span><a href="mailto:[contact email]">[contact email]</a></li>
+        <li><span>Phone</span><a href="tel:[phone]">[phone]</a></li>
+        <li><span>Hours</span><b>[business hours]</b></li>
+      </ul>
     </div>
-  </div>
+  </section>
 </main>
 
-<nav class="tabbar" aria-label="Primary (mobile)">
-  <a href="new-sketch.html"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>Place order</a>
-  <a href="report-settings.html"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>Branding</a>
-  <a href="index.html" aria-current="page"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg>Order history</a>
-  <a href="team.html"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.8c2 .8 3.2 2.6 3.6 5.2"/></svg>Team</a>
-  <a href="account.html"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>Account</a>
-</nav>
+<footer class="lp-foot">
+  <div class="lp-wrap lp-foot-in">
+    <span>© <span id="lp-year">2026</span> Rapid Squares</span>
+    <nav aria-label="Footer">
+      <a href="new-sketch.html">Order a report</a>
+      <a href="signin.html">Sign in</a>
+      <a href="#faq">FAQ</a>
+      <a href="#contact">Contact</a>
+    </nav>
+  </div>
+</footer>
 
 <script src="runtime-config.js"></script>
 <script src="config.js"></script>
 <script src="api.js"></script>
 <script src="auth.js"></script>
-<script src="mock-api.js"></script>
-<script src="app.js"></script>
+<script>
+  // Signed-in visitors (or sample data) get a shortcut into the app instead of "Sign in".
+  (function () {
+    document.getElementById('lp-year').textContent = new Date().getFullYear();
+    var signedIn = window.RS && RS.api && (RS.api.mode === 'sample' || (RS.auth && RS.auth.signedIn()));
+    if (signedIn) { var a = document.getElementById('lp-account'); a.textContent = 'My account'; a.href = 'orders.html'; }
+  })();
+</script>
 </body>
 </html>

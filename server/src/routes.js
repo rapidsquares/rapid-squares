@@ -51,7 +51,60 @@ async function imageUpload(req) {
   return { bytes: Buffer.from(await file.arrayBuffer()), type: file.type, ext };
 }
 
+// Simple per-visitor limit for routes anyone can call without signing in.
+const hits = new Map();
+function rateLimit(req, key, max, windowMs) {
+  const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+  const k = key + '|' + ip, now = Date.now();
+  const list = (hits.get(k) || []).filter((t) => now - t < windowMs);
+  if (list.length >= max) fail(429, 'too_many', 'Too many orders from this connection. Try again later, or create a free account.');
+  list.push(now); hits.set(k, list);
+  if (hits.size > 5000) for (const [kk, v] of hits) if (!v.some((t) => now - t < windowMs)) hits.delete(kk);
+}
+function publicProducts(p) {
+  return Object.values(p).filter((x) => x.id !== 'esx_addon').map((x) => ({ id: x.id, label: x.label, price_cents: x.price_cents, subscriber_price_cents: x.subscriber_price_cents, available: x.available, esx_addon_allowed: x.esx_addon_allowed, delivery_minutes: x.delivery_minutes }));
+}
+
 export function registerRoutes(r) {
+  // ---------- no account needed ----------
+  // Price list for visitors who aren't signed in (regular prices; free reports need an account).
+  r.get('/api/public/products', async () => {
+    const p = await products();
+    return { products: publicProducts(p), esx_price_cents: p.esx_addon ? p.esx_addon.price_cents : 500, free_reports_remaining: 0, subscribed: false, signup_free_reports: config.freeReportsOnSignup };
+  });
+
+  // Guest order: no account. Saved as awaiting payment; it is only sent to RoofQuery after payment.
+  r.post('/api/guest-orders', async ({ req }) => {
+    rateLimit(req, 'guest-order', 5, 60 * 60 * 1000);
+    const b = await readJson(req);
+    const prods = await products();
+    const type = str(b.report_type) || 'premium_residential';
+    const p = prods[type];
+    if (!p || type === 'esx_addon') fail(422, 'invalid', 'Choose a report type.');
+    if (!p.available) fail(422, 'unavailable', `${p.label} isn\u2019t available yet.`);
+    const esx = !!b.esx;
+    if (esx && !p.esx_addon_allowed) fail(422, 'invalid', `The ESX file isn\u2019t available for ${p.label}.`);
+    if (!str(b.address) || typeof b.lat !== 'number' || typeof b.lon !== 'number' || Math.abs(b.lat) > 90 || Math.abs(b.lon) > 180) fail(422, 'invalid', 'Look up the property address first.');
+    const emailAddr = str(b.email).toLowerCase();
+    if (!emailOk(emailAddr)) fail(422, 'invalid', 'Enter the email address where we should send the report.');
+    const name = str(b.name);
+    if (!name) fail(422, 'invalid', 'Enter your name.');
+    if (!stripe.connected() && !config.allowUnpaidTestOrders) fail(503, 'payments_not_connected', 'Guest ordering isn\u2019t open yet: payments aren\u2019t connected.');
+    const esxPrice = prods.esx_addon ? prods.esx_addon.price_cents : 500;
+    const price = p.price_cents + (esx ? esxPrice : 0);
+    const [order] = await db.insert('report_orders', {
+      company_id: null, ordered_by: null, guest_email: emailAddr, guest_name: name, guest_phone: str(b.phone, 40) || null,
+      report_type: type, address: str(b.address, 300), lat: b.lat, lon: b.lon, status: 'awaiting_payment', price_cents: price, esx_purchased: esx,
+      status_detail: stripe.connected() ? 'Waiting for payment' : 'Test order: payment and RoofQuery aren\u2019t connected yet'
+    });
+    await email.send({ to: emailAddr, subject: `Rapid Squares order RS-${order.report_number} received`,
+      text: `Hi ${name},\n\nWe received your order for a ${p.label}${esx ? ' + ESX file' : ''} at ${order.address}.\nOrder number: RS-${order.report_number}\nTotal: $${(price / 100).toFixed(2)}\n\nWe'll email your report to this address when it's ready.` });
+    return {
+      order: { report_number: 'RS-' + order.report_number, product_label: p.label, address: order.address, price_cents: price, esx_purchased: esx, status: order.status },
+      checkout_url: null, email: emailAddr
+    };
+  });
+
   // ---------- health ----------
   r.get('/api/health', async () => ({ ok: true, connected: connected() }));
 

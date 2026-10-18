@@ -214,6 +214,17 @@ create table if not exists public.webhook_events (
   received_at  timestamptz not null default now()
 );
 
+-- ---------- guest orders (no account) ----------
+-- A guest order has no company; it carries the guest's email instead.
+alter table public.report_orders alter column company_id drop not null;
+alter table public.report_orders add column if not exists guest_email text;
+alter table public.report_orders add column if not exists guest_name  text;
+alter table public.report_orders add column if not exists guest_phone text;
+do $$ begin
+  alter table public.report_orders add constraint report_orders_owner_check check (company_id is not null or guest_email is not null);
+exception when duplicate_object then null; end $$;
+create index if not exists report_orders_guest_email_idx on public.report_orders (lower(guest_email)) where guest_email is not null;
+
 -- ---------- lock everything down: only the backend's service key gets in ----------
 -- Row level security is ON for every table with no policies, so the public keys can't read anything.
 alter table public.companies enable row level security;

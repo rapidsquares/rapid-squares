@@ -84,7 +84,7 @@
     main.appendChild(el('section', { class: 'card no-access' }, [
       el('h1', { text: 'You don’t have access to this page', style: 'font-size: 26px;' }),
       el('p', { class: 'lede', text: 'This page needs the “' + need[1] + '” permission. Ask your company admin to turn it on for you.' }),
-      el('div', { class: 'actions' }, [el('a', { href: 'index.html', class: 'btn btn-primary', text: 'Go to Order history' })])
+      el('div', { class: 'actions' }, [el('a', { href: 'orders.html', class: 'btn btn-primary', text: 'Go to Order history' })])
     ]));
     return false;
   }
@@ -513,9 +513,39 @@
     });
   }
 
+  // ---------- visitors without an account (Place order page only) ----------
+  function isGuest() {
+    if (page !== 'new-sketch' || !api) return false;
+    if (api.mode === 'live') return !(RS.auth && RS.auth.signedIn());
+    return new URLSearchParams(location.search).has('guest'); // sample data: ?guest shows the visitor view
+  }
+  function setupGuest() {
+    document.body.classList.add('guest');
+    RS.guest = true;
+    var next = encodeURIComponent('new-sketch.html');
+    var nav = document.querySelector('.topnav');
+    if (nav) {
+      nav.innerHTML = '';
+      nav.appendChild(el('a', { href: 'index.html#how', text: 'How it works' }));
+      nav.appendChild(el('a', { href: 'signin.html?next=' + next, text: 'Sign in' }));
+      nav.appendChild(el('a', { href: 'signin.html?step=signup&next=' + next, class: 'nav-cta', text: 'Create free account' }));
+    }
+    var bar = document.querySelector('.tabbar');
+    if (bar) bar.remove();
+    var brand = document.querySelector('.topbar .brand');
+    if (brand && brand.tagName !== 'A') {
+      var link = el('a', { href: 'index.html', class: 'brand', 'aria-label': 'Rapid Squares home' });
+      while (brand.firstChild) link.appendChild(brand.firstChild);
+      brand.replaceWith(link);
+    }
+  }
+
+  RS.ui = { toast: toast, showError: showError, el: el, money: money, can: can };
+
   // ---------- start ----------
   labelTables();
   if (!api) return;
+  if (isGuest()) { setupGuest(); document.dispatchEvent(new CustomEvent('rs:ready', { detail: null })); return; }
   setupSampleSwitcher();
   if (api.mode === 'live' && !(RS.auth && RS.auth.signedIn())) { RS.auth.toSignIn(); return; }
   api.get('/api/me').then(function (me) {
@@ -530,6 +560,4 @@
     else if (page === 'account') initAccount();
     document.dispatchEvent(new CustomEvent('rs:ready', { detail: me }));
   }).catch(showError);
-
-  RS.ui = { toast: toast, showError: showError, el: el, money: money, can: can };
 })();

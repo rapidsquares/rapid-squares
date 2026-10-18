@@ -16,10 +16,10 @@
 <body data-page="signin">
 <main class="auth-page">
   <div class="auth-card">
-    <div class="auth-brand">
+    <a class="auth-brand" href="index.html" aria-label="Rapid Squares home">
       <svg width="30" height="30" viewBox="0 0 30 30" fill="none" stroke="#B03A0A" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M3 16 L15 5 L27 16"/><path d="M7 13 V25 H23 V13"/><path d="M15 5 V25"/></svg>
       <b>Rapid Squares</b>
-    </div>
+    </a>
 
     <section class="card">
       <p class="auth-invite hidden" id="invite-banner"></p>
@@ -28,7 +28,7 @@
       <div class="hidden" data-view="sample">
         <h1 style="margin:0;font-size:24px;">Sign-in isn’t on here</h1>
         <p class="lede">This copy of the site is running on sample data, so there’s nothing to sign in to. Start the Rapid Squares server (<span class="mono">npm start</span> in the server folder) to use real accounts.</p>
-        <a class="btn btn-primary" href="index.html">Go to the sample site</a>
+        <a class="btn btn-primary" href="orders.html">Go to the sample site</a>
       </div>
 
       <form class="hidden" data-view="signin" novalidate>
@@ -95,7 +95,7 @@
       <div class="hidden" data-view="problem">
         <h1 style="margin:0;font-size:24px;">That didn’t work</h1>
         <p class="lede" id="problem-text"></p>
-        <p class="auth-switch"><button type="button" class="linkbtn" data-signout>Sign out</button> · <a href="index.html">Go to reports</a></p>
+        <p class="auth-switch"><button type="button" class="linkbtn" data-signout>Sign out</button> · <a href="orders.html">Go to reports</a></p>
       </div>
     </section>
   </div>

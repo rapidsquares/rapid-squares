@@ -31,7 +31,10 @@ function runtimeConfig() {
 function cors(req, res) {
   const origin = req.headers.origin;
   if (!origin) return true;
-  const same = origin === config.appUrl || origin === `http://localhost:${config.port}` || origin === `http://127.0.0.1:${config.port}`;
+  // Same site as this server (whatever address it's reached at), the APP_URL, or local testing.
+  const host = String(req.headers['x-forwarded-host'] || req.headers.host || '');
+  const same = origin === config.appUrl || origin === `https://${host}` || origin === `http://${host}` ||
+    origin === `http://localhost:${config.port}` || origin === `http://127.0.0.1:${config.port}`;
   if (!same && !config.allowedOrigins.includes(origin)) return false;
   res.setHeader('Access-Control-Allow-Origin', origin);
   res.setHeader('Vary', 'Origin');

@@ -6,7 +6,8 @@ Clickable mockups for an aerial roof report tool. These are design mockups only:
 
 | File | Screen |
 | --- | --- |
-| `index.html` | **Order history**: ordered reports with status filters and search |
+| `index.html` | **Landing page**: what Rapid Squares is, address search, how it works, FAQ and contact |
+| `orders.html` | **Order history**: ordered reports with status filters and search |
 | `new-sketch.html` | **Place order**: look up an address and see the roof in Azure Maps satellite imagery |
 | `report-settings.html` | **Report settings**: company name, logo, license number, contact info, and roof photos |
 | `team.html` | **Team & invites** (admin): invite employees, pick a role, and set ordering and settings permissions |
@@ -142,6 +143,9 @@ Double-click **`start-live.bat`** again. It checks each setting, tells you in pl
 On Mac or Linux: `cd server`, `cp .env.example .env`, fill it in, then `npm run check` and `npm start`.
 
 ### What works now
+
+- **Landing page** at `/` (`index.html`) with an address search, how it works, FAQ and contact. Contact details are `[placeholders]` to fill in.
+- **No account needed** on the Place order page: visitors can look up a roof, see report types and regular prices, and either order as a guest (name + email) or create a free account, which brings them back to the same order. Guest orders are saved as "awaiting payment" and are never sent to RoofQuery until payment is connected. Order history, Report settings, Team and Account still need sign-in.
 
 - **Create an account**, then name your company. New companies get 3 free Premium reports (`FREE_REPORTS_ON_SIGNUP` in `.env`).
 - **Report settings, profile, logo and photo uploads** save to Supabase.

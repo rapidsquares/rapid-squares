@@ -1,7 +1,7 @@
 {
   "name": "Rapid Squares — Aerial Roof Reports",
   "short_name": "Rapid Squares",
-  "start_url": "index.html",
+  "start_url": "orders.html",
   "display": "standalone",
   "background_color": "#F3F1EC",
   "theme_color": "#16222C",

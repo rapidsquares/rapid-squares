@@ -271,7 +271,7 @@
     if (map && selected) map.setCamera({ center: [selected.lon, selected.lat], zoom: ZOOM, type: 'ease', duration: 500 });
   });
   // ---------- Ordering: pick a report type in a pop-up, then place the order ----------
-  var dlg = $('order-dialog'), catalog = null;
+  var dlg = $('order-dialog'), catalog = null, preselect = null;
   function money(c) { return '$' + (c / 100).toFixed(2); }
   // What this company pays for a product right now (server re-checks everything).
   function priceFor(p) {
@@ -281,7 +281,7 @@
   }
   function loadCatalog() {
     if (catalog) return Promise.resolve(catalog);
-    return RS.api.get('/api/products').then(function (r) { catalog = r; return r; });
+    return RS.api.get(RS.guest ? '/api/public/products' : '/api/products').then(function (r) { catalog = r; return r; });
   }
   function el(tag, cls, text) { var n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; }
 
@@ -338,11 +338,15 @@
       box.appendChild(card);
     });
     if (firstOpen) {
-      var pref = box.querySelector('input[value="premium_residential"]:not([disabled])');
+      var want = preselect && preselect.report_type;
+      var pref = (want && box.querySelector('input[value="' + want + '"]:not([disabled])')) || box.querySelector('input[value="premium_residential"]:not([disabled])');
       (pref || firstOpen).checked = true;
     }
+    if (catalog.signup_free_reports != null) $('od-free-n').textContent = catalog.signup_free_reports;
     $('od-esx-price').textContent = money(catalog.esx_price_cents);
     updateTotal();
+    if (preselect && preselect.esx && !$('od-esx').disabled) { $('od-esx').checked = true; updateTotal(); }
+    preselect = null;
   }
   function current() {
     var r = dlg.querySelector('input[name="report_type"]:checked');
@@ -359,7 +363,7 @@
     $('od-submit').disabled = !p;
     var note = '';
     if (usesFree) note = 'Uses 1 of your free reports' + (esx.checked ? ', ESX file included.' : '.');
-    else if (p && total > 0) note = 'Charged to the card on file when you place the order.';
+    else if (p && total > 0) note = RS.guest ? 'You’ll pay when you place the order.' : 'Charged to the card on file when you place the order.';
     $('od-note').textContent = note;
   }
   function closeDialog() { if (dlg.open) dlg.close(); }
@@ -369,7 +373,9 @@
     if (!window.RS || !RS.api) { var m0 = $('order-msg'); m0.textContent = 'Ordering isn’t available on this page.'; m0.classList.remove('hidden'); return; }
     $('od-address').textContent = selected.label;
     $('od-error').classList.add('hidden');
-    $('od-esx').checked = false;
+    if (!preselect) $('od-esx').checked = false;
+    $('od-guest').classList.toggle('hidden', !RS.guest);
+    $('od-submit').textContent = RS.guest ? 'Place guest order' : 'Place order';
     dlg.showModal();
     loadCatalog().then(renderOptions).catch(function (err) {
       $('od-options').innerHTML = '';
@@ -387,6 +393,7 @@
     e.preventDefault();
     var p = current(); if (!p || !selected) return;
     var btn = $('od-submit'), err = $('od-error'), place = selected, esx = $('od-esx').checked;
+    if (RS.guest) { placeGuestOrder(p, esx); return; }
     btn.disabled = true; btn.setAttribute('aria-busy', 'true'); err.classList.add('hidden');
     RS.api.post('/api/orders', { address: place.label, lat: place.lat, lon: place.lon, report_type: p.id, esx: esx })
       .then(function (r) {
@@ -398,7 +405,7 @@
         m.classList.remove('hidden', 'error');
         m.innerHTML = '';
         m.appendChild(document.createTextNode('Ordered ' + o.report_number + ' · ' + o.product_label + (o.esx_purchased ? ' + ESX' : '') + ' for ' + place.label + '. ' + paid + ' '));
-        var a = document.createElement('a'); a.href = 'index.html'; a.textContent = 'Track it in Order history';
+        var a = document.createElement('a'); a.href = 'orders.html'; a.textContent = 'Track it in Order history';
         m.appendChild(a);
       })
       .catch(function (x) {
@@ -407,6 +414,49 @@
       })
       .then(function () { btn.disabled = false; btn.setAttribute('aria-busy', 'false'); });
   });
+
+  // ---------- visitors without an account ----------
+  function placeGuestOrder(p, esx) {
+    var btn = $('od-submit'), err = $('od-error'), place = selected;
+    var name = $('og-name').value.trim(), email = $('og-email').value.trim();
+    if (!name) { err.textContent = 'Enter your name.'; err.classList.remove('hidden'); $('og-name').focus(); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { err.textContent = 'Enter the email address where we should send the report.'; err.classList.remove('hidden'); $('og-email').focus(); return; }
+    btn.disabled = true; btn.setAttribute('aria-busy', 'true'); err.classList.add('hidden');
+    RS.api.post('/api/guest-orders', { address: place.label, lat: place.lat, lon: place.lon, report_type: p.id, esx: esx, name: name, email: email, phone: $('og-phone').value.trim() })
+      .then(function (r) {
+        if (r.checkout_url) { location.href = r.checkout_url; return; }
+        closeDialog();
+        var o = r.order, m = $('order-msg');
+        m.classList.remove('hidden', 'error');
+        m.innerHTML = '';
+        m.appendChild(document.createTextNode('Order ' + o.report_number + ' received · ' + o.product_label + (o.esx_purchased ? ' + ESX' : '') + ' for ' + place.label + ' · ' + money(o.price_cents) + '. We’ll email the report to ' + r.email + '. '));
+        var a = document.createElement('a'); a.href = 'signin.html?step=signup&next=new-sketch.html'; a.textContent = 'Create a free account to track orders';
+        m.appendChild(a);
+      })
+      .catch(function (x) { err.textContent = (x && x.message) || 'The order didn’t go through. Try again.'; err.classList.remove('hidden'); })
+      .then(function () { btn.disabled = false; btn.setAttribute('aria-busy', 'false'); });
+  }
+
+  // "Sign in" / "Create a free account" from the pop-up: remember the order, then come back to it.
+  var PENDING = 'rs.pendingOrder';
+  function savePending() {
+    var p = current();
+    try { localStorage.setItem(PENDING, JSON.stringify({ place: selected, report_type: p ? p.id : null, esx: $('od-esx').checked, at: Date.now() })); } catch (_) { /* storage blocked */ }
+  }
+  $('od-signin').addEventListener('click', function (e) { e.preventDefault(); savePending(); location.href = 'signin.html?next=' + encodeURIComponent('new-sketch.html?resume=1'); });
+  $('od-signup').addEventListener('click', function (e) { e.preventDefault(); savePending(); location.href = 'signin.html?step=signup&next=' + encodeURIComponent('new-sketch.html?resume=1'); });
+
+  function resumePending() {
+    var saved = null;
+    try { saved = JSON.parse(localStorage.getItem(PENDING)); localStorage.removeItem(PENDING); } catch (_) { /* nothing saved */ }
+    if (!saved || !saved.place || Date.now() - saved.at > 2 * 3600 * 1000) return;
+    input.value = saved.place.label;
+    show(saved.place);
+    preselect = saved;
+    $('od-esx').checked = false;
+    $('order-btn').click();
+  }
+  if (/[?&]resume=1/.test(location.search) && !RS.guest) document.addEventListener('rs:ready', resumePending, { once: true });
 
   // Prefill from ?address=… (e.g. links from other pages)
   var pre = new URLSearchParams(location.search).get('address');

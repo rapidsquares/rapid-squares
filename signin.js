@@ -4,7 +4,7 @@
   var q = new URLSearchParams(location.search);
   var inviteToken = q.get('invite') || '';
   var nextRaw = q.get('next') || '';
-  var next = /^[a-z0-9-]+\.html(\?[^#]*)?$/i.test(nextRaw) ? nextRaw : 'index.html';
+  var next = /^[a-z0-9-]+\.html(\?[^#]*)?$/i.test(nextRaw) ? nextRaw : 'orders.html';
   var invite = null;
 
   function $(s) { return document.querySelector(s); }
@@ -89,11 +89,11 @@
   submit('company', function () {
     var company = need($('#co-name').value, 'Enter your company name.');
     var you = need($('#co-you').value, 'Enter your name.');
-    return RS.api.post('/api/onboarding', { company_name: company, full_name: you }).then(function () { location.replace('index.html'); });
+    return RS.api.post('/api/onboarding', { company_name: company, full_name: you }).then(function () { location.replace(next); });
   });
   submit('accept', function () {
     var name = need($('#ac-name').value, 'Enter your name.');
-    return RS.api.post('/api/invites/accept', { token: inviteToken, full_name: name }).then(function () { location.replace('index.html'); });
+    return RS.api.post('/api/invites/accept', { token: inviteToken, full_name: name }).then(function () { location.replace(next); });
   });
 
   // ---------- start ----------

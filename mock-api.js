@@ -198,6 +198,28 @@
     };
   });
 
+  // ---------- no account needed ----------
+  route('GET', '/api/public/products', function () {
+    return {
+      products: Object.keys(PRODUCTS).map(function (k) { var p = PRODUCTS[k]; return { id: k, label: p.label, price_cents: p.price, subscriber_price_cents: p.subscriber_price, available: p.available, esx_addon_allowed: p.esx, delivery_minutes: p.delivery_minutes }; }),
+      esx_price_cents: ESX_PRICE, free_reports_remaining: 0, subscribed: false, signup_free_reports: 3
+    };
+  });
+  route('POST', '/api/guest-orders', function (c) {
+    var b = c.body || {};
+    var type = b.report_type || 'premium_residential', p = PRODUCTS[type];
+    if (!p) fail(422, 'invalid', 'Choose a report type.');
+    if (!p.available) fail(422, 'unavailable', p.label + ' isn’t available yet.');
+    if (b.esx && !p.esx) fail(422, 'invalid', 'The ESX file isn’t available for ' + p.label + '.');
+    if (!str(b.address) || typeof b.lat !== 'number' || typeof b.lon !== 'number') fail(422, 'invalid', 'Look up the property address first.');
+    var email = str(b.email).toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail(422, 'invalid', 'Enter the email address where we should send the report.');
+    if (!str(b.name)) fail(422, 'invalid', 'Enter your name.');
+    var n = c.db.next_report++; save(c.db);
+    var price = p.price + (b.esx ? ESX_PRICE : 0);
+    return { order: { report_number: 'RS-' + n, product_label: p.label, address: str(b.address, 300), price_cents: price, esx_purchased: !!b.esx, status: 'awaiting_payment' }, checkout_url: null, email: email };
+  });
+
   route('GET', '/api/orders', function (c) {
     advance(c.db);
     var q = c.query, mine = permsOf(c.me).indexOf('orders.view_all') === -1;
@@ -370,7 +392,8 @@
           new URLSearchParams(parts[1] || '').forEach(function (v, k) { query[k] = v; });
           var db = load();
           var me = db.users.filter(function (u) { return u.id === currentUserId(db); })[0];
-          if (!me) fail(401, 'unauthorized', 'Sign in to continue.');
+          var isPublic = /^\/api\/(public\/|guest-orders)/.test(pathname);
+          if (!me && !isPublic) fail(401, 'unauthorized', 'Sign in to continue.');
           for (var i = 0; i < routes.length; i++) {
             var r = routes[i];
             if (r.method !== method) continue;
