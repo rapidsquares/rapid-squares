@@ -401,6 +401,7 @@
         catalog = null; // free-report count may have changed
         closeDialog();
         var o = r.order, m = $('order-msg');
+        if (RS.embed && window.parent !== window) { window.parent.postMessage({ type: 'rs:ordered', report_number: o.report_number, label: o.product_label + (o.esx_purchased ? ' + ESX' : '') + ' for ' + place.label }, location.origin); return; }
         var paid = r.used_free_report ? 'Used 1 free report.' : (r.charged_cents ? money(r.charged_cents) + ' charged to the card on file.' : '');
         m.classList.remove('hidden', 'error');
         m.innerHTML = '';

@@ -198,6 +198,42 @@
       ]);
     }
     load();
+    setupQuickOrder(function () { state.page = 1; load(); });
+  }
+
+  // "Order new report" opens the Place order page inside a pop-up instead of leaving Order history.
+  function setupQuickOrder(onOrdered) {
+    var btn = document.querySelector('.page-head a[href="new-sketch.html"]');
+    if (!btn) return;
+    var dlg = null;
+    function open() {
+      if (!dlg) {
+        var frame = el('iframe', { src: 'new-sketch.html?embed=1', title: 'Order a new report', class: 'qo-frame' });
+        dlg = el('dialog', { class: 'modal qo', 'aria-label': 'Order a new report' }, [
+          el('div', { class: 'qo-head' }, [
+            el('h2', { text: 'Order a new report' }),
+            el('button', { type: 'button', class: 'modal-x', 'aria-label': 'Close', onclick: function () { dlg.close(); } }, [])
+          ]),
+          frame
+        ]);
+        dlg.querySelector('.modal-x').innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+        dlg.addEventListener('click', function (e) { if (e.target === dlg) dlg.close(); });
+        document.body.appendChild(dlg);
+      } else {
+        dlg.querySelector('iframe').src = 'new-sketch.html?embed=1'; // fresh start each time
+      }
+      dlg.showModal();
+    }
+    btn.addEventListener('click', function (e) {
+      if (e.ctrlKey || e.metaKey || e.shiftKey || !window.HTMLDialogElement) return; // new tab / old browser: go to the page
+      e.preventDefault(); open();
+    });
+    window.addEventListener('message', function (e) {
+      if (e.origin !== location.origin || !e.data || e.data.type !== 'rs:ordered') return;
+      if (dlg && dlg.open) dlg.close();
+      toast('Ordered ' + e.data.report_number + ' · ' + e.data.label + '.');
+      onOrdered();
+    });
   }
 
   // ---------- Report settings ----------
@@ -543,10 +579,11 @@
   RS.ui = { toast: toast, showError: showError, el: el, money: money, can: can };
 
   // ---------- start ----------
+  if (page === 'new-sketch' && /[?&]embed=1/.test(location.search)) { document.body.classList.add('embed'); RS.embed = true; }
   labelTables();
   if (!api) return;
   if (isGuest()) { setupGuest(); document.dispatchEvent(new CustomEvent('rs:ready', { detail: null })); return; }
-  setupSampleSwitcher();
+  if (!RS.embed) setupSampleSwitcher();
   if (api.mode === 'live' && !(RS.auth && RS.auth.signedIn())) { RS.auth.toSignIn(); return; }
   api.get('/api/me').then(function (me) {
     ME = me;

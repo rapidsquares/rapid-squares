@@ -537,3 +537,19 @@ body.lp { padding-bottom: 0; background: var(--paper); }
   .lp-search .btn { width: 100%; }
   .lp-section { padding: 48px 0; }
 }
+
+/* Order history: "Order new report" pop-up (Place order page inside a frame) */
+dialog.modal.qo { width: min(1240px, calc(100vw - 32px)); height: min(900px, calc(100vh - 32px)); max-height: none; display: none; flex-direction: column; overflow: hidden; }
+dialog.modal.qo[open] { display: flex; }
+.qo-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px 12px 24px; border-bottom: 1px solid var(--line); }
+.qo-head h2 { margin: 0; font-family: 'Archivo', sans-serif; font-size: 20px; font-weight: 800; }
+.qo-head .modal-x { margin: 0; }
+.qo-frame { flex: 1; width: 100%; border: 0; background: var(--ground); }
+@media (max-width: 720px) {
+  dialog.modal.qo { width: 100vw; height: 100dvh; max-width: 100vw; margin: 0; border-radius: 0; }
+}
+/* Place order page shown inside that pop-up */
+body.embed { padding-bottom: 0; }
+body.embed .topbar, body.embed .tabbar, body.embed .demo, body.embed .page-head .eyebrow { display: none !important; }
+body.embed .page { padding-top: 20px; }
+body.embed .page-head h1 { font-size: 24px; }

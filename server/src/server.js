@@ -18,7 +18,8 @@ registerRoutes(router);
 const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
-  'X-Frame-Options': 'DENY',
+  'X-Frame-Options': 'SAMEORIGIN',
+  'Content-Security-Policy': "frame-ancestors 'self'",
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=(self)'
 };
 
