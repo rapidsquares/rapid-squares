@@ -53,7 +53,13 @@ else if (b.status) skip('Couldn\u2019t list file storage buckets. If logo upload
 
 // 4. Later connections.
 config.roofquery.apiKey ? ok('RoofQuery key: set') : skip('RoofQuery: not connected yet');
-config.stripe.secretKey ? ok('Stripe key: set') : skip(`Stripe: not connected yet${config.allowUnpaidTestOrders ? ' (test orders allowed without payment)' : ''}`);
+if (config.stripe.secretKey) {
+  const st = await tryFetch(`${config.stripe.apiBase}/v1/customers?limit=1`, { headers: { Authorization: 'Bearer ' + config.stripe.secretKey } });
+  if (st.status === 0) bad('Can\u2019t reach Stripe.');
+  else if (st.status === 401) bad('Stripe rejected STRIPE_SECRET_KEY. Copy the secret key (sk_test_…) again.');
+  else ok(`Stripe: connected (${/^sk_live_/.test(config.stripe.secretKey) ? 'LIVE mode, real charges' : 'test mode'})`);
+  config.stripe.webhookSecret ? ok('Stripe webhook secret: set') : bad('STRIPE_WEBHOOK_SECRET is empty. Card saving and payment pages won\u2019t finish without it.');
+} else skip(`Stripe: not connected yet${config.allowUnpaidTestOrders ? ' (test orders allowed without payment)' : ''}`);
 config.email.sendgridKey ? ok('SendGrid key: set') : skip('SendGrid: not connected yet (emails print in the server window)');
 if (!/^https:/.test(config.appUrl) && !/localhost|127\.0\.0\.1/.test(config.appUrl)) bad('APP_URL should start with https:// when the site is online.');
 

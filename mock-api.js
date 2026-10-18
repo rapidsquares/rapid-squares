@@ -369,11 +369,13 @@
     var invoices = c.db.orders.filter(charged).map(function (o) {
       return { date: o.created_at, description: (PRODUCTS[o.report_type] || {}).label + (o.esx_purchased ? ' + ESX' : '') + ' · ' + o.report_number, amount_cents: o.price_cents };
     });
-    var subStart = new Date(co.subscription.renews_at).getTime() - 30 * DAY;
-    invoices.push({ date: iso(subStart), description: 'Rapid Squares subscription · monthly', amount_cents: co.subscription.price_cents });
+    if (co.subscription && co.subscription.status === 'active') {
+      var subStart = new Date(co.subscription.renews_at).getTime() - 30 * DAY;
+      invoices.push({ date: iso(subStart), description: 'Rapid Squares subscription · monthly', amount_cents: co.subscription.price_cents });
+    }
     invoices.sort(function (a, b) { return b.date < a.date ? -1 : 1; });
     return {
-      subscription: clone(co.subscription), card: clone(co.card), free_reports_remaining: co.free_reports_remaining,
+      subscription: co.subscription ? clone(co.subscription) : { status: 'none' }, plans: { monthly_cents: 10000, yearly_cents: 100000 }, card: clone(co.card), free_reports_remaining: co.free_reports_remaining,
       reports_this_month: month.filter(charged).length, spend_this_month_cents: month.filter(charged).reduce(function (s, o) { return s + o.price_cents; }, 0),
       billing_email: co.billing_email, billing_address: co.billing_address, invoices: invoices.slice(0, 10)
     };
@@ -381,6 +383,14 @@
   route('POST', '/api/billing/portal', function (c) {
     need(c.me, 'billing.manage');
     return { url: null, message: 'Stripe’s billing page will open here once Stripe is connected. This is sample data.' };
+  });
+  route('POST', '/api/billing/card', function (c) {
+    need(c.me, 'billing.manage');
+    return { url: null, message: 'Stripe’s secure card page opens here on the live site. This is sample data.' };
+  });
+  route('POST', '/api/billing/subscribe', function (c) {
+    need(c.me, 'billing.manage');
+    return { url: null, message: 'Stripe’s subscription checkout opens here on the live site. This is sample data.' };
   });
 
   // ---------- request entry point (adds a short delay, like a real network call) ----------

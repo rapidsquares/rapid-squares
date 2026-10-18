@@ -26,7 +26,12 @@ export const config = {
     jwtSecret: String(env.SUPABASE_JWT_SECRET || '').trim()
   },
   roofquery: { apiKey: String(env.ROOFQUERY_API_KEY || '').trim(), webhookSecret: String(env.ROOFQUERY_WEBHOOK_SECRET || '').trim(), baseUrl: trimSlash(env.ROOFQUERY_BASE_URL) || 'https://api.roofquery.com' },
-  stripe: { secretKey: String(env.STRIPE_SECRET_KEY || '').trim(), webhookSecret: String(env.STRIPE_WEBHOOK_SECRET || '').trim() },
+  stripe: {
+    secretKey: String(env.STRIPE_SECRET_KEY || '').trim(), webhookSecret: String(env.STRIPE_WEBHOOK_SECRET || '').trim(),
+    apiBase: trimSlash(env.STRIPE_API_BASE) || 'https://api.stripe.com',
+    monthlyCents: parseInt(env.SUBSCRIPTION_MONTHLY_CENTS, 10) || 10000,
+    yearlyCents: parseInt(env.SUBSCRIPTION_YEARLY_CENTS, 10) || 100000
+  },
   azureMapsKey: String(env.AZURE_MAPS_KEY || '').trim(),
   email: { sendgridKey: String(env.SENDGRID_API_KEY || '').trim(), from: String(env.EMAIL_FROM || 'reports@rapidsquares.com').trim() }
 };
@@ -41,6 +46,9 @@ export function configProblems() {
   if (!s.secretKey) p.push('SUPABASE_SECRET_KEY is empty. Use the "secret" (or "service_role") key.');
   if (s.secretKey && s.publishableKey && s.secretKey === s.publishableKey) p.push('SUPABASE_SECRET_KEY and SUPABASE_PUBLISHABLE_KEY are the same. The secret key is a different value.');
   if (/^sb_publishable_/.test(s.secretKey)) p.push('SUPABASE_SECRET_KEY holds a publishable key. Use the key that starts with sb_secret_ (or the service_role key).');
+  const k = config.stripe.secretKey;
+  if (k && !/^(sk|rk)_(test|live)_/.test(k)) p.push('STRIPE_SECRET_KEY should start with sk_test_ (test mode) or sk_live_. The pk_ key is the wrong one.');
+  if (k && !config.stripe.webhookSecret) console.warn('[stripe] STRIPE_WEBHOOK_SECRET is empty: card saving, subscriptions and payment pages won\u2019t finish until it\u2019s set.');
   return p;
 }
 

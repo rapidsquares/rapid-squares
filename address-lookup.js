@@ -272,7 +272,7 @@
   });
   // ---------- Ordering: pick a report type in a pop-up, then place the order ----------
   var dlg = $('order-dialog'), catalog = null, preselect = null;
-  function money(c) { return '$' + (c / 100).toFixed(2); }
+  function money(c) { return '$' + (c / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
   // What this company pays for a product right now (server re-checks everything).
   function priceFor(p) {
     if (!catalog) return 0;
@@ -363,7 +363,7 @@
     $('od-submit').disabled = !p;
     var note = '';
     if (usesFree) note = 'Uses 1 of your free reports' + (esx.checked ? ', ESX file included.' : '.');
-    else if (p && total > 0) note = RS.guest ? 'You’ll pay when you place the order.' : 'Charged to the card on file when you place the order.';
+    else if (p && total > 0) note = RS.guest ? 'You’ll pay on Stripe’s secure page when you place the order.' : (catalog.has_card === false ? 'You’ll add your card on Stripe’s secure page; it’s saved for next time.' : 'Charged to the card on file when you place the order.');
     $('od-note').textContent = note;
   }
   function closeDialog() { if (dlg.open) dlg.close(); }
@@ -397,7 +397,7 @@
     btn.disabled = true; btn.setAttribute('aria-busy', 'true'); err.classList.add('hidden');
     RS.api.post('/api/orders', { address: place.label, lat: place.lat, lon: place.lon, report_type: p.id, esx: esx })
       .then(function (r) {
-        if (r.checkout_url) { location.href = r.checkout_url; return; }
+        if (r.checkout_url) { goToPayment(r.checkout_url); return; }
         catalog = null; // free-report count may have changed
         closeDialog();
         var o = r.order, m = $('order-msg');
@@ -416,6 +416,20 @@
       .then(function () { btn.disabled = false; btn.setAttribute('aria-busy', 'false'); });
   });
 
+  // Stripe's payment page can't open inside the Order history pop-up, so leave the whole page.
+  function goToPayment(url) {
+    var btn = $('od-submit'); btn.textContent = 'Opening secure payment\u2026';
+    try { (RS.embed && window.top !== window ? window.top : window).location.href = url; } catch (_) { location.href = url; }
+  }
+  // Back from Stripe after a guest payment.
+  (function () {
+    var q = new URLSearchParams(location.search);
+    if (!q.get('paid') && !q.get('unpaid')) return;
+    var text = q.get('paid') ? 'Payment received for ' + q.get('paid') + '. We\u2019ll email your report when it\u2019s ready.' : 'Payment wasn\u2019t finished, so ' + q.get('unpaid') + ' wasn\u2019t placed.';
+    if (RS.ui) RS.ui.toast(text, { error: !!q.get('unpaid') }); else say(text, !!q.get('unpaid'));
+    history.replaceState(null, '', location.pathname);
+  })();
+
   // ---------- visitors without an account ----------
   function placeGuestOrder(p, esx) {
     var btn = $('od-submit'), err = $('od-error'), place = selected;
@@ -425,7 +439,7 @@
     btn.disabled = true; btn.setAttribute('aria-busy', 'true'); err.classList.add('hidden');
     RS.api.post('/api/guest-orders', { address: place.label, lat: place.lat, lon: place.lon, report_type: p.id, esx: esx, name: name, email: email, phone: $('og-phone').value.trim() })
       .then(function (r) {
-        if (r.checkout_url) { location.href = r.checkout_url; return; }
+        if (r.checkout_url) { goToPayment(r.checkout_url); return; }
         closeDialog();
         var o = r.order, m = $('order-msg');
         m.classList.remove('hidden', 'error');

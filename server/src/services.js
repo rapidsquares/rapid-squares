@@ -10,12 +10,8 @@ export const roofquery = {
   notConnected(what) { fail(501, 'not_connected', `${what} will be available once RoofQuery is connected.`); }
 };
 
-export const stripe = {
-  connected: () => !!config.stripe.secretKey,
-  // Charges the company's saved card for an order. Returns { payment_id } once connected.
-  async chargeOrder(/* company, amountCents, description */) { return null; },
-  async portalUrl(/* company */) { return null; }
-};
+// Stripe lives in stripe.js; re-exported here so routes can use it like the other services.
+export * as stripe from './stripe.js';
 
 export const email = {
   connected: () => !!config.email.sendgridKey,

@@ -19,7 +19,7 @@
     (kids || []).forEach(function (c) { if (c != null) n.appendChild(typeof c === 'string' ? document.createTextNode(c) : c); });
     return n;
   }
-  function money(cents) { return '$' + (cents / 100).toFixed(2); }
+  function money(cents) { return '$' + (cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
   function fmtDate(iso) { return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }); }
   function fmtTime(iso) {
     var d = new Date(iso), today = new Date();
@@ -199,6 +199,10 @@
     }
     load();
     setupQuickOrder(function () { state.page = 1; load(); });
+    var back = new URLSearchParams(location.search);
+    if (back.get('paid')) { toast('Payment received for ' + back.get('paid') + '. Your order is placed.'); setTimeout(load, 2500); }
+    else if (back.get('unpaid')) toast('Payment wasn\u2019t finished, so ' + back.get('unpaid') + ' wasn\u2019t placed. Order again when you\u2019re ready.', { error: true });
+    if (back.get('paid') || back.get('unpaid')) history.replaceState(null, '', location.pathname);
   }
 
   // "Order new report" opens the Place order page inside a pop-up instead of leaving Order history.
@@ -515,38 +519,58 @@
     links.forEach(function (a) { a.addEventListener('click', function () { links.forEach(function (x) { x.classList.toggle('current', x === a); }); }); });
 
     if (!can('billing.manage')) { $('billing').classList.add('hidden'); $('nav-billing').classList.add('hidden'); return; }
-    api.get('/api/billing').then(function (b) {
-      var s = b.subscription;
-      if (s && s.status === 'active') {
-        $('bill-plan').textContent = (s.plan === 'yearly' ? 'Yearly' : 'Monthly') + ' · ' + money(s.price_cents).replace('.00', '') + (s.plan === 'yearly' ? '/year' : '/month');
-        $('bill-plan-detail').textContent = 'Subscriber prices on every report · renews ' + fmtDate(s.renews_at);
-      } else {
-        $('bill-plan').textContent = 'Pay per report';
-        $('bill-plan-detail').textContent = 'Subscribe to get lower prices on every report.';
-      }
-      $('bill-count').textContent = b.reports_this_month;
-      $('bill-spend').textContent = money(b.spend_this_month_cents);
-      $('bill-free').textContent = b.free_reports_remaining;
-      $('bill-card').textContent = b.card ? b.card.brand + ' ending in ' + b.card.last4 : 'No card saved';
-      $('bill-card-exp').textContent = b.card ? 'Expires ' + b.card.exp : '';
-      $('bem').value = b.billing_email || ''; $('bad').value = b.billing_address || '';
-      var tbody = $('invoice-rows');
-      tbody.innerHTML = '';
-      b.invoices.forEach(function (inv) {
-        tbody.appendChild(el('tr', {}, [
-          el('td', { style: 'padding-left: 0;', text: fmtDate(inv.date) }),
-          el('td', { text: inv.description }),
-          el('td', { text: money(inv.amount_cents) }),
-          el('td', { style: 'padding-right: 0;' }, [el('button', { type: 'button', class: 'linkbtn', text: 'Receipt', 'data-portal': true })])
-        ]));
-      });
-      labelTables($('billing'));
-    }).catch(showError);
+    function goTo(path, body) {
+      return api.post(path, body || {}).then(function (r) { if (r.url) location.href = r.url; else toast(r.message || 'That isn\u2019t available yet.'); }).catch(showError);
+    }
+    function loadBilling() {
+      return api.get('/api/billing').then(function (b) {
+        var s = b.subscription || {}, plans = b.plans || { monthly_cents: 10000, yearly_cents: 100000 };
+        var actions = $('bill-plan-actions'); actions.innerHTML = '';
+        if (s.status === 'active') {
+          $('bill-plan').textContent = (s.plan === 'yearly' ? 'Yearly' : 'Monthly') + ' \u00b7 ' + money(s.price_cents).replace('.00', '') + (s.plan === 'yearly' ? '/year' : '/month');
+          $('bill-plan-detail').textContent = 'Subscriber prices on every report \u00b7 ' + (s.cancel_at_period_end ? 'ends ' : 'renews ') + fmtDate(s.renews_at);
+          actions.appendChild(el('button', { type: 'button', class: 'btn', text: 'Manage subscription', onclick: function () { goTo('/api/billing/portal'); } }));
+        } else {
+          $('bill-plan').textContent = 'Pay per report';
+          $('bill-plan-detail').textContent = s.status === 'past_due' ? 'Your last subscription payment failed. Update your card on the billing page.' : 'Subscribe to get lower prices on every report.';
+          actions.appendChild(el('button', { type: 'button', class: 'btn', text: 'Monthly \u00b7 ' + money(plans.monthly_cents).replace('.00', '') + '/mo', onclick: function () { goTo('/api/billing/subscribe', { plan: 'monthly' }); } }));
+          actions.appendChild(el('button', { type: 'button', class: 'btn btn-dark', text: 'Yearly \u00b7 ' + money(plans.yearly_cents).replace('.00', '') + '/yr', onclick: function () { goTo('/api/billing/subscribe', { plan: 'yearly' }); } }));
+        }
+        $('bill-count').textContent = b.reports_this_month;
+        $('bill-spend').textContent = money(b.spend_this_month_cents);
+        $('bill-free').textContent = b.free_reports_remaining;
+        $('bill-card').textContent = b.card ? b.card.brand + ' ending in ' + b.card.last4 : 'No card saved';
+        $('bill-card-exp').textContent = b.card ? 'Expires ' + b.card.exp : 'Add a card to order paid reports without re-entering it.';
+        $('bill-card-btn').textContent = b.card ? 'Update card' : 'Add a card';
+        $('bem').value = b.billing_email || ''; $('bad').value = b.billing_address || '';
+        var tbody = $('invoice-rows');
+        tbody.innerHTML = '';
+        if (!b.invoices.length) tbody.appendChild(el('tr', {}, [el('td', { colspan: '4', class: 'hint', style: 'padding-left: 0;', text: 'No charges yet.' })]));
+        b.invoices.forEach(function (inv) {
+          tbody.appendChild(el('tr', {}, [
+            el('td', { style: 'padding-left: 0;', text: fmtDate(inv.date) }),
+            el('td', { text: inv.description }),
+            el('td', { text: money(inv.amount_cents) }),
+            el('td', { style: 'padding-right: 0;' }, [inv.receipt_url
+              ? el('a', { href: inv.receipt_url, target: '_blank', rel: 'noopener', class: 'linkbtn', text: 'Receipt' })
+              : el('button', { type: 'button', class: 'linkbtn', text: 'Receipt', 'data-portal': true })])
+          ]));
+        });
+        labelTables($('billing'));
+      }).catch(showError);
+    }
+    loadBilling();
+    $('bill-card-btn').addEventListener('click', function () { goTo('/api/billing/card'); });
     $('billing').addEventListener('click', function (e) {
-      var t = e.target.closest('[data-portal]');
-      if (!t) return;
-      api.post('/api/billing/portal').then(function (r) { if (r.url) location.href = r.url; else toast(r.message); }).catch(showError);
+      if (e.target.closest('[data-portal]')) goTo('/api/billing/portal');
     });
+    // Back from a Stripe page: Stripe tells our server a moment later, so refresh shortly after.
+    var back = new URLSearchParams(location.search);
+    if (back.has('card') || back.has('subscribed')) {
+      toast(back.has('card') ? 'Card saved. It can take a few seconds to show here.' : 'Subscription started. Subscriber prices apply to your next order.');
+      setTimeout(loadBilling, 2500); setTimeout(loadBilling, 7000);
+      history.replaceState(null, '', location.pathname + location.hash);
+    }
   }
 
   // ---------- visitors without an account (Place order page only) ----------

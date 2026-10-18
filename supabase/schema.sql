@@ -220,6 +220,7 @@ alter table public.report_orders alter column company_id drop not null;
 alter table public.report_orders add column if not exists guest_email text;
 alter table public.report_orders add column if not exists guest_name  text;
 alter table public.report_orders add column if not exists guest_phone text;
+alter table public.report_orders add column if not exists receipt_url text;
 do $$ begin
   alter table public.report_orders add constraint report_orders_owner_check check (company_id is not null or guest_email is not null);
 exception when duplicate_object then null; end $$;

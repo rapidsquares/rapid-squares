@@ -2,7 +2,7 @@
 // placeholder in the website's mock-api.js, so pages behave the same on either.
 import crypto from 'node:crypto';
 import { config, connected } from './config.js';
-import { fail, readJson, readForm } from './http.js';
+import { fail, readJson, readForm, readBody } from './http.js';
 import { db, storage, eq, inList, gte } from './supabase.js';
 import { member, signedIn, effectivePerms, cleanPerms, userOut, ALL_PERMS } from './access.js';
 import { roofquery, stripe, email } from './services.js';
@@ -65,6 +65,33 @@ function publicProducts(p) {
   return Object.values(p).filter((x) => x.id !== 'esx_addon').map((x) => ({ id: x.id, label: x.label, price_cents: x.price_cents, subscriber_price_cents: x.subscriber_price_cents, available: x.available, esx_addon_allowed: x.esx_addon_allowed, delivery_minutes: x.delivery_minutes }));
 }
 
+// Paid (or free): mark the order pending and send it to RoofQuery when that's connected.
+async function markPaidAndPlace(order, company, payment) {
+  const patch = { status: 'pending', status_detail: roofquery.connected() ? null : 'Waiting for RoofQuery to be connected' };
+  if (payment && payment.payment_id) patch.stripe_payment_id = payment.payment_id;
+  if (payment && payment.receipt_url) patch.receipt_url = payment.receipt_url;
+  const placed = roofquery.connected() ? await roofquery.placeOrder(order, company) : null;
+  if (placed) patch.roofquery_order_id = placed.roofquery_order_id;
+  const [saved] = await db.update('report_orders', { id: eq(order.id) }, patch);
+  return saved;
+}
+// Called from the Stripe webhook when a payment page is paid.
+async function orderPaid(orderId, paymentIntentId, receiptUrl) {
+  const order = await db.one('report_orders', { id: eq(orderId) });
+  if (!order || order.status !== 'awaiting_payment') return; // already handled
+  const company = order.company_id ? await db.one('companies', { id: eq(order.company_id) }) : null;
+  const saved = await markPaidAndPlace(order, company, { payment_id: paymentIntentId, receipt_url: receiptUrl });
+  if (order.guest_email) {
+    await email.send({ to: order.guest_email, subject: `Payment received for RS-${order.report_number}`,
+      text: `Thanks${order.guest_name ? ', ' + order.guest_name : ''}! We received your payment of $${(order.price_cents / 100).toFixed(2)} for RS-${order.report_number} at ${order.address}.${receiptUrl ? '\nReceipt: ' + receiptUrl : ''}\n\nWe'll email your report to this address when it's ready.` });
+  }
+  return saved;
+}
+async function orderCancelled(orderId, why) {
+  const order = await db.one('report_orders', { id: eq(orderId) });
+  if (order && order.status === 'awaiting_payment') await db.update('report_orders', { id: eq(orderId) }, { status: 'cancelled', status_detail: why });
+}
+
 export function registerRoutes(r) {
   // ---------- no account needed ----------
   // Price list for visitors who aren't signed in (regular prices; free reports need an account).
@@ -97,6 +124,11 @@ export function registerRoutes(r) {
       report_type: type, address: str(b.address, 300), lat: b.lat, lon: b.lon, status: 'awaiting_payment', price_cents: price, esx_purchased: esx,
       status_detail: stripe.connected() ? 'Waiting for payment' : 'Test order: payment and RoofQuery aren\u2019t connected yet'
     });
+    if (stripe.connected()) {
+      const url = await stripe.checkoutForOrder({ customer: null, email: emailAddr, guest: true, amountCents: price, order,
+        description: `${p.label}${esx ? ' + ESX' : ''} \u00b7 RS-${order.report_number}` });
+      return { order: { report_number: 'RS-' + order.report_number, product_label: p.label, address: order.address, price_cents: price, esx_purchased: esx, status: order.status }, checkout_url: url, email: emailAddr };
+    }
     await email.send({ to: emailAddr, subject: `Rapid Squares order RS-${order.report_number} received`,
       text: `Hi ${name},\n\nWe received your order for a ${p.label}${esx ? ' + ESX file' : ''} at ${order.address}.\nOrder number: RS-${order.report_number}\nTotal: $${(price / 100).toFixed(2)}\n\nWe'll email your report to this address when it's ready.` });
     return {
@@ -167,7 +199,8 @@ export function registerRoutes(r) {
     return {
       products: Object.values(p).filter((x) => x.id !== 'esx_addon').map((x) => ({ id: x.id, label: x.label, price_cents: x.price_cents, subscriber_price_cents: x.subscriber_price_cents, available: x.available, esx_addon_allowed: x.esx_addon_allowed, delivery_minutes: x.delivery_minutes })),
       esx_price_cents: p.esx_addon ? p.esx_addon.price_cents : 500,
-      free_reports_remaining: m.company.free_reports_remaining, subscribed: m.company.subscription_status === 'active'
+      free_reports_remaining: m.company.free_reports_remaining, subscribed: m.company.subscription_status === 'active',
+      has_card: !stripe.connected() || !!(m.company.stripe_config && m.company.stripe_config.card)
     };
   });
 
@@ -241,18 +274,19 @@ export function registerRoutes(r) {
     });
     let payment = null;
     try {
-      if (price > 0 && stripe.connected()) payment = await stripe.chargeOrder(m.company, price, `${p.label} · RS-${order.report_number}`);
+      if (price > 0 && stripe.connected()) payment = await stripe.chargeOrder(m.company, price, `${p.label}${esx ? ' + ESX' : ''} \u00b7 RS-${order.report_number}`, order);
     } catch (e) {
       await db.update('report_orders', { id: eq(order.id) }, { status: 'cancelled', status_detail: 'Payment failed' });
       if (usedFree) await db.update('companies', { id: eq(m.company.id) }, { free_reports_remaining: m.company.free_reports_remaining });
       throw e;
     }
-    const patch = { status: 'pending', stripe_payment_id: payment ? payment.payment_id : null,
-      status_detail: roofquery.connected() ? null : 'Waiting for RoofQuery to be connected' };
-    const placed = roofquery.connected() ? await roofquery.placeOrder(order, m.company) : null;
-    if (placed) patch.roofquery_order_id = placed.roofquery_order_id;
-    const [saved] = await db.update('report_orders', { id: eq(order.id) }, patch);
-    return { order: orderOut(saved, prods, { [m.user.id]: m.user }), checkout_url: null, charged_cents: price, used_free_report: usedFree };
+    if (payment && payment.checkout_url) {
+      // No saved card (or the bank wants confirmation): pay on Stripe's page; the webhook finishes the order.
+      const [waiting] = await db.update('report_orders', { id: eq(order.id) }, { status_detail: 'Waiting for payment' });
+      return { order: orderOut(waiting, prods, { [m.user.id]: m.user }), checkout_url: payment.checkout_url, charged_cents: 0, used_free_report: usedFree };
+    }
+    const saved = await markPaidAndPlace(order, m.company, payment);
+    return { order: orderOut(saved, prods, { [m.user.id]: m.user }), checkout_url: null, charged_cents: price, used_free_report: usedFree, receipt_url: saved.receipt_url || null };
   });
 
   r.get('/api/orders/:id/pdf', async ({ req, params }) => { const m = await member(req); m.need('orders.download'); await findOrder(m, params.id); roofquery.notConnected('The PDF report'); });
@@ -395,17 +429,45 @@ export function registerRoutes(r) {
     const month = await db.select('report_orders', { company_id: eq(c.id), created_at: gte(startOfMonth()), status: 'not.in.(failed,cancelled,awaiting_payment)', select: 'price_cents' });
     const prods = await products();
     return {
-      subscription: c.subscription_status === 'active' ? { plan: c.subscription_plan, status: 'active', price_cents: c.subscription_plan === 'yearly' ? 100000 : 10000, renews_at: c.subscription_renews_at } : { status: c.subscription_status },
-      card: cfg.card || null, free_reports_remaining: c.free_reports_remaining,
+      subscription: c.subscription_status === 'active' ? { plan: c.subscription_plan, status: 'active', price_cents: c.subscription_plan === 'yearly' ? config.stripe.yearlyCents : config.stripe.monthlyCents, renews_at: c.subscription_renews_at, cancel_at_period_end: !!cfg.cancel_at_period_end } : { status: c.subscription_status || 'none' },
+      plans: { monthly_cents: config.stripe.monthlyCents, yearly_cents: config.stripe.yearlyCents },
+      card: cfg.card ? { brand: cfg.card.brand, last4: cfg.card.last4, exp: cfg.card.exp } : null, free_reports_remaining: c.free_reports_remaining,
       reports_this_month: month.length, spend_this_month_cents: month.reduce((s, o) => s + o.price_cents, 0),
       billing_email: cfg.billing_email || c.email, billing_address: cfg.billing_address || c.address,
-      invoices: charged.map((o) => ({ date: o.created_at, description: `${(prods[o.report_type] || {}).label || o.report_type}${o.esx_purchased ? ' + ESX' : ''} · RS-${o.report_number}`, amount_cents: o.price_cents })),
+      invoices: charged.map((o) => ({ date: o.created_at, description: `${(prods[o.report_type] || {}).label || o.report_type}${o.esx_purchased ? ' + ESX' : ''} · RS-${o.report_number}`, amount_cents: o.price_cents, receipt_url: o.receipt_url || null })),
       payments_connected: stripe.connected()
     };
   });
   r.post('/api/billing/portal', async ({ req }) => {
     const m = await member(req); m.need('billing.manage');
-    const url = stripe.connected() ? await stripe.portalUrl(m.company) : null;
-    return url ? { url } : { url: null, message: 'Stripe\u2019s billing page will open here once Stripe is connected.' };
+    if (!stripe.connected()) return { url: null, message: 'Stripe\u2019s billing page will open here once Stripe is connected.' };
+    return { url: await stripe.portalUrl(m.company) };
+  });
+  // Stripe page to add or replace the saved card.
+  r.post('/api/billing/card', async ({ req }) => {
+    const m = await member(req); m.need('billing.manage');
+    if (!stripe.connected()) return { url: null, message: 'Adding a card will work once Stripe is connected.' };
+    return { url: await stripe.cardSetupUrl(m.company) };
+  });
+  // Stripe page to start a subscription: { plan: 'monthly' | 'yearly' }
+  r.post('/api/billing/subscribe', async ({ req }) => {
+    const m = await member(req); m.need('billing.manage'); const b = await readJson(req);
+    if (!stripe.connected()) return { url: null, message: 'Subscriptions will work once Stripe is connected.' };
+    return { url: await stripe.subscribeUrl(m.company, str(b.plan)) };
+  });
+
+  // ---------- Stripe webhook (called by Stripe, not the website) ----------
+  r.post('/webhooks/stripe', async ({ req }) => {
+    const raw = await readBody(req, 1024 * 1024);
+    const event = stripe.verifySignature(raw, req.headers['stripe-signature']);
+    try { await db.insert('webhook_events', { id: event.id, source: 'stripe' }); }
+    catch (e) { if (e.status === 409) return { received: true, duplicate: true }; throw e; }
+    try {
+      await stripe.handleEvent(event, { onOrderPaid: orderPaid, onOrderCancelled: orderCancelled });
+    } catch (e) {
+      await db.remove('webhook_events', { id: eq(event.id) }).catch(() => {}); // let Stripe retry
+      throw e;
+    }
+    return { received: true };
   });
 }

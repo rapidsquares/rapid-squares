@@ -153,6 +153,16 @@ On Mac or Linux: `cd server`, `cp .env.example .env`, fill it in, then `npm run 
 - **Ordering** creates the report record with the right price (free report, subscriber or regular price, ESX add-on). Until Stripe and RoofQuery are connected, nothing is charged and the report waits as "pending". `ALLOW_UNPAID_TEST_ORDERS=true` allows this; set it to `false` before launch.
 - **PDF and ESX downloads** say they're coming once RoofQuery is connected.
 
+### Payments (Stripe)
+
+Set `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` (in `server\.env` and on Render) and the site takes real payments:
+
+- **Orders:** free reports are used first. Then the saved card is charged right away. With no saved card (or if the bank wants the customer to confirm), the buyer goes to Stripe's secure payment page and the card is saved for next time.
+- **Guests** always pay on Stripe's page; the order is only sent on once Stripe confirms payment.
+- **Account › Billing:** add or update the card, subscribe ($100/month or $1,000/year, from `SUBSCRIPTION_MONTHLY_CENTS` / `SUBSCRIPTION_YEARLY_CENTS`), manage or cancel through Stripe's billing page, and open a receipt for each charge.
+- **Webhook:** Stripe must be able to call `https://<your site>/webhooks/stripe`. Card saving, subscriptions and payment-page orders finish there.
+- When Stripe is connected, `ALLOW_UNPAID_TEST_ORDERS` no longer matters for paid orders; set it to `false`.
+
 ### Good to know
 
 - Supabase emails a confirmation link to new accounts, and its built-in email only sends a few an hour. For testing, you can turn off **Confirm email** under Authentication › Sign In / Providers › Email. Turn it back on before launch.

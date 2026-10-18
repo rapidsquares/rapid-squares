@@ -50,6 +50,14 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://local');
   const pathname = url.pathname;
   try {
+    // Webhooks come from Stripe's servers (no browser, no CORS); signature checks happen in the route.
+    if (pathname.startsWith('/webhooks/') && req.method === 'POST') {
+      const hit = router.match('POST', pathname);
+      if (!hit || hit.methodNotAllowed) return sendJson(res, 404, { error: { code: 'not_found', message: 'Unknown webhook.' } });
+      const out = await hit.handler({ req, res, params: hit.params, query: url.searchParams });
+      if (!res.headersSent) sendJson(res, 200, out ?? {});
+      return;
+    }
     if (pathname.startsWith('/api/')) {
       if (!cors(req, res)) return sendJson(res, 403, { error: { code: 'origin_not_allowed', message: 'This website isn’t allowed to use the Rapid Squares API.' } });
       if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }

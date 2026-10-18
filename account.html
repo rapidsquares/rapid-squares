@@ -103,10 +103,7 @@
             <span class="display" id="bill-plan" style="font-size: 22px; font-weight: 800;">—</span>
             <span class="hint" id="bill-plan-detail"></span>
           </div>
-          <div class="actions">
-            <button type="button" class="btn" data-portal>Cancel subscription</button>
-            <button type="button" class="btn btn-dark" data-portal>Change plan</button>
-          </div>
+          <div class="actions" id="bill-plan-actions"></div>
         </div>
         <div class="stats">
           <div><span class="hint">Reports this month</span><b id="bill-count">—</b></div>
@@ -120,13 +117,13 @@
             </div>
             <div style="display: flex; flex-direction: column; gap: 2px;"><b style="font-size: 14px;" id="bill-card">—</b><span class="hint" id="bill-card-exp"></span></div>
           </div>
-          <button type="button" class="btn" data-portal>Update payment method</button>
+          <button type="button" class="btn" id="bill-card-btn">Add a card</button>
         </div>
         <div class="grid-fields" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
           <div class="fld"><label for="bem">Billing email</label><input id="bem" type="email" placeholder="billing@yourcompany.com" disabled></div>
           <div class="fld"><label for="bad">Billing address</label><input id="bad" type="text" placeholder="Street, City, State ZIP" disabled></div>
         </div>
-        <span class="hint">Billing email and address are changed on Stripe’s secure billing page.</span>
+        <span class="hint">Billing email and address are changed on Stripe’s secure billing page. <button type="button" class="linkbtn" data-portal>Open billing page</button></span>
         <div style="display: flex; flex-direction: column; gap: 8px;">
           <b style="font-size: 14px;">Recent charges</b>
           <div class="table-wrap">
