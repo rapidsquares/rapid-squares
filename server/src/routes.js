@@ -308,9 +308,9 @@ export function registerRoutes(r) {
 
   async function sendInviteEmail(m, inv, token) {
     const url = inviteUrl(token);
-    await email.send({ to: inv.email, subject: `${m.user.full_name} invited you to ${m.company.name} on Rapid Squares`,
+    const r = await email.send({ to: inv.email, subject: `${m.user.full_name} invited you to ${m.company.name} on Rapid Squares`,
       text: `${m.user.full_name} invited you to join ${m.company.name} on Rapid Squares.\n\nAccept the invite: ${url}\n\nThis link expires ${new Date(inv.expires_at).toDateString()}.` });
-    return url;
+    return { url, sent: !!(r && r.sent) };
   }
 
   r.post('/api/invites', async ({ req }) => {
@@ -340,7 +340,7 @@ export function registerRoutes(r) {
     const out = [];
     for (let i = 0; i < rows.length; i++) {
       const { token_hash, ...inv } = rows.find((x) => x.email === emails[i]) || rows[i];
-      out.push({ ...inv, invite_url: await sendInviteEmail(m, inv, tokens[i]), email_sent: email.connected() });
+      { const e = await sendInviteEmail(m, inv, tokens[i]); out.push({ ...inv, invite_url: e.url, email_sent: e.sent }); }
     }
     return { invites: out };
   });
@@ -356,7 +356,7 @@ export function registerRoutes(r) {
     const token = newToken();
     const [u] = await db.update('invites', { id: eq(inv.id) }, { token_hash: sha256(token), status: 'pending', expires_at: new Date(Date.now() + 7 * DAY).toISOString() });
     const { token_hash, ...out } = u;
-    return { invite: { ...out, invite_url: await sendInviteEmail(m, u, token), email_sent: email.connected() } };
+    { const e = await sendInviteEmail(m, u, token); return { invite: { ...out, invite_url: e.url, email_sent: e.sent } }; }
   });
   r.delete('/api/invites/:id', async ({ req, params }) => {
     const m = await member(req); m.need('users.manage'); const inv = await findInvite(m, params.id);

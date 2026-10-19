@@ -149,7 +149,7 @@ On Mac or Linux: `cd server`, `cp .env.example .env`, fill it in, then `npm run 
 
 - **Create an account**, then name your company. New companies get 3 free Premium reports (`FREE_REPORTS_ON_SIGNUP` in `.env`).
 - **Report settings, profile, logo and photo uploads** save to Supabase.
-- **Team invites:** until SendGrid is connected, invites aren't emailed. The Team page shows each person's invite link to send yourself, and the server window prints the email it would have sent. Each link works once, for that email address only.
+- **Team invites:** until Resend is connected, invites aren't emailed. The Team page shows each person's invite link to send yourself, and the server window prints the email it would have sent. Each link works once, for that email address only.
 - **Ordering** creates the report record with the right price (free report, subscriber or regular price, ESX add-on). Until Stripe and RoofQuery are connected, nothing is charged and the report waits as "pending". `ALLOW_UNPAID_TEST_ORDERS=true` allows this; set it to `false` before launch.
 - **PDF and ESX downloads** say they're coming once RoofQuery is connected.
 
@@ -166,6 +166,7 @@ Set `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` (in `server\.env` and on Ren
 ### Good to know
 
 - Supabase emails a confirmation link to new accounts, and its built-in email only sends a few an hour. For testing, you can turn off **Confirm email** under Authentication › Sign In / Providers › Email. Turn it back on before launch.
+- **Email (Resend):** set `RESEND_API_KEY` and `EMAIL_FROM` (an address on a domain verified in Resend › Domains) in `server/.env` and on Render. The site then emails guest order confirmations, payment confirmations and team invites. Supabase's sign-up and password-reset emails are separate: point Supabase › Authentication › Emails › SMTP Settings at Resend (host `smtp.resend.com`, port `465`, username `resend`, password = a Resend API key) to send them from your domain and lift the few-an-hour limit. `npm run check` tells you whether the key works and the domain is verified.
 - **Azure key on the real server:** put it in `server\.env` as `AZURE_MAPS_KEY=` (and in Render's environment variables when hosted) instead of `config.js`, so it never goes on GitHub. The server hands it to the Place order page.
 - If your Azure Maps key has CORS rules, add `http://localhost:3000` to them.
 - Opening the site with `start-windows.bat` (port 8000) still uses sample data, so you can keep showing the mockups without signing in.

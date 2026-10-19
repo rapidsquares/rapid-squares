@@ -94,6 +94,6 @@ server.listen(config.port, () => {
   console.log(`  Supabase   ${mark(c.supabase)}`);
   console.log(`  RoofQuery  ${mark(c.roofquery)}`);
   console.log(`  Stripe     ${mark(c.stripe)}${!c.stripe && config.allowUnpaidTestOrders ? ' (test orders allowed without payment)' : ''}`);
-  console.log(`  SendGrid   ${mark(c.email)}${c.email ? '' : ' (emails print here instead)'}`);
+  console.log(`  Resend     ${mark(c.email)}${c.email ? '' : ' (emails print here instead)'}`);
   console.log('\nPress Ctrl+C to stop.\n');
 });

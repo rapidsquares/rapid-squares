@@ -33,7 +33,12 @@ export const config = {
     yearlyCents: parseInt(env.SUBSCRIPTION_YEARLY_CENTS, 10) || 100000
   },
   azureMapsKey: String(env.AZURE_MAPS_KEY || '').trim(),
-  email: { sendgridKey: String(env.SENDGRID_API_KEY || '').trim(), from: String(env.EMAIL_FROM || 'reports@rapidsquares.com').trim() }
+  email: {
+    resendKey: String(env.RESEND_API_KEY || '').trim().replace(/^["']|["']$/g, ''),
+    apiBase: trimSlash(env.RESEND_API_BASE) || 'https://api.resend.com',
+    from: String(env.EMAIL_FROM || 'Rapid Squares <reports@rapidsquares.com>').trim().replace(/^["']|["']$/g, ''),
+    replyTo: String(env.EMAIL_REPLY_TO || '').trim()
+  }
 };
 
 // Problems that stop the server from starting, explained in plain words.
@@ -49,6 +54,9 @@ export function configProblems() {
   const k = config.stripe.secretKey;
   if (k && !/^(sk|rk)_(test|live)_/.test(k)) p.push('STRIPE_SECRET_KEY should start with sk_test_ (test mode) or sk_live_. The pk_ key is the wrong one.');
   if (k && !config.stripe.webhookSecret) console.warn('[stripe] STRIPE_WEBHOOK_SECRET is empty: card saving, subscriptions and payment pages won\u2019t finish until it\u2019s set.');
+  const rk = config.email.resendKey;
+  if (rk && !/^re_/.test(rk)) p.push('RESEND_API_KEY should start with re_. Copy it again from Resend › API Keys.');
+  if (!/@[^@\s>]+\.[a-z]{2,}/i.test(config.email.from)) p.push('EMAIL_FROM should be an address like Rapid Squares <reports@rapidsquares.com>.');
   return p;
 }
 
@@ -57,6 +65,6 @@ export function connected() {
     supabase: !!(config.supabase.url && config.supabase.secretKey),
     roofquery: !!config.roofquery.apiKey,
     stripe: !!config.stripe.secretKey,
-    email: !!config.email.sendgridKey
+    email: !!config.email.resendKey
   };
 }

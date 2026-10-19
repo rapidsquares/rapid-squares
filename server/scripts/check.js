@@ -60,7 +60,20 @@ if (config.stripe.secretKey) {
   else ok(`Stripe: connected (${/^sk_live_/.test(config.stripe.secretKey) ? 'LIVE mode, real charges' : 'test mode'})`);
   config.stripe.webhookSecret ? ok('Stripe webhook secret: set') : bad('STRIPE_WEBHOOK_SECRET is empty. Card saving and payment pages won\u2019t finish without it.');
 } else skip(`Stripe: not connected yet${config.allowUnpaidTestOrders ? ' (test orders allowed without payment)' : ''}`);
-config.email.sendgridKey ? ok('SendGrid key: set') : skip('SendGrid: not connected yet (emails print in the server window)');
+if (config.email.resendKey) {
+  const fromDomain = (config.email.from.match(/@([^@\s>]+)/) || [])[1] || '';
+  const rs = await tryFetch(`${config.email.apiBase}/domains`, { headers: { Authorization: 'Bearer ' + config.email.resendKey } });
+  const body = rs.status ? await rs.json().catch(() => ({})) : {};
+  if (rs.status === 0) bad('Can\u2019t reach Resend.');
+  else if (body.name === 'restricted_api_key') ok(`Resend: connected (sending-only key; make sure ${fromDomain} is verified in Resend › Domains)`);
+  else if (!rs.ok) bad('Resend rejected RESEND_API_KEY. Copy the key (re_…) again from Resend › API Keys.');
+  else {
+    const d = (body.data || []).find((x) => x.name === fromDomain || fromDomain.endsWith('.' + x.name));
+    if (!d) bad(`Resend: connected, but ${fromDomain} isn\u2019t added in Resend › Domains, so emails from ${config.email.from} will be refused.`);
+    else if (d.status !== 'verified') bad(`Resend: ${d.name} is added but not verified yet (status: ${d.status}). Check the DNS records at GoDaddy, then click Verify in Resend.`);
+    else ok(`Resend: connected, sending from ${config.email.from}`);
+  }
+} else skip('Resend: not connected yet (emails print in the server window)');
 if (!/^https:/.test(config.appUrl) && !/localhost|127\.0\.0\.1/.test(config.appUrl)) bad('APP_URL should start with https:// when the site is online.');
 
 console.log(failed ? '\nSome checks failed. Fix them, then run `npm run check` again.\n' : '\nAll set. Start the app with `npm start`.\n');
