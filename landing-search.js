@@ -61,8 +61,10 @@
         if (id !== reqId) return; // a newer keystroke won
         render((data.features || []).map(toItem).filter(function (p) { return p.label; }));
       }).catch(function () { if (id === reqId) render([]); });
-    }, 250);
+    }, 200);
   });
+  // Typed before this script was ready (slow first load)? Show suggestions for it now.
+  if (input.value.trim().length >= 3 && document.activeElement === input) input.dispatchEvent(new Event('input'));
   input.addEventListener('keydown', function (e) {
     var open = !list.classList.contains('hidden');
     if (e.key === 'ArrowDown' && open) { e.preventDefault(); highlight(active + 1); }

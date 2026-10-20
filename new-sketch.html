@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Place Order · Rapid Squares</title>
+<link rel="preconnect" href="https://atlas.microsoft.com" crossorigin>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
@@ -72,10 +73,19 @@
         <span id="ob-line2" class="hint"></span>
         <span id="ob-pin" class="ob-pin hidden">Using your pin location</span>
       </div>
-      <button type="button" id="order-btn" class="btn btn-primary order-bar-btn">Order report for this roof</button>
+      <div class="order-bar-actions">
+        <button type="button" id="iq-btn" class="btn order-bar-btn hidden" aria-controls="iq-panel">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>
+          <span id="iq-btn-text">Instant estimate</span>
+        </button>
+        <button type="button" id="order-btn" class="btn btn-primary order-bar-btn">Order report for this roof</button>
+      </div>
     </div>
     <p id="order-msg" class="hint hidden" role="status" style="margin: 0;"></p>
   </section>
+
+  <!-- Instant estimate (RoofQuery Instant Query): subscribers only -->
+  <section id="iq-panel" class="card iq-panel hidden" aria-labelledby="iq-h" aria-live="polite"></section>
 
   <div class="row" style="gap: 20px;">
     <section class="card map-card col-main" aria-labelledby="map-h" style="padding: 0; gap: 0; overflow: hidden;">

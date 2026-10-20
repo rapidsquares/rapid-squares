@@ -398,10 +398,8 @@
       $('inv-h').textContent = 'Invite employees';
       $('send-label').textContent = 'Send invites';
       $('cancel-edit').classList.add('hidden');
-      $('inv-exp-fld').classList.remove('hidden');
       $('inv-note').classList.remove('hidden');
       ['inv-em', 'inv-fn', 'inv-ti'].forEach(function (id) { $(id).value = ''; $(id).disabled = false; });
-      $('inv-lim').value = ''; $('inv-exp').value = '7';
       formError(''); setPreset('estimator');
     }
     function startEdit(m) {
@@ -409,16 +407,10 @@
       $('inv-h').textContent = 'Edit ' + m.full_name;
       $('send-label').textContent = 'Save changes';
       $('cancel-edit').classList.remove('hidden');
-      $('inv-exp-fld').classList.add('hidden');
       $('inv-note').classList.add('hidden');
       $('inv-em').value = m.email; $('inv-em').disabled = true;
       $('inv-fn').value = m.full_name; $('inv-fn').disabled = true;
       $('inv-ti').value = m.job_title || '';
-      $('inv-lim').value = m.monthly_order_limit == null ? '' : String(m.monthly_order_limit);
-      if (!Array.prototype.some.call($('inv-lim').options, function (o) { return o.value === $('inv-lim').value; })) {
-        $('inv-lim').appendChild(el('option', { value: String(m.monthly_order_limit), text: m.monthly_order_limit + ' reports' }));
-        $('inv-lim').value = String(m.monthly_order_limit);
-      }
       boxes.forEach(function (box) { box.checked = m.permissions.indexOf(PERM_KEYS[box.getAttribute('data-perm')]) !== -1; });
       setPreset(PRESETS[m.preset] && presetFor(m.permissions) === m.preset ? m.preset : presetFor(m.permissions));
       formError('');
@@ -427,8 +419,8 @@
     $('cancel-edit').addEventListener('click', resetForm);
 
     $('send-invites').addEventListener('click', function () {
-      var btn = this, perms = chosenPerms(), limit = $('inv-lim').value;
-      var common = { preset: preset, permissions: perms, monthly_order_limit: limit ? parseInt(limit, 10) : null, job_title: $('inv-ti').value.trim() };
+      var btn = this, perms = chosenPerms();
+      var common = { preset: preset, permissions: perms, job_title: $('inv-ti').value.trim() };
       if (editing) {
         busy(btn, true);
         api.patch('/api/team/' + editing.id, common).then(function () {
@@ -439,7 +431,7 @@
       var emails = $('inv-em').value.split(/[,;\s]+/).map(function (s) { return s.trim(); }).filter(Boolean);
       if (!emails.length) { formError('Enter at least one email address.'); $('inv-em').focus(); return; }
       busy(btn, true);
-      api.post('/api/invites', Object.assign({ emails: emails, full_name: $('inv-fn').value.trim(), expires_in_days: parseInt($('inv-exp').value, 10) }, common)).then(function (r) {
+      api.post('/api/invites', Object.assign({ emails: emails, full_name: $('inv-fn').value.trim() }, common)).then(function (r) {
         var unsent = r.invites.filter(function (i) { return i.invite_url && i.email_sent === false; });
         if (unsent.length) { showInviteLinks(unsent); toast(unsent.length === 1 ? 'Invite created. Email isn\u2019t connected yet, so share the link below.' : unsent.length + ' invites created. Share the links below.'); }
         else toast(r.invites.length === 1 ? 'Invite sent to ' + r.invites[0].email + '.' : r.invites.length + ' invites sent.');
@@ -479,10 +471,7 @@
       if (perms.indexOf('users.manage') !== -1) parts.push('Team');
       return parts.length ? parts.join(', ') : '—';
     }
-    function orderText(perms, limit) {
-      if (perms.indexOf('orders.create') === -1) return '—';
-      return limit != null ? 'Yes · ' + limit + '/mo' : 'Yes';
-    }
+    function orderText(perms) { return perms.indexOf('orders.create') === -1 ? '—' : 'Yes'; }
     function avatar(name, url) {
       return url ? el('img', { class: 'avatar', src: url, alt: '' }) : el('span', { class: 'avatar', text: name ? initials(name) : '?' });
     }
@@ -501,7 +490,7 @@
       return el('tr', { 'data-member': m.id }, [
         el('td', {}, [el('div', { class: 'member' }, [avatar(m.full_name, m.avatar_url), el('span', {}, [el('b', { text: m.full_name }), el('br'), el('span', { class: 'hint', text: m.email })])])]),
         el('td', { text: isOwner ? 'Owner' : (PRESET_LABEL[m.preset] || 'Custom') }),
-        el('td', { text: orderText(m.permissions, m.monthly_order_limit) }),
+        el('td', { text: orderText(m.permissions) }),
         el('td', { text: accessText(m.permissions, isOwner) }),
         el('td', {}, [el('span', { class: 'pill active', text: 'Active' })]),
         actions
@@ -512,9 +501,9 @@
       return el('tr', { 'data-invite': i.id }, [
         el('td', {}, [el('div', { class: 'member' }, [avatar(null), el('span', {}, [el('b', { text: i.full_name || 'Invite sent' }), el('br'), el('span', { class: 'hint', text: i.email })])])]),
         el('td', { text: PRESET_LABEL[i.preset] || 'Custom' }),
-        el('td', { text: orderText(i.permissions, i.monthly_order_limit) }),
+        el('td', { text: orderText(i.permissions) }),
         el('td', { text: accessText(i.permissions, false) }),
-        el('td', {}, [el('span', { class: 'pill ' + (expired ? 'failed' : 'pending'), text: expired ? 'Expired' : 'Pending' })]),
+        el('td', {}, [el('span', { class: 'pill ' + (expired ? 'failed' : 'pending'), text: expired ? 'Expired' : 'Pending' }), expired ? null : el('span', { class: 'hint inv-expires', text: 'Expires ' + fmtDate(i.expires_at) })]),
         el('td', {}, [
           el('button', { type: 'button', class: 'linkbtn', text: 'Resend', onclick: function () {
             api.post('/api/invites/' + i.id + '/resend').then(function (r) {

@@ -77,6 +77,9 @@ export async function placeOrder(order) {
 }
 export const getOrder = (rqId) => json('GET', `/api/v1/reports/orders/${encodeURIComponent(rqId)}/status`);
 export const identity = () => json('GET', '/api/v1/identity');
+// Instant Query (beta): roof outlines, pitch and area for every building at a point, plus storm history.
+// Enabled per account by RoofQuery support; answers 404 until then.
+export const instantQuery = (lat, lon) => json('POST', '/api/v1/instant-query', { body: { latitude: lat, longitude: lon } });
 export const webhooks = () => json('GET', '/api/v1/webhooks');
 
 // ---------- files (these RoofQuery routes take no key: the order id is the credential) ----------

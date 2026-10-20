@@ -47,11 +47,11 @@
     var users = [
       { id: 'u_owner', company_id: company.id, full_name: 'Dana Whitfield', email: 'dana@lonestarroofing.example', phone: '(512) 555-0142', job_title: 'Owner', avatar_url: null, role: 'owner', preset: 'admin', permissions: ALL_PERMS.slice(), monthly_order_limit: null, office_phone: '(512) 555-0100', preferred_contact: 'Email', timezone: 'Central Time (CT)', created_at: iso(now - 120 * DAY) },
       { id: 'u_marcus', company_id: company.id, full_name: 'Marcus Bell', email: 'marcus@lonestarroofing.example', phone: '(512) 555-0177', job_title: 'Operations Manager', avatar_url: null, role: 'user', preset: 'manager', permissions: ['orders.create', 'orders.view_all', 'orders.download', 'branding.edit'], monthly_order_limit: null, office_phone: '', preferred_contact: 'Text message', timezone: 'Central Time (CT)', created_at: iso(now - 90 * DAY) },
-      { id: 'u_priya', company_id: company.id, full_name: 'Priya Nair', email: 'priya@lonestarroofing.example', phone: '(512) 555-0193', job_title: 'Estimator', avatar_url: null, role: 'user', preset: 'estimator', permissions: ['orders.create', 'orders.download'], monthly_order_limit: 10, office_phone: '', preferred_contact: 'Email', timezone: 'Central Time (CT)', created_at: iso(now - 60 * DAY) },
+      { id: 'u_priya', company_id: company.id, full_name: 'Priya Nair', email: 'priya@lonestarroofing.example', phone: '(512) 555-0193', job_title: 'Estimator', avatar_url: null, role: 'user', preset: 'estimator', permissions: ['orders.create', 'orders.download'], monthly_order_limit: null, office_phone: '', preferred_contact: 'Email', timezone: 'Central Time (CT)', created_at: iso(now - 60 * DAY) },
       { id: 'u_tom', company_id: company.id, full_name: 'Tom Alvarez', email: 'tom@lonestarroofing.example', phone: '', job_title: 'Sales', avatar_url: null, role: 'user', preset: 'viewer', permissions: ['orders.download'], monthly_order_limit: null, office_phone: '', preferred_contact: 'Phone call', timezone: 'Central Time (CT)', created_at: iso(now - 30 * DAY) }
     ];
     var invites = [
-      { id: 'inv_1', company_id: company.id, email: 'jordan@lonestarroofing.example', full_name: 'Jordan Reyes', job_title: 'Estimator', role: 'user', preset: 'estimator', permissions: ['orders.create', 'orders.download'], monthly_order_limit: 10, invited_by: 'u_owner', status: 'pending', expires_at: iso(now + 5 * DAY), created_at: iso(now - 2 * DAY) },
+      { id: 'inv_1', company_id: company.id, email: 'jordan@lonestarroofing.example', full_name: 'Jordan Reyes', job_title: 'Estimator', role: 'user', preset: 'estimator', permissions: ['orders.create', 'orders.download'], monthly_order_limit: null, invited_by: 'u_owner', status: 'pending', expires_at: iso(now + 5 * DAY), created_at: iso(now - 2 * DAY) },
       { id: 'inv_2', company_id: company.id, email: 'kim.adjuster@example.com', full_name: '', job_title: '', role: 'user', preset: 'viewer', permissions: ['orders.download'], monthly_order_limit: null, invited_by: 'u_marcus', status: 'pending', expires_at: iso(now + 12 * DAY), created_at: iso(now - 2 * DAY) }
     ];
     function m(sq, pitch, facets) {
@@ -257,10 +257,6 @@
     if (!p) fail(422, 'invalid', 'Choose a report type.');
     if (!p.available) fail(422, 'unavailable', p.label + ' isn’t available yet.');
     if (!str(b.address) || typeof b.lat !== 'number' || typeof b.lon !== 'number') fail(422, 'invalid', 'Look up the property address first.');
-    if (c.me.monthly_order_limit != null) {
-      var used = c.db.orders.filter(function (o) { return o.ordered_by === c.me.id && new Date(o.created_at).getTime() >= startOfMonth(); }).length;
-      if (used >= c.me.monthly_order_limit) fail(409, 'order_limit_reached', 'You’ve reached your limit of ' + c.me.monthly_order_limit + ' reports this month. Ask your company admin to raise it.');
-    }
     var subscribed = c.db.company.subscription && c.db.company.subscription.status === 'active';
     var free = c.db.company.free_reports_remaining > 0 && type === 'premium_residential';
     if (b.esx && !p.esx) fail(422, 'invalid', 'The ESX file isn’t available for ' + p.label + '.');
@@ -283,6 +279,32 @@
   }
   route('GET', '/api/orders/:id/pdf', notYet('The PDF report'));
   route('GET', '/api/orders/:id/esx', notYet('The Xactimate (ESX) file'));
+  // Instant estimate (sample): two buildings drawn around the pin, plus a storm history.
+  route('POST', '/api/instant-query', function (c) {
+    need(c.me, 'orders.create');
+    var co = c.db.company;
+    if (!(co.subscription && co.subscription.status === 'active')) fail(403, 'subscribers_only', 'Instant estimates are for subscribers. Start a free trial on the Account page to use them.');
+    var lat = Number(c.body && c.body.lat), lon = Number(c.body && c.body.lon);
+    if (!isFinite(lat) || !isFinite(lon)) fail(422, 'invalid', 'Look up the property first.');
+    var dLat = 1 / 111320, dLon = 1 / (111320 * Math.cos(lat * Math.PI / 180));
+    function box(cx, cy, w, h) { // metres → corners
+      return [[-w, -h], [w, -h], [w, h], [-w, h]].map(function (p) { return { lat: Math.round((lat + (cy + p[1] / 2) * dLat) * 1e6) / 1e6, lng: Math.round((lon + (cx + p[0] / 2) * dLon) * 1e6) / 1e6 }; });
+    }
+    var seed = Math.abs(Math.round(lat * 1000 + lon * 1000)) % 7;
+    var main = 1900 + seed * 140, garage = 480 + seed * 20;
+    return {
+      address: null, parcel: null, sandbox: true,
+      buildings: [
+        { id: 'bld_main', primary: true, confidence: 'high', flat_sqft: main, pitched_sqft: Math.round(main * 1.083), squares: Math.round(main * 1.083) / 100, pitch: ['5/12', '6/12', '7/12'][seed % 3], polygon: box(0, 0, 22, 16) },
+        { id: 'bld_garage', primary: false, confidence: 'medium', flat_sqft: garage, pitched_sqft: Math.round(garage * 1.054), squares: Math.round(garage * 1.054) / 100, pitch: '4/12', polygon: box(18, -14, 8, 7) }
+      ],
+      total_squares: Math.round(main * 1.083 + garage * 1.054) / 100,
+      storm: { status: 'ok', period: { from: '2021-10-20', to: '2026-10-20', years: 5 }, damage_chance: 'medium',
+        hail: { days_near: 4, largest: { size_in: 1.75, size_name: 'golf ball', date: '2024-04-28', distance: 'within_3_mi', confidence: 'high' }, last: { size_in: 1, size_name: 'quarter', date: '2026-05-14', distance: 'within_1_mi', confidence: 'medium' } },
+        wind: { days_severe: 3, strongest: { mph: 74, date: '2023-06-02', distance_mi: 1.6, confidence: 'high' } },
+        tornado: null, top_storms: [] }
+    };
+  });
   route('POST', '/api/orders/:id/buy-esx', function (c) {
     need(c.me, 'orders.create'); var o = findOrder(c);
     if (o.status !== 'delivered') fail(409, 'not_ready', 'The ESX file can be bought once the report is ready.');
@@ -320,11 +342,11 @@
     if (taken.length) fail(409, 'already_invited', taken.join(', ') + (taken.length > 1 ? ' are' : ' is') + ' already on the team or has a pending invite.');
     var perms = cleanPerms(b.permissions);
     if (perms.indexOf('users.manage') !== -1 && c.me.role !== 'owner' && c.me.role !== 'admin') fail(403, 'forbidden', 'Only an owner or admin can invite someone who manages the team.');
-    var days = [7, 14, 30].indexOf(b.expires_in_days) !== -1 ? b.expires_in_days : 7;
+    var days = 7; // invitations always expire after 7 days
     var created = emails.map(function (e) {
       var inv = { id: uid('inv'), company_id: c.db.company.id, email: e, full_name: emails.length === 1 ? str(b.full_name) : '', job_title: str(b.job_title),
         role: b.preset === 'admin' ? 'admin' : 'user', preset: str(b.preset, 20) || 'custom', permissions: perms,
-        monthly_order_limit: typeof b.monthly_order_limit === 'number' ? b.monthly_order_limit : null,
+        monthly_order_limit: null,
         invited_by: c.me.id, status: 'pending', expires_at: iso(Date.now() + days * DAY), created_at: iso(Date.now()) };
       c.db.invites.push(inv); return clone(inv);
     });
@@ -364,7 +386,7 @@
       u.preset = str(b.preset, 20) || 'custom';
       u.role = b.preset === 'admin' ? 'admin' : 'user';
     }
-    if ('monthly_order_limit' in b) u.monthly_order_limit = typeof b.monthly_order_limit === 'number' ? b.monthly_order_limit : null;
+    u.monthly_order_limit = null;
     if ('job_title' in b) u.job_title = str(b.job_title);
     save(c.db);
     return { member: userOut(u) };

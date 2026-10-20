@@ -9,6 +9,7 @@ import { roofquery, stripe, email } from './services.js';
 import * as fulfillment from './fulfillment.js';
 
 const DAY = 86400000;
+const INVITE_DAYS = 7; // invitations always expire after 7 days
 const str = (v, max = 200) => String(v ?? '').trim().slice(0, max);
 const emailOk = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 const startOfMonth = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toISOString(); };
@@ -55,11 +56,11 @@ async function imageUpload(req) {
 
 // Simple per-visitor limit for routes anyone can call without signing in.
 const hits = new Map();
-function rateLimit(req, key, max, windowMs) {
-  const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+function rateLimit(req, key, max, windowMs, message) {
+  const ip = req ? String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim() : '';
   const k = key + '|' + ip, now = Date.now();
   const list = (hits.get(k) || []).filter((t) => now - t < windowMs);
-  if (list.length >= max) fail(429, 'too_many', 'Too many orders from this connection. Try again later, or create a free account.');
+  if (list.length >= max) fail(429, 'too_many', message || 'Too many orders from this connection. Try again later, or create a free account.');
   list.push(now); hits.set(k, list);
   if (hits.size > 5000) for (const [kk, v] of hits) if (!v.some((t) => now - t < windowMs)) hits.delete(kk);
 }
@@ -277,10 +278,6 @@ export function registerRoutes(r) {
     const esx = !!b.esx;
     if (esx && !p.esx_addon_allowed) fail(422, 'invalid', `The ESX file isn\u2019t available for ${p.label}.`);
     if (!str(b.address) || typeof b.lat !== 'number' || typeof b.lon !== 'number' || Math.abs(b.lat) > 90 || Math.abs(b.lon) > 180) fail(422, 'invalid', 'Look up the property address first.');
-    if (m.user.monthly_order_limit !== null && m.user.monthly_order_limit !== undefined) {
-      const { total } = await db.select('report_orders', { ordered_by: eq(m.user.id), created_at: gte(startOfMonth()), select: 'id', limit: 1 }, { count: true });
-      if (total >= m.user.monthly_order_limit) fail(409, 'order_limit_reached', `You\u2019ve reached your limit of ${m.user.monthly_order_limit} reports this month. Ask your company admin to raise it.`);
-    }
     if (!stripe.connected() && !config.allowUnpaidTestOrders) fail(503, 'payments_not_connected', 'Ordering isn\u2019t open yet: payments aren\u2019t connected.');
 
     // Price: free report (Premium only), else subscriber or regular price, plus ESX.
@@ -313,6 +310,39 @@ export function registerRoutes(r) {
     }
     const saved = await markPaidAndPlace(order, m.company, payment);
     return { order: orderOut(saved, prods, { [m.user.id]: m.user }), checkout_url: null, charged_cents: price, used_free_report: usedFree, receipt_url: saved.receipt_url || null };
+  });
+
+  // ---------- Instant estimate (RoofQuery Instant Query): subscribers only ----------
+  r.post('/api/instant-query', async ({ req }) => {
+    const m = await member(req); m.need('orders.create'); const b = await readJson(req);
+    if (m.company.subscription_status !== 'active') fail(403, 'subscribers_only', 'Instant estimates are for subscribers. Start a free trial on the Account page to use them.');
+    const lat = Number(b.lat), lon = Number(b.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) fail(422, 'invalid', 'Look up the property first.');
+    if (!roofquery.connected()) fail(503, 'not_connected', 'Instant estimates will work once RoofQuery is connected.');
+    rateLimit(null, 'iq|' + m.company.id, 120, 60 * 60 * 1000, 'You\u2019ve run a lot of instant estimates this hour. Try again in a little while.');
+    let q;
+    try { q = await roofquery.instantQuery(lat, lon); }
+    catch (e) {
+      if (e.status === 404) fail(503, 'not_enabled', 'Instant estimates aren\u2019t switched on for this account yet.');
+      if (e.status === 503) fail(503, 'busy', 'The instant estimate service is busy. Try again in a minute.');
+      if (e.status === 400) fail(422, 'invalid', 'That location couldn\u2019t be estimated. Move the pin onto the roof and try again.');
+      fail(502, 'estimate_failed', 'The instant estimate didn\u2019t work this time. Try again in a moment.');
+    }
+    const r1 = (n) => (typeof n === 'number' ? Math.round(n * 10) / 10 : null);
+    const pt = (p) => ({ lat: p.lat, lng: p.lng });
+    const buildings = (q.buildings || []).slice(0, 25).map((x) => ({
+      id: x.building_id, primary: !!x.primary, confidence: x.confidence || null,
+      flat_sqft: r1(x.flat_sqft), pitched_sqft: r1(x.pitched_sqft), squares: typeof x.pitched_sqft === 'number' ? Math.round(x.pitched_sqft) / 100 : null,
+      pitch: x.pitch ? x.pitch.ratio : null, polygon: (x.polygon || []).map(pt)
+    }));
+    const s = q.storm || {};
+    return {
+      address: q.address || null, parcel: q.parcel && q.parcel.found ? { polygon: (q.parcel.polygon || []).map(pt) } : null,
+      buildings,
+      total_squares: Math.round(buildings.reduce((t, x) => t + (x.pitched_sqft || 0), 0)) / 100,
+      storm: { status: s.status || 'unavailable', period: s.period || null, damage_chance: s.damage_chance || null, hail: s.hail || null, wind: s.wind || null, tornado: s.tornado || null, top_storms: (s.top_storms || []).slice(0, 5) },
+      sandbox: roofquery.sandbox()
+    };
   });
 
   // Downloads: the website asks for a short-lived link, then opens it (works for any browser download).
@@ -405,7 +435,7 @@ export function registerRoutes(r) {
   async function sendInviteEmail(m, inv, token) {
     const url = inviteUrl(token);
     const r = await email.send({ to: inv.email, subject: `${m.user.full_name} invited you to ${m.company.name} on Rapid Squares`,
-      text: `${m.user.full_name} invited you to join ${m.company.name} on Rapid Squares.\n\nAccept the invite: ${url}\n\nThis link expires ${new Date(inv.expires_at).toDateString()}.` });
+      text: `${m.user.full_name} invited you to join ${m.company.name} on Rapid Squares.\n\nAccept the invite: ${url}\n\nThis invitation expires in 7 days (${new Date(inv.expires_at).toDateString()}). If it runs out, ask ${m.user.full_name} to resend it.` });
     return { url, sent: !!(r && r.sent) };
   }
 
@@ -425,8 +455,8 @@ export function registerRoutes(r) {
     const perms = cleanPerms(b.permissions);
     const makesAdmin = b.preset === 'admin' || perms.includes('users.manage');
     if (makesAdmin && !['owner', 'admin'].includes(m.user.role)) fail(403, 'forbidden', 'Only an owner or admin can invite someone who manages the team.');
-    const days = [7, 14, 30].includes(b.expires_in_days) ? b.expires_in_days : 7;
-    const limit = Number.isInteger(b.monthly_order_limit) && b.monthly_order_limit >= 0 ? b.monthly_order_limit : null;
+    const days = INVITE_DAYS; // every invite lasts 7 days
+    const limit = null; // monthly order limits are no longer offered
     const tokens = emails.map(() => newToken());
     const rows = await db.insert('invites', emails.map((e, i) => ({
       company_id: m.company.id, email: e, full_name: emails.length === 1 ? str(b.full_name) : null, job_title: str(b.job_title) || null,
@@ -450,7 +480,7 @@ export function registerRoutes(r) {
   r.post('/api/invites/:id/resend', async ({ req, params }) => {
     const m = await member(req); m.need('users.manage'); const inv = await findInvite(m, params.id);
     const token = newToken();
-    const [u] = await db.update('invites', { id: eq(inv.id) }, { token_hash: sha256(token), status: 'pending', expires_at: new Date(Date.now() + 7 * DAY).toISOString() });
+    const [u] = await db.update('invites', { id: eq(inv.id) }, { token_hash: sha256(token), status: 'pending', expires_at: new Date(Date.now() + INVITE_DAYS * DAY).toISOString() });
     const { token_hash, ...out } = u;
     { const e = await sendInviteEmail(m, u, token); return { invite: { ...out, invite_url: e.url, email_sent: e.sent } }; }
   });
@@ -481,7 +511,7 @@ export function registerRoutes(r) {
     if (await db.one('users', { id: eq(auth.id) })) fail(409, 'already_member', 'Your account already belongs to a company.');
     const [u] = await db.insert('users', {
       id: auth.id, company_id: inv.company_id, full_name: str(b.full_name) || inv.full_name || auth.email.split('@')[0], email: auth.email,
-      job_title: inv.job_title, role: inv.role === 'owner' ? 'user' : inv.role, preset: inv.preset, permissions: cleanPerms(inv.permissions), monthly_order_limit: inv.monthly_order_limit
+      job_title: inv.job_title, role: inv.role === 'owner' ? 'user' : inv.role, preset: inv.preset, permissions: cleanPerms(inv.permissions), monthly_order_limit: null
     });
     await db.update('invites', { id: eq(inv.id) }, { status: 'accepted', accepted_by: auth.id });
     const company = await db.one('companies', { id: eq(inv.company_id), select: 'id,name' });
@@ -506,7 +536,7 @@ export function registerRoutes(r) {
       patch.role = b.preset === 'admin' ? 'admin' : 'user';
     }
     if ((patch.permissions || []).includes('users.manage') && !['owner', 'admin'].includes(m.user.role)) fail(403, 'forbidden', 'Only an owner or admin can give someone team management.');
-    if ('monthly_order_limit' in b) patch.monthly_order_limit = Number.isInteger(b.monthly_order_limit) && b.monthly_order_limit >= 0 ? b.monthly_order_limit : null;
+    patch.monthly_order_limit = null; // limits are no longer offered; clears any old one
     if ('job_title' in b) patch.job_title = str(b.job_title);
     const [saved] = await db.update('users', { id: eq(u.id) }, patch);
     return { member: userOut(saved) };

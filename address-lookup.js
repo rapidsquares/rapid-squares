@@ -166,8 +166,10 @@
         renderSuggestions(items);
         say(items.length ? items.length + ' suggestion' + (items.length > 1 ? 's' : '') + '. Use the arrow keys to choose.' : 'No matches yet — keep typing or press Look up.');
       }).catch(function (err) { if (id === reqId) { closeSuggestions(); say(explain(err), true); } });
-    }, 250);
+    }, 200);
   });
+  // Typed before this script was ready (slow first load)? Show suggestions for it now.
+  if (input.value.trim().length >= 3 && document.activeElement === input && !new URLSearchParams(location.search).get('address')) input.dispatchEvent(new Event('input'));
   input.addEventListener('keydown', function (e) {
     var open = !list.classList.contains('hidden');
     if (e.key === 'ArrowDown' && open) { e.preventDefault(); highlight(active + 1); }
@@ -236,6 +238,7 @@
     $('sel-lon').textContent = p.lon.toFixed(6);
     $('sel-conf').textContent = p.confidence ? p.confidence + ' confidence' : '—';
     showPin();
+    iqReset();
     $('order-msg').classList.add('hidden');
     say('Showing aerial view of ' + p.label + '.');
     showOnMap(p).catch(function () { say('Found the address, but the aerial view couldn’t load.', true); });
@@ -298,6 +301,7 @@
     if (!selected) return;
     selected.lat = Math.round(lat * 1e7) / 1e7; selected.lon = Math.round(lon * 1e7) / 1e7;
     showPin();
+    iqStale();
     say('Pin moved. The report will be ordered for the roof under the pin.');
   }
   function showPin() {
@@ -319,6 +323,7 @@
     if (marker) marker.setOptions({ position: [selected.lon, selected.lat] });
     if (map) map.setCamera({ center: [selected.lon, selected.lat], type: 'ease', duration: 400 });
     showPin();
+    iqStale();
     say('Pin back on the address.');
   });
   // ---------- Ordering: pick a report type in a pop-up, then place the order ----------
@@ -527,6 +532,131 @@
     $('order-btn').click();
   }
   if (/[?&]resume=1/.test(location.search) && !RS.guest) document.addEventListener('rs:ready', resumePending, { once: true });
+
+  // ---------- Instant estimate (RoofQuery Instant Query): subscribers only ----------
+  var iq = { mode: 'off', result: null, at: null, source: null }; // mode: off (guest) · locked · on
+  var iqBtn = $('iq-btn'), iqPanel = $('iq-panel');
+  function iqInit() {
+    if (RS.guest || !RS.api) return;
+    loadCatalog().then(function (c) {
+      iq.mode = c.subscribed ? 'on' : 'locked';
+      iqBtn.classList.remove('hidden');
+      iqBtn.classList.toggle('locked', iq.mode === 'locked');
+      $('iq-btn-text').textContent = iq.mode === 'on' ? 'Instant estimate' : 'Instant estimate \u00b7 Subscribers';
+    }).catch(function () { /* the button simply stays hidden */ });
+  }
+  if (window.RS && RS.me) iqInit(); else document.addEventListener('rs:ready', iqInit, { once: true });
+
+  function iqEl(tag, cls, text) { var n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; }
+  function iqReset() { iq.result = null; iqPanel.classList.add('hidden'); iqPanel.innerHTML = ''; iqDraw(null); }
+  function iqStale() {
+    if (!iq.result || iqPanel.classList.contains('hidden')) return;
+    var note = iqPanel.querySelector('.iq-stale');
+    if (!note) {
+      note = iqEl('p', 'iq-stale'); note.appendChild(document.createTextNode('You moved the pin. '));
+      var again = iqEl('button', 'linkbtn', 'Update the estimate'); again.type = 'button'; again.addEventListener('click', iqRun);
+      note.appendChild(again); iqPanel.insertBefore(note, iqPanel.children[1] || null);
+    }
+  }
+  function iqUpsell() {
+    iqPanel.innerHTML = '';
+    var head = iqEl('div', 'iq-head'); var h = iqEl('h2', null, 'Instant estimate'); h.id = 'iq-h'; head.appendChild(h); head.appendChild(iqEl('span', 'iq-tag', 'Subscribers'));
+    iqPanel.appendChild(head);
+    iqPanel.appendChild(iqEl('p', 'hint', 'See roof area, pitch and 5 years of storm history in seconds, before you order. Included with a subscription.'));
+    var foot = iqEl('div', 'iq-foot');
+    var days = catalog && catalog.trial_eligible && catalog.trial_days;
+    var a = iqEl('a', 'btn btn-primary', days ? 'Start your ' + days + '-day free trial' : 'See subscription plans');
+    a.href = 'account.html#billing'; a.target = '_top';
+    foot.appendChild(a); iqPanel.appendChild(foot);
+    iqPanel.classList.remove('hidden');
+  }
+  function iqRun() {
+    if (!selected) return;
+    if (iq.mode === 'locked') { iqUpsell(); return; }
+    var at = { lat: selected.lat, lon: selected.lon };
+    iqBtn.disabled = true; iqBtn.setAttribute('aria-busy', 'true');
+    iqPanel.innerHTML = ''; iqPanel.appendChild(iqEl('p', 'hint', 'Measuring the roofs from above\u2026 this takes a few seconds.'));
+    iqPanel.classList.remove('hidden');
+    RS.api.post('/api/instant-query', at).then(function (r) {
+      if (!selected || selected.lat !== at.lat || selected.lon !== at.lon) return; // the pin moved meanwhile
+      iq.result = r; iqRender(r); iqDraw(r);
+    }).catch(function (e) {
+      if (e && e.code === 'subscribers_only') { iq.mode = 'locked'; iqInit(); iqUpsell(); return; }
+      iqPanel.innerHTML = ''; var p = iqEl('p', 'form-error', (e && e.message) || 'The instant estimate didn\u2019t work. Try again.'); iqPanel.appendChild(p);
+    }).then(function () { iqBtn.disabled = false; iqBtn.setAttribute('aria-busy', 'false'); });
+  }
+  iqBtn.addEventListener('click', iqRun);
+
+  function fmtDay(d) { try { return new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); } catch (_) { return d; } }
+  var DIST = { at_property: 'at the property', within_1_mi: 'within 1 mile', within_3_mi: 'within 3 miles', within_5_mi: 'within 5 miles' };
+  function stat(label, value) { var d = iqEl('div', 'iq-stat'); d.appendChild(iqEl('span', 'hint', label)); d.appendChild(iqEl('b', null, value)); return d; }
+  function iqRender(r) {
+    iqPanel.innerHTML = '';
+    var bs = r.buildings || [], main = bs.filter(function (b) { return b.primary; })[0] || bs[0];
+    var head = iqEl('div', 'iq-head'); var h = iqEl('h2', null, 'Instant estimate'); h.id = 'iq-h'; head.appendChild(h);
+    if (main && main.confidence) head.appendChild(iqEl('span', 'iq-tag ' + main.confidence, main.confidence.charAt(0).toUpperCase() + main.confidence.slice(1) + ' confidence'));
+    if (r.sandbox) head.appendChild(iqEl('span', 'iq-tag', 'Sample data'));
+    iqPanel.appendChild(head);
+    if (!main) { iqPanel.appendChild(iqEl('p', 'hint', 'No buildings were found at the pin. Move the pin onto the roof and try again.')); return; }
+    var stats = iqEl('div', 'iq-stats');
+    stats.appendChild(stat('Main roof', main.squares != null ? main.squares.toFixed(1) + ' squares' : '\u2014'));
+    stats.appendChild(stat('Pitch', main.pitch || 'Unknown'));
+    stats.appendChild(stat('Footprint', main.flat_sqft != null ? Math.round(main.flat_sqft).toLocaleString('en-US') + ' sq ft' : '\u2014'));
+    if (bs.length > 1) stats.appendChild(stat('All ' + bs.length + ' buildings', r.total_squares.toFixed(1) + ' squares'));
+    iqPanel.appendChild(stats);
+    if (main.confidence === 'low') iqPanel.appendChild(iqEl('p', 'hint', 'Low confidence: treat these numbers as a rough guide.'));
+    if (bs.length > 1) {
+      var ul = iqEl('ul', 'iq-list');
+      bs.forEach(function (b, i) {
+        var li = iqEl('li');
+        li.appendChild(iqEl('span', null, 'Building ' + (i + 1) + (b.primary ? ' (main)' : '')));
+        li.appendChild(iqEl('span', 'hint', [b.squares != null ? b.squares.toFixed(1) + ' squares' : null, b.pitch, b.confidence ? b.confidence + ' confidence' : null].filter(Boolean).join(' \u00b7 ')));
+        ul.appendChild(li);
+      });
+      iqPanel.appendChild(ul);
+    }
+    // Storm history
+    var s = r.storm || {}, box = iqEl('div', 'iq-storm'), h3 = iqEl('h3', null, 'Storm history \u00b7 last ' + ((s.period && s.period.years) || 5) + ' years');
+    if (s.damage_chance) h3.appendChild(iqEl('span', 'iq-tag ' + (s.damage_chance === 'high' ? 'low' : s.damage_chance === 'medium' ? 'medium' : 'high'), s.damage_chance.charAt(0).toUpperCase() + s.damage_chance.slice(1) + ' damage chance'));
+    box.appendChild(h3);
+    if (s.status === 'none') box.appendChild(iqEl('p', 'hint', 'No storms recorded within 5 miles in the last 5 years.'));
+    else if (s.status !== 'ok') box.appendChild(iqEl('p', 'hint', 'Storm history isn\u2019t available right now.'));
+    else {
+      var lines = iqEl('ul');
+      var hl = s.hail && s.hail.largest;
+      if (hl) lines.appendChild(iqEl('li', null, 'Largest hail: ' + hl.size_in + '\u2033' + (hl.size_name ? ' (' + hl.size_name + ')' : '') + ' on ' + fmtDay(hl.date) + ', ' + (DIST[hl.distance] || hl.distance)));
+      if (s.hail && s.hail.days_near) lines.appendChild(iqEl('li', null, 'Hail days at or within 1 mile: ' + s.hail.days_near));
+      var w = s.wind && s.wind.strongest;
+      if (w) lines.appendChild(iqEl('li', null, 'Strongest wind: ' + w.mph + ' mph on ' + fmtDay(w.date) + ', ' + w.distance_mi + ' mi away'));
+      if (s.tornado) lines.appendChild(iqEl('li', null, 'Closest tornado: ' + (s.tornado.ef_scale ? s.tornado.ef_scale + ', ' : '') + s.tornado.closest_mi + ' mi away on ' + fmtDay(s.tornado.date)));
+      if (!lines.children.length) lines.appendChild(iqEl('li', null, 'Nothing significant recorded nearby.'));
+      box.appendChild(lines);
+    }
+    iqPanel.appendChild(box);
+    var foot = iqEl('div', 'iq-foot');
+    foot.appendChild(iqEl('p', 'hint', 'An estimate from aerial outlines, not a measured report. Order a report for exact measurements, the full sketch and the ESX file.'));
+    var go = iqEl('button', 'btn btn-primary', 'Order full report'); go.type = 'button';
+    go.addEventListener('click', function () { $('order-btn').click(); });
+    foot.appendChild(go); iqPanel.appendChild(foot);
+  }
+  // Building outlines on the map (main roof in orange). Skipped quietly if the map isn't up.
+  function iqDraw(r) {
+    try {
+      if (!map || !window.atlas || !atlas.source) return;
+      if (!iq.source) {
+        iq.source = new atlas.source.DataSource(); map.sources.add(iq.source);
+        var col = ['case', ['get', 'primary'], '#F08A4B', '#FFFFFF'];
+        map.layers.add([new atlas.layer.PolygonLayer(iq.source, null, { fillColor: col, fillOpacity: 0.22 }), new atlas.layer.LineLayer(iq.source, null, { strokeColor: col, strokeWidth: 2 })]);
+      }
+      iq.source.clear();
+      if (!r) return;
+      (r.buildings || []).forEach(function (b) {
+        if (!b.polygon || b.polygon.length < 3) return;
+        var ring = b.polygon.map(function (p) { return [p.lng, p.lat]; }); ring.push(ring[0]);
+        iq.source.add(new atlas.data.Feature(new atlas.data.Polygon([ring]), { primary: !!b.primary }));
+      });
+    } catch (e) { console.warn('[Rapid Squares] Couldn\u2019t draw the building outlines.', e); }
+  }
 
   // Prefill from ?address=… (e.g. links from other pages)
   var pre = new URLSearchParams(location.search).get('address');
