@@ -126,10 +126,43 @@ async function recipient(order) {
   const c = order.company_id ? await db.one('companies', { id: eq(order.company_id), select: 'email,name' }) : null;
   return c && c.email ? { to: c.email, name: c.name, guest: false } : null;
 }
+// Order confirmation, sent once the order is paid (or covered by a free report).
+export async function tellPlaced(order) {
+  try {
+    const p = (await db.one('products', { id: eq(order.report_type) })) || { label: order.report_type };
+    const label = p.label + (order.esx_purchased ? ' + ESX file' : '');
+    const total = order.used_free_report ? 'Free (one of your free reports)' : money(order.price_cents);
+    const eta = p.delivery_minutes ? `\nUsually ready within ${p.delivery_minutes >= 60 ? Math.round(p.delivery_minutes / 60) + ' hour' + (p.delivery_minutes >= 120 ? 's' : '') : p.delivery_minutes + ' minutes'}.` : '';
+    const who = await recipient(order);
+    if (who) {
+      const first = String(who.name || '').split(' ')[0];
+      const track = who.guest ? '\n\nWe\u2019ll email you here with download links when it\u2019s ready.' : `\n\nTrack it in your order history: ${config.appUrl}/orders.html\nWe\u2019ll email you when it\u2019s ready.`;
+      await email.send({ to: who.to, subject: `Order RS-${order.report_number} received`,
+        text: `Hi${first ? ' ' + first : ''},\n\nThanks for your order.\n\nOrder: RS-${order.report_number}\nReport: ${label}\nProperty: ${order.address}\nTotal: ${total}${order.receipt_url ? '\nReceipt: ' + order.receipt_url : ''}${eta}${track}` });
+    }
+    if (config.orderAlerts && config.adminEmail) {
+      const by = await orderedBy(order);
+      await email.send({ to: config.adminEmail, subject: `[Rapid Squares] New order RS-${order.report_number}: ${p.label}`,
+        text: `New order RS-${order.report_number}\n\nReport: ${label}\nProperty: ${order.address}\nTotal: ${total}\nOrdered by: ${by}` });
+    }
+  } catch (e) { console.error('[email] order confirmation for RS-' + order.report_number, e.message); }
+}
+async function orderedBy(order) {
+  if (order.guest_email) return `${order.guest_name || 'Guest'} <${order.guest_email}> (guest)`;
+  const [u, c] = await Promise.all([
+    order.ordered_by ? db.one('users', { id: eq(order.ordered_by), select: 'full_name,email' }) : null,
+    order.company_id ? db.one('companies', { id: eq(order.company_id), select: 'name' }) : null
+  ]);
+  return [u && `${u.full_name} <${u.email}>`, c && c.name].filter(Boolean).join(', ') || 'Unknown';
+}
 async function tellReady(order) {
   // Only once, even if two webhooks race.
   const claimed = await db.update('report_orders', { id: eq(order.id), ready_notified: eq(false) }, { ready_notified: true });
   if (!claimed.length) return;
+  if (config.orderAlerts && config.adminEmail) {
+    await email.send({ to: config.adminEmail, subject: `[Rapid Squares] Order RS-${order.report_number} completed`,
+      text: `RS-${order.report_number} is ready.\n\nProperty: ${order.address}${order.total_squares != null ? `\n${order.total_squares} squares, ${order.predominant_pitch} predominant pitch` : ''}\nOrdered by: ${await orderedBy(order)}` });
+  }
   const who = await recipient(order);
   if (!who) return;
   const first = String(who.name || '').split(' ')[0];

@@ -73,6 +73,7 @@ async function markPaidAndPlace(order, company, payment) {
   if (payment && payment.payment_id) patch.stripe_payment_id = payment.payment_id;
   if (payment && payment.receipt_url) patch.receipt_url = payment.receipt_url;
   const [saved] = await db.update('report_orders', { id: eq(order.id) }, patch);
+  await fulfillment.tellPlaced(saved); // confirmation to the customer (+ copy to ADMIN_EMAIL)
   if (!roofquery.connected()) return saved;
   try { return (await fulfillment.place(saved.id)) || saved; }
   catch (e) { console.error('[roofquery] placing RS-' + saved.report_number, e.message); return saved; }
@@ -89,10 +90,6 @@ async function orderPaid(orderId, paymentIntentId, receiptUrl) {
   if (!order || order.status !== 'awaiting_payment') return; // already handled
   const company = order.company_id ? await db.one('companies', { id: eq(order.company_id) }) : null;
   const saved = await markPaidAndPlace(order, company, { payment_id: paymentIntentId, receipt_url: receiptUrl });
-  if (order.guest_email) {
-    await email.send({ to: order.guest_email, subject: `Payment received for RS-${order.report_number}`,
-      text: `Thanks${order.guest_name ? ', ' + order.guest_name : ''}! We received your payment of $${(order.price_cents / 100).toFixed(2)} for RS-${order.report_number} at ${order.address}.${receiptUrl ? '\nReceipt: ' + receiptUrl : ''}\n\nWe'll email your report to this address when it's ready.` });
-  }
   return saved;
 }
 async function orderCancelled(orderId, why) {

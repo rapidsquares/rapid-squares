@@ -35,6 +35,8 @@ export const config = {
   },
   // Who hears about problems that need a person (RoofQuery balance too low, an order that couldn't be placed).
   adminEmail: String(env.ADMIN_EMAIL || env.EMAIL_REPLY_TO || '').trim(),
+  // Also email ADMIN_EMAIL a copy when an order is placed and when it's completed (ORDER_ALERTS=false turns this off).
+  orderAlerts: bool(env.ORDER_ALERTS, true),
   // Signs download links. Defaults to a value derived from the Supabase secret key.
   downloadSecret: String(env.DOWNLOAD_LINK_SECRET || '').trim(),
   stripe: {
