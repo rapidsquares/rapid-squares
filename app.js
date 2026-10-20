@@ -269,22 +269,6 @@
       if (!f) return;
       api.upload('/api/company/logo', f).then(function (r) { showLogo(r.logo_url); toast('Logo updated.'); }).catch(showError);
     });
-
-    // Roof photos: preview only for now.
-    var photos = [], slotLabels = ['Aerial overview', 'Front slope', 'Rear slope', 'Damage close-up'];
-    var grid = $('photo-grid'), count = $('photo-count');
-    function renderPhotos() {
-      grid.innerHTML = '';
-      photos.forEach(function (p) { grid.appendChild(el('figure', {}, [el('img', { src: p.url, alt: p.name }), el('figcaption', { text: p.name })])); });
-      slotLabels.slice(photos.length).forEach(function (label) { grid.appendChild(el('div', { class: 'thumb-empty', text: label })); });
-      count.textContent = photos.length === 1 ? '1 photo' : photos.length + ' photos';
-    }
-    $('photo-input').addEventListener('change', function (e) {
-      Array.prototype.forEach.call(e.target.files || [], function (f) { photos.push({ url: URL.createObjectURL(f), name: f.name }); });
-      e.target.value = '';
-      renderPhotos();
-    });
-    renderPhotos();
   }
 
   // ---------- Team & invites ----------
