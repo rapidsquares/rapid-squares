@@ -266,7 +266,13 @@
     function showLogo(url) {
       document.querySelectorAll('.logo-img').forEach(function (img) { if (url) { img.src = url; img.classList.remove('hidden'); } else img.classList.add('hidden'); });
       document.querySelectorAll('.logo-empty').forEach(function (n) { n.classList.toggle('hidden', !!url); });
+      $('logo-remove').classList.toggle('hidden', !url);
     }
+    $('logo-remove').addEventListener('click', function () {
+      if (!window.confirm('Remove your logo? It will no longer appear on your reports.')) return;
+      var btn = this; busy(btn, true);
+      api.del('/api/company/logo').then(function () { showLogo(null); toast('Logo removed.'); }).catch(showError).then(function () { busy(btn, false); });
+    });
     // Brand color + header text color: picker, hex box and buttons stay in step; the preview shows the PDF header.
     var DEFAULT_COLOR = '#B03A0A';
     var picker = $('bc-picker'), hex = $('bc-hex'), band = $('rp-band'), tPicker = $('tc-picker'), tHex = $('tc-hex');

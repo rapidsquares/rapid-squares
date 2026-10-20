@@ -186,6 +186,11 @@
     save(c.db);
     return { company: companyOut(c.db.company) };
   });
+  route('DELETE', '/api/company/logo', function (c) {
+    need(c.me, 'branding.edit');
+    c.db.company.logo_url = null; save(c.db);
+    return { logo_url: null };
+  });
   route('POST', '/api/company/logo', function (c) {
     need(c.me, 'branding.edit');
     if (!c.body || !c.body.file) fail(422, 'no_file', 'Choose a logo to upload.');

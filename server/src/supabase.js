@@ -86,6 +86,11 @@ export const storage = {
     await call(`${sb.url}/storage/v1/object/${bucket}/${objectPath}`,
       { method: 'POST', headers: headers({ 'Content-Type': contentType, 'x-upsert': 'true', 'Cache-Control': 'max-age=60' }), body: bytes });
     return `${sb.url}/storage/v1/object/public/${bucket}/${objectPath}?v=${Date.now()}`;
+  },
+  // Deletes files from a bucket. Paths that don't exist are ignored.
+  async remove(bucket, objectPaths) {
+    await call(`${sb.url}/storage/v1/object/${bucket}`,
+      { method: 'DELETE', headers: headers({ 'Content-Type': 'application/json' }), body: JSON.stringify({ prefixes: objectPaths }) });
   }
 };
 

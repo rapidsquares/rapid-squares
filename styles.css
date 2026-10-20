@@ -568,7 +568,8 @@ body.embed .page-head h1 { font-size: 24px; }
 .swatch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .report-preview { margin-top: 4px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--paper); max-width: 520px; }
 .rp-band { display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: #B03A0A; color: #FFFFFF; transition: background .15s, color .15s; }
-.rp-logo { width: 40px; height: 40px; object-fit: contain; background: rgba(255,255,255,.9); border-radius: 4px; flex: 0 0 auto; }
+.rp-logo { width: 56px; height: 56px; object-fit: contain; background: #FFFFFF; border-radius: 4px; flex: 0 0 auto; }
+.rp-logo-empty { width: 56px; height: 56px; box-sizing: border-box; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; text-align: center; padding: 4px; border: 1.5px dashed currentColor; border-radius: 4px; font-size: 10px; font-weight: 600; line-height: 1.2; opacity: .8; }
 .rp-text { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
 .rp-text b { font-family: 'Archivo', sans-serif; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rp-text span { font-size: 12px; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

@@ -206,6 +206,14 @@ export function registerRoutes(r) {
     if (c) roofquery.ensureBrand(c);
     return { logo_url: url };
   });
+  r.delete('/api/company/logo', async ({ req }) => {
+    const m = await member(req); m.need('branding.edit');
+    const [c] = await db.update('companies', { id: eq(m.company.id) }, { logo_url: null });
+    // Delete the stored file(s) and take the logo off the PDF branding (both in the background, best effort).
+    storage.remove('logos', Object.values(IMAGE_TYPES).map((ext) => `${m.company.id}/logo.${ext}`)).catch((e) => console.error('[storage] logo delete', e.message));
+    if (c) roofquery.ensureBrand(c);
+    return { logo_url: null };
+  });
 
   // ---------- price list ----------
   r.get('/api/products', async ({ req }) => {
