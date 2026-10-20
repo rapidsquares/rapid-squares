@@ -185,15 +185,16 @@ export function registerRoutes(r) {
   r.patch('/api/company', async ({ req }) => {
     const m = await member(req); m.need('branding.edit'); const b = await readJson(req);
     const patch = {};
-    ['name', 'license_number', 'contact_name', 'phone', 'email', 'website', 'address', 'brand_color'].forEach((k) => { if (k in b) patch[k] = str(b[k]); });
+    ['name', 'license_number', 'contact_name', 'phone', 'email', 'website', 'address', 'brand_color', 'brand_text_color'].forEach((k) => { if (k in b) patch[k] = str(b[k]); });
     if ('name' in patch && !patch.name) fail(422, 'invalid', 'Enter your company name.');
     if (patch.email && !emailOk(patch.email)) fail(422, 'invalid', 'Enter a valid email address, like estimates@yourcompany.com.');
-    if ('brand_color' in patch) {
-      let c = patch.brand_color.toUpperCase(); if (c && c[0] !== '#') c = '#' + c;
+    [['brand_color', 'brand colour', '#0F7A4D'], ['brand_text_color', 'header text colour', '#FFFFFF']].forEach(([k, what, eg]) => {
+      if (!(k in patch)) return;
+      let c = patch[k].toUpperCase(); if (c && c[0] !== '#') c = '#' + c;
       if (/^#[0-9A-F]{3}$/.test(c)) c = '#' + c[1] + c[1] + c[2] + c[2] + c[3] + c[3];
-      if (c && !/^#[0-9A-F]{6}$/.test(c)) fail(422, 'invalid', 'Enter the brand colour as a hex code like #0F7A4D.');
-      patch.brand_color = c || null;
-    }
+      if (c && !/^#[0-9A-F]{6}$/.test(c)) fail(422, 'invalid', `Enter the ${what} as a hex code like ${eg}.`);
+      patch[k] = c || null;
+    });
     const [c] = await db.update('companies', { id: eq(m.company.id) }, patch);
     roofquery.ensureBrand(c); // keep the PDF branding in step (background; never fails the save)
     return { company: companyOut(c) };

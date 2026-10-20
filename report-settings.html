@@ -87,7 +87,22 @@
             </div>
             <button type="button" class="linkbtn" id="bc-reset">Use default</button>
           </div>
-          <span class="hint" id="bc-hint">Colours the header band of your PDF reports. Text on it switches to black or white automatically so it stays readable.</span>
+          <span class="hint" id="bc-hint">Colours the header band of your PDF reports.</span>
+        </div>
+        <div class="fld">
+          <span class="label" id="tc-label">Header text colour</span>
+          <div class="color-row">
+            <div class="seg" role="radiogroup" aria-labelledby="tc-label">
+              <button type="button" class="seg-btn" role="radio" data-tc="" aria-checked="true">White</button>
+              <button type="button" class="seg-btn" role="radio" data-tc="#000000" aria-checked="false">Black</button>
+            </div>
+            <label class="color-swatch" title="Pick a text colour">
+              <input id="tc-picker" type="color" value="#ffffff" aria-label="Header text colour">
+            </label>
+            <input id="tc-hex" class="color-hex" type="text" maxlength="7" spellcheck="false" autocomplete="off" placeholder="#FFFFFF" aria-label="Header text colour hex code" aria-describedby="tc-hint tc-warn" data-field="brand_text_color">
+          </div>
+          <span class="hint" id="tc-hint">The company name and contact details on the header band. White unless you choose another colour.</span>
+          <span class="hint tc-warn hidden" id="tc-warn" role="status"></span>
           <div class="report-preview" aria-label="Report header preview">
             <div class="rp-band" id="rp-band">
               <img class="logo-img rp-logo hidden" alt="">

@@ -576,3 +576,18 @@ body.embed .page-head h1 { font-size: 24px; }
 .rp-body { display: flex; flex-direction: column; gap: 8px; padding: 16px; }
 .rp-body span { display: block; height: 8px; border-radius: 4px; background: var(--line-2); }
 @media (max-width: 720px) { .rp-tag { display: none; } }
+
+.seg { display: inline-flex; border: 1px solid var(--field); border-radius: 8px; overflow: hidden; background: var(--paper); }
+.seg-btn { height: 42px; padding: 0 14px; border: 0; border-left: 1px solid var(--field); background: transparent; font: inherit; font-size: 14px; color: var(--ink); cursor: pointer; }
+.seg-btn:first-child { border-left: 0; }
+.seg-btn[aria-checked="true"] { background: var(--navy); color: #FFFFFF; font-weight: 600; }
+.seg-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tc-warn { color: var(--danger); font-weight: 500; }
+
+/* Place order: order button between the lookup and the map */
+.order-bar { margin-bottom: 20px; gap: 10px; border-color: var(--accent); background: var(--accent-soft); }
+.order-bar-in { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px; }
+.order-bar-addr { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.order-bar-addr b { font-size: 17px; }
+.order-bar-btn { height: 48px; padding: 0 24px; flex: 0 0 auto; }
+@media (max-width: 720px) { .order-bar-btn { width: 100%; } }

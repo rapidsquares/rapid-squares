@@ -63,6 +63,19 @@
     <p id="lookup-status" class="hint" aria-live="polite" style="margin: 0;">Type at least 3 characters to see suggestions.</p>
   </section>
 
+  <!-- Shows once a property is found: order right here, before the map -->
+  <section id="order-bar" class="card order-bar hidden" aria-label="Order a report for this property">
+    <div class="order-bar-in">
+      <div class="order-bar-addr">
+        <span class="hint">Selected property</span>
+        <b id="ob-line1"></b>
+        <span id="ob-line2" class="hint"></span>
+      </div>
+      <button type="button" id="order-btn" class="btn btn-primary order-bar-btn">Order report for this roof</button>
+    </div>
+    <p id="order-msg" class="hint hidden" role="status" style="margin: 0;"></p>
+  </section>
+
   <div class="row" style="gap: 20px;">
     <section class="card map-card col-main" aria-labelledby="map-h" style="padding: 0; gap: 0; overflow: hidden;">
       <h2 id="map-h" class="sr">Aerial view</h2>
@@ -79,7 +92,7 @@
 
     <aside class="col-side" aria-labelledby="sel-h">
       <div class="card" style="gap: 14px;">
-        <h2 id="sel-h" style="font-size: 18px;">Selected property</h2>
+        <h2 id="sel-h" style="font-size: 18px;">Property details</h2>
         <div id="sel-empty" class="hint">Search for an address to select a property.</div>
         <div id="sel-details" class="hidden" style="display: flex; flex-direction: column; gap: 12px;">
           <div>
@@ -92,10 +105,8 @@
             <div><dt>Match</dt><dd id="sel-conf"></dd></div>
           </dl>
           <div class="actions" style="flex-direction: column;">
-            <button type="button" id="order-btn" class="btn btn-primary">Order report for this roof</button>
             <button type="button" id="recenter-btn" class="btn">Re-center on roof</button>
           </div>
-          <p id="order-msg" class="hint hidden" role="status" style="margin: 0;"></p>
         </div>
       </div>
     </aside>

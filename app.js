@@ -267,36 +267,51 @@
       document.querySelectorAll('.logo-img').forEach(function (img) { if (url) { img.src = url; img.classList.remove('hidden'); } else img.classList.add('hidden'); });
       document.querySelectorAll('.logo-empty').forEach(function (n) { n.classList.toggle('hidden', !!url); });
     }
-    // Brand colour: picker, hex box and swatches stay in step; the preview shows the PDF header.
+    // Brand colour + header text colour: picker, hex box and buttons stay in step; the preview shows the PDF header.
     var DEFAULT_COLOR = '#B03A0A';
-    var picker = $('bc-picker'), hex = $('bc-hex'), band = $('rp-band');
+    var picker = $('bc-picker'), hex = $('bc-hex'), band = $('rp-band'), tPicker = $('tc-picker'), tHex = $('tc-hex');
+    var col = { bc: '', tc: '' };
     function normHex(v) {
       v = String(v || '').trim().toUpperCase(); if (v && v[0] !== '#') v = '#' + v;
       if (/^#[0-9A-F]{3}$/.test(v)) v = '#' + v[1] + v[1] + v[2] + v[2] + v[3] + v[3];
       return /^#[0-9A-F]{6}$/.test(v) ? v : null;
     }
-    function textOn(c) { // black or white, whichever reads better on the colour
+    function lum(c) {
       var n = parseInt(c.slice(1), 16), ch = [n >> 16 & 255, n >> 8 & 255, n & 255].map(function (x) { x /= 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); });
-      var L = 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
-      return (1.05 / (L + 0.05)) >= ((L + 0.05) / 0.05) ? '#FFFFFF' : '#111111';
+      return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
     }
-    function showColor(c, from) {
-      var shown = c || DEFAULT_COLOR;
-      band.style.background = shown; band.style.color = textOn(shown);
-      if (from !== 'picker') picker.value = shown.toLowerCase();
-      if (from !== 'hex') hex.value = c || '';
-      hex.setAttribute('aria-invalid', 'false');
-      document.querySelectorAll('.swatch').forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-color') === shown)); });
+    function contrast(a, b) { var x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+    var DEFAULT_TEXT = '#FFFFFF';
+    function showColors(from) {
+      var bg = col.bc || DEFAULT_COLOR, fg = col.tc || DEFAULT_TEXT;
+      band.style.background = bg; band.style.color = fg;
+      if (from !== 'picker') picker.value = bg.toLowerCase();
+      if (from !== 'hex') hex.value = col.bc;
+      if (from !== 'tpicker') tPicker.value = fg.toLowerCase();
+      if (from !== 'thex') tHex.value = col.tc;
+      hex.setAttribute('aria-invalid', 'false'); tHex.setAttribute('aria-invalid', 'false');
+      document.querySelectorAll('.swatch').forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-color') === bg)); });
+      var tcKey = col.tc === DEFAULT_TEXT ? '' : col.tc; // White is the default, saved as empty
+      document.querySelectorAll('.seg-btn').forEach(function (b) { b.setAttribute('aria-checked', String(b.getAttribute('data-tc') === tcKey)); });
+      var warn = $('tc-warn'), ratio = contrast(bg, fg);
+      warn.classList.toggle('hidden', ratio >= 3);
+      if (ratio < 3) warn.textContent = 'This text will be hard to read on your brand colour (contrast ' + ratio.toFixed(1) + ':1). Try ' + (contrast(bg, '#000000') > contrast(bg, '#FFFFFF') ? 'Black' : 'White') + '.';
     }
-    picker.addEventListener('input', function () { showColor(normHex(picker.value), 'picker'); });
-    hex.addEventListener('input', function () {
-      var c = normHex(hex.value);
-      if (c) showColor(c, 'hex'); else hex.setAttribute('aria-invalid', hex.value.trim() ? 'true' : 'false');
-      if (!hex.value.trim()) showColor('', 'hex');
-    });
-    hex.addEventListener('blur', function () { var c = normHex(hex.value); if (c) hex.value = c; });
-    document.querySelectorAll('.swatch').forEach(function (b) { b.addEventListener('click', function () { showColor(b.getAttribute('data-color')); }); });
-    $('bc-reset').addEventListener('click', function () { showColor(''); });
+    function hexInput(input, key, from) {
+      input.addEventListener('input', function () {
+        var c = normHex(input.value);
+        if (c) { col[key] = c; showColors(from); }
+        else if (!input.value.trim()) { col[key] = ''; showColors(from); }
+        else input.setAttribute('aria-invalid', 'true');
+      });
+      input.addEventListener('blur', function () { var c = normHex(input.value); if (c) input.value = c; });
+    }
+    hexInput(hex, 'bc', 'hex'); hexInput(tHex, 'tc', 'thex');
+    picker.addEventListener('input', function () { col.bc = normHex(picker.value) || col.bc; showColors('picker'); });
+    tPicker.addEventListener('input', function () { col.tc = normHex(tPicker.value) || col.tc; showColors('tpicker'); });
+    document.querySelectorAll('.swatch').forEach(function (b) { b.addEventListener('click', function () { col.bc = b.getAttribute('data-color'); showColors(); }); });
+    document.querySelectorAll('.seg-btn').forEach(function (b) { b.addEventListener('click', function () { col.tc = b.getAttribute('data-tc'); showColors(); }); });
+    $('bc-reset').addEventListener('click', function () { col.bc = ''; showColors(); });
     function showPreviewText() {
       var v = function (k) { var f = document.querySelector('[data-field="' + k + '"]'); return f ? f.value.trim() : ''; };
       $('rp-name').textContent = v('name') || 'Your company';
@@ -307,7 +322,7 @@
     api.get('/api/company').then(function (r) {
       fields.forEach(function (f) { f.value = r.company[f.getAttribute('data-field')] || ''; });
       showLogo(r.company.logo_url);
-      showColor(normHex(r.company.brand_color) || '');
+      col.bc = normHex(r.company.brand_color) || ''; col.tc = normHex(r.company.brand_text_color) || ''; showColors();
       showPreviewText();
     }).catch(showError);
 
@@ -315,7 +330,8 @@
       var btn = this, body = {};
       fields.forEach(function (f) { body[f.getAttribute('data-field')] = f.value.trim(); });
       if (body.brand_color && !normHex(body.brand_color)) { showError({ message: 'Enter the brand colour as a hex code like #0F7A4D, or pick one.' }); hex.focus(); return; }
-      body.brand_color = normHex(body.brand_color) || '';
+      if (body.brand_text_color && !normHex(body.brand_text_color)) { showError({ message: 'Enter the header text colour as a hex code like #FFFFFF, or choose White or Black.' }); tHex.focus(); return; }
+      body.brand_color = normHex(body.brand_color) || ''; body.brand_text_color = normHex(body.brand_text_color) || '';
       busy(btn, true);
       api.patch('/api/company', body).then(function () { toast('Report settings saved.'); }).catch(showError).then(function () { busy(btn, false); });
     });

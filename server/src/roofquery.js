@@ -90,10 +90,11 @@ export async function fetchFile(rqId, kind, { brand } = {}) {
 // ---------- brand profiles: one per company, so PDFs carry the company's own name, logo and colours ----------
 const cut = (v, n) => { const s = String(v || '').trim(); return s ? s.slice(0, n) : undefined; };
 function brandFields(c) {
-  const color = /^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(String(c.brand_color || '').trim()) ? c.brand_color.trim() : undefined;
+  const hex = (v) => (/^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(String(v || '').trim()) ? String(v).trim() : undefined);
+  const color = hex(c.brand_color), textColor = hex(c.brand_text_color) || '#FFFFFF'; // header text defaults to white
   return {
     name: cut(`${c.name} · ${c.id.slice(0, 8)}`, 80), companyName: cut(c.name, 80), address: cut(c.address, 160),
-    publicPhone: cut(c.phone, 32), publicEmail: cut(c.email, 160), brandColor: color
+    publicPhone: cut(c.phone, 32), publicEmail: cut(c.email, 160), brandColor: color, brandTextColor: textColor
   };
 }
 // Returns the company's brand profile id, creating or updating it when the branding changed.

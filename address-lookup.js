@@ -226,6 +226,9 @@
     selected = p;
     $('sel-empty').classList.add('hidden');
     $('sel-details').classList.remove('hidden');
+    $('order-bar').classList.remove('hidden');
+    $('ob-line1').textContent = p.line1 || p.label;
+    $('ob-line2').textContent = p.line2 || '';
     $('sel-line1').textContent = p.line1 || p.label;
     $('sel-line2').textContent = p.line2 || '';
     $('sel-lat').textContent = p.lat.toFixed(6);
