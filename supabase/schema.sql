@@ -232,6 +232,9 @@ alter table public.report_orders add column if not exists ready_notified boolean
 alter table public.report_orders add column if not exists refunded_at    timestamptz;
 alter table public.report_orders add column if not exists refund_id      text;
 alter table public.companies     add column if not exists roofquery_brand_hash text;
+-- 30-day free trial of the subscription: one per company.
+alter table public.companies     add column if not exists trial_used    boolean not null default false;
+alter table public.companies     add column if not exists trial_ends_at timestamptz;
 alter table public.companies     add column if not exists brand_text_color text;  -- header text on PDFs; empty = white
 -- The ESX file bought after the report was delivered.
 alter table public.report_orders add column if not exists esx_price_cents         integer;

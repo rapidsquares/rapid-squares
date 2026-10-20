@@ -592,3 +592,13 @@ body.embed .page-head h1 { font-size: 24px; }
 .order-bar-addr b { font-size: 17px; }
 .order-bar-btn { height: 48px; padding: 0 24px; flex: 0 0 auto; }
 @media (max-width: 720px) { .order-bar-btn { width: 100%; } }
+
+/* Order pop-up: free trial nudge */
+.od-trial { margin: 0; padding: 10px 14px; border-radius: 8px; background: var(--accent-soft); font-size: 14px; }
+.od-trial a { font-weight: 600; }
+
+/* Order history: free trial prompt */
+.trial-banner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px; margin: 20px 0 0; padding: 16px 20px; border: 1px solid var(--accent); border-radius: 10px; background: var(--accent-soft); }
+.trial-banner > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.trial-banner b { font-size: 16px; }
+@media (max-width: 720px) { .trial-banner .btn { width: 100%; } }

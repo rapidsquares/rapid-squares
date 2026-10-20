@@ -147,7 +147,7 @@ On Mac or Linux: `cd server`, `cp .env.example .env`, fill it in, then `npm run 
 - **Landing page** at `/` (`index.html`) with an address search, how it works, FAQ and contact. Contact details are `[placeholders]` to fill in.
 - **No account needed** on the Place order page: visitors can look up a roof, see report types and regular prices, and either order as a guest (name + email) or create a free account, which brings them back to the same order. Guest orders are saved as "awaiting payment" and are never sent to RoofQuery until payment is connected. Order history, Report settings, Team and Account still need sign-in.
 
-- **Create an account**, then name your company. New companies get 3 free Premium reports (`FREE_REPORTS_ON_SIGNUP` in `.env`).
+- **Create an account**, then name your company. Each company can try a subscription free for 30 days (`TRIAL_DAYS`): Stripe collects a card at the start, subscriber prices apply during the trial, and the plan begins on day 31 unless they cancel. Free reports on sign-up are off by default (`FREE_REPORTS_ON_SIGNUP=0`); any a company already has are still used first.
 - **Report settings, profile, logo and photo uploads** save to Supabase.
 - **Team invites:** until Resend is connected, invites aren't emailed. The Team page shows each person's invite link to send yourself, and the server window prints the email it would have sent. Each link works once, for that email address only.
 - **Ordering** creates the report record with the right price (free report, subscriber or regular price, ESX add-on). Until Stripe and RoofQuery are connected, nothing is charged and the report waits as "pending". `ALLOW_UNPAID_TEST_ORDERS=true` allows this; set it to `false` before launch.

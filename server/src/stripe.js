@@ -143,12 +143,15 @@ export async function subscribeUrl(company, plan) {
   if (!p) fail(422, 'invalid', 'Choose monthly or yearly.');
   if (company.subscription_status === 'active') fail(409, 'already_subscribed', 'You already have a subscription. Use Manage billing to change it.');
   const customer = await ensureCustomer(company);
+  const trial = trialEligible(company) ? config.trialDays : 0;
   const s = await api('POST', '/checkout/sessions', {
     mode: 'subscription', customer,
     line_items: [{ quantity: 1, price_data: { currency: 'usd', unit_amount: p.cents, recurring: { interval: p.interval }, product_data: { name: p.label } } }],
-    subscription_data: { metadata: { company_id: company.id, plan } },
-    metadata: { kind: 'subscription', company_id: company.id, plan },
-    success_url: `${config.appUrl}/account.html?subscribed=1#billing`,
+    subscription_data: { metadata: { company_id: company.id, plan }, ...(trial ? { trial_period_days: trial } : {}) },
+    // A card is always collected, so the plan starts by itself when the trial ends.
+    payment_method_collection: 'always',
+    metadata: { kind: 'subscription', company_id: company.id, plan, trial_days: String(trial) },
+    success_url: `${config.appUrl}/account.html?${trial ? 'trial' : 'subscribed'}=1#billing`,
     cancel_url: `${config.appUrl}/account.html#billing`
   });
   return s.url;
@@ -232,7 +235,12 @@ export async function handleEvent(event, { onOrderPaid, onOrderCancelled, onEsxP
   }
 }
 
+// One free trial per company: only before its first subscription.
+export function trialEligible(company) {
+  return config.trialDays > 0 && !company.trial_used && !(company.stripe_config && company.stripe_config.subscription_id) && company.subscription_status !== 'active';
+}
 async function syncSubscription(company, sub) {
+  const trialing = sub.status === 'trialing' && !sub.ended_at;
   const active = ['active', 'trialing'].includes(sub.status) && !sub.ended_at;
   const item = sub.items && sub.items.data && sub.items.data[0];
   const interval = item && item.price && item.price.recurring && item.price.recurring.interval;
@@ -241,6 +249,8 @@ async function syncSubscription(company, sub) {
     subscription_status: active ? 'active' : (sub.status === 'past_due' ? 'past_due' : 'canceled'),
     subscription_plan: interval === 'year' ? 'yearly' : 'monthly',
     subscription_renews_at: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
+    trial_ends_at: trialing && sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null,
+    ...(trialing || sub.trial_end ? { trial_used: true } : {}),
     stripe_config: { ...(company.stripe_config || {}), subscription_id: sub.id, cancel_at_period_end: !!sub.cancel_at_period_end }
   });
 }

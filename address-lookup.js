@@ -353,7 +353,11 @@
       var pref = (want && box.querySelector('input[value="' + want + '"]:not([disabled])')) || box.querySelector('input[value="premium_residential"]:not([disabled])');
       (pref || firstOpen).checked = true;
     }
-    if (catalog.signup_free_reports != null) $('od-free-n').textContent = catalog.signup_free_reports;
+    // Free trial: shown to visitors (as a reason to sign up) and to companies that haven't used theirs.
+    var days = catalog.trial_days || 0;
+    $('od-trial-n').textContent = days; $('od-trial-days').textContent = days;
+    $('od-trial-clause').classList.toggle('hidden', !days);
+    $('od-trial').classList.toggle('hidden', !(days && catalog.trial_eligible && !catalog.subscribed && !RS.guest));
     $('od-esx-price').textContent = money(catalog.esx_price_cents);
     updateTotal();
     if (preselect && preselect.esx && !$('od-esx').disabled) { $('od-esx').checked = true; updateTotal(); }

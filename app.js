@@ -216,6 +216,10 @@
       ]);
     }
     load();
+    // Free trial prompt for companies that haven't used theirs (people who can manage billing only).
+    if (can('billing.manage')) api.get('/api/products').then(function (pr) {
+      if (pr.trial_eligible && pr.trial_days && !pr.subscribed) { $('tb-days').textContent = pr.trial_days; $('trial-banner').classList.remove('hidden'); }
+    }).catch(function () { /* the banner is optional */ });
     setupQuickOrder(function () { state.page = 1; load(); });
     var back = new URLSearchParams(location.search);
     if (back.get('paid')) { toast('Payment received for ' + back.get('paid') + '. Your order is placed.'); setTimeout(load, 2500); }
@@ -593,19 +597,29 @@
       return api.get('/api/billing').then(function (b) {
         var s = b.subscription || {}, plans = b.plans || { monthly_cents: 10000, yearly_cents: 100000 };
         var actions = $('bill-plan-actions'); actions.innerHTML = '';
-        if (s.status === 'active') {
+        var perMo = function (c) { return money(c).replace('.00', ''); };
+        if (s.status === 'active' && s.trial_ends_at) {
+          $('bill-plan').textContent = 'Free trial';
+          $('bill-plan-detail').textContent = 'Subscriber prices on every report \u00b7 ' + (s.cancel_at_period_end ? 'ends ' + fmtDate(s.trial_ends_at) + ', no charge' : 'ends ' + fmtDate(s.trial_ends_at) + ', then ' + perMo(s.price_cents) + (s.plan === 'yearly' ? '/year' : '/month'));
+          actions.appendChild(el('button', { type: 'button', class: 'btn', text: 'Manage subscription', onclick: function () { goTo('/api/billing/portal'); } }));
+        } else if (s.status === 'active') {
           $('bill-plan').textContent = (s.plan === 'yearly' ? 'Yearly' : 'Monthly') + ' \u00b7 ' + money(s.price_cents).replace('.00', '') + (s.plan === 'yearly' ? '/year' : '/month');
           $('bill-plan-detail').textContent = 'Subscriber prices on every report \u00b7 ' + (s.cancel_at_period_end ? 'ends ' : 'renews ') + fmtDate(s.renews_at);
           actions.appendChild(el('button', { type: 'button', class: 'btn', text: 'Manage subscription', onclick: function () { goTo('/api/billing/portal'); } }));
         } else {
-          $('bill-plan').textContent = 'Pay per report';
-          $('bill-plan-detail').textContent = s.status === 'past_due' ? 'Your last subscription payment failed. Update your card on the billing page.' : 'Subscribe to get lower prices on every report.';
-          actions.appendChild(el('button', { type: 'button', class: 'btn', text: 'Monthly \u00b7 ' + money(plans.monthly_cents).replace('.00', '') + '/mo', onclick: function () { goTo('/api/billing/subscribe', { plan: 'monthly' }); } }));
-          actions.appendChild(el('button', { type: 'button', class: 'btn btn-dark', text: 'Yearly \u00b7 ' + money(plans.yearly_cents).replace('.00', '') + '/yr', onclick: function () { goTo('/api/billing/subscribe', { plan: 'yearly' }); } }));
+          var trial = b.trial_eligible && b.trial_days;
+          $('bill-plan').textContent = trial ? 'Try it free for ' + b.trial_days + ' days' : 'Pay per report';
+          $('bill-plan-detail').textContent = s.status === 'past_due' ? 'Your last subscription payment failed. Update your card on the billing page.'
+            : trial ? 'Subscriber prices on every report, no subscription charge for ' + b.trial_days + ' days. Your plan starts after the trial unless you cancel.'
+            : 'Subscribe to get lower prices on every report.';
+          var lead = trial ? 'Start free trial \u00b7 ' : '';
+          actions.appendChild(el('button', { type: 'button', class: 'btn', text: lead + 'Monthly \u00b7 ' + perMo(plans.monthly_cents) + '/mo' + (trial ? ' after' : ''), onclick: function () { goTo('/api/billing/subscribe', { plan: 'monthly' }); } }));
+          actions.appendChild(el('button', { type: 'button', class: 'btn btn-dark', text: lead + 'Yearly \u00b7 ' + perMo(plans.yearly_cents) + '/yr' + (trial ? ' after' : ''), onclick: function () { goTo('/api/billing/subscribe', { plan: 'yearly' }); } }));
         }
         $('bill-count').textContent = b.reports_this_month;
         $('bill-spend').textContent = money(b.spend_this_month_cents);
         $('bill-free').textContent = b.free_reports_remaining;
+        $('bill-free').parentNode.classList.toggle('hidden', !b.free_reports_remaining); // only while some are left
         $('bill-card').textContent = b.card ? b.card.brand + ' ending in ' + b.card.last4 : 'No card saved';
         $('bill-card-exp').textContent = b.card ? 'Expires ' + b.card.exp : 'Add a card to order paid reports without re-entering it.';
         $('bill-card-btn').textContent = b.card ? 'Update card' : 'Add a card';
@@ -633,8 +647,8 @@
     });
     // Back from a Stripe page: Stripe tells our server a moment later, so refresh shortly after.
     var back = new URLSearchParams(location.search);
-    if (back.has('card') || back.has('subscribed')) {
-      toast(back.has('card') ? 'Card saved. It can take a few seconds to show here.' : 'Subscription started. Subscriber prices apply to your next order.');
+    if (back.has('card') || back.has('subscribed') || back.has('trial')) {
+      toast(back.has('card') ? 'Card saved. It can take a few seconds to show here.' : back.has('trial') ? 'Free trial started. Subscriber prices apply to your next order.' : 'Subscription started. Subscriber prices apply to your next order.');
       setTimeout(loadBilling, 2500); setTimeout(loadBilling, 7000);
       history.replaceState(null, '', location.pathname + location.hash);
     }

@@ -22,7 +22,7 @@ async function products() {
   return Object.fromEntries(rows.map((p) => [p.id, p]));
 }
 function companyOut(c) {
-  const { stripe_config, stripe_customer_id, subscription_status, subscription_plan, subscription_renews_at, free_reports_remaining, ...rest } = c;
+  const { stripe_config, stripe_customer_id, subscription_status, subscription_plan, subscription_renews_at, free_reports_remaining, trial_used, trial_ends_at, ...rest } = c;
   return rest;
 }
 function orderOut(o, prods, people) {
@@ -103,7 +103,7 @@ export function registerRoutes(r) {
   // Price list for visitors who aren't signed in (regular prices; free reports need an account).
   r.get('/api/public/products', async () => {
     const p = await products();
-    return { products: publicProducts(p), esx_price_cents: p.esx_addon ? p.esx_addon.price_cents : 500, free_reports_remaining: 0, subscribed: false, signup_free_reports: config.freeReportsOnSignup };
+    return { products: publicProducts(p), esx_price_cents: p.esx_addon ? p.esx_addon.price_cents : 500, free_reports_remaining: 0, subscribed: false, signup_free_reports: config.freeReportsOnSignup, trial_days: stripe.connected() ? config.trialDays : 0 };
   });
 
   // Guest order: no account. Saved as awaiting payment; it is only sent to RoofQuery after payment.
@@ -223,6 +223,7 @@ export function registerRoutes(r) {
       products: Object.values(p).filter((x) => x.id !== 'esx_addon').map((x) => ({ id: x.id, label: x.label, price_cents: x.price_cents, subscriber_price_cents: x.subscriber_price_cents, available: x.available, esx_addon_allowed: x.esx_addon_allowed, delivery_minutes: x.delivery_minutes })),
       esx_price_cents: p.esx_addon ? p.esx_addon.price_cents : 500,
       free_reports_remaining: m.company.free_reports_remaining, subscribed: m.company.subscription_status === 'active',
+      trial_days: config.trialDays, trial_eligible: stripe.connected() && stripe.trialEligible(m.company),
       has_card: !stripe.connected() || !!(m.company.stripe_config && m.company.stripe_config.card)
     };
   });
@@ -530,7 +531,8 @@ export function registerRoutes(r) {
       .concat(esxBuys.map((o) => ({ date: o.esx_purchased_at, description: `ESX file (Xactimate) · RS-${o.report_number}`, amount_cents: o.esx_price_cents, receipt_url: o.esx_receipt_url || null })))
       .sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 10);
     return {
-      subscription: c.subscription_status === 'active' ? { plan: c.subscription_plan, status: 'active', price_cents: c.subscription_plan === 'yearly' ? config.stripe.yearlyCents : config.stripe.monthlyCents, renews_at: c.subscription_renews_at, cancel_at_period_end: !!cfg.cancel_at_period_end } : { status: c.subscription_status || 'none' },
+      subscription: c.subscription_status === 'active' ? { plan: c.subscription_plan, status: 'active', price_cents: c.subscription_plan === 'yearly' ? config.stripe.yearlyCents : config.stripe.monthlyCents, renews_at: c.subscription_renews_at, cancel_at_period_end: !!cfg.cancel_at_period_end, trial_ends_at: c.trial_ends_at && new Date(c.trial_ends_at) > new Date() ? c.trial_ends_at : null } : { status: c.subscription_status || 'none' },
+      trial_days: config.trialDays, trial_eligible: stripe.connected() && stripe.trialEligible(c),
       plans: { monthly_cents: config.stripe.monthlyCents, yearly_cents: config.stripe.yearlyCents },
       card: cfg.card ? { brand: cfg.card.brand, last4: cfg.card.last4, exp: cfg.card.exp } : null, free_reports_remaining: c.free_reports_remaining,
       reports_this_month: month.length, spend_this_month_cents: month.reduce((s, o) => s + o.price_cents, 0) + esxThisMonth,

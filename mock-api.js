@@ -41,7 +41,7 @@
       logo_url: null, brand_color: '#B03A0A', created_at: iso(now - 120 * DAY),
       subscription: { plan: 'monthly', price_cents: 10000, status: 'active', renews_at: iso(now + 12 * DAY) },
       card: { brand: 'Visa', last4: '4242', exp: '08/28' },
-      free_reports_remaining: 2,
+      free_reports_remaining: 0, trial_used: true,
       billing_email: 'billing@lonestarroofing.example', billing_address: '2300 Ranch Rd 620 S, Lakeway, TX 78734'
     };
     var users = [
@@ -202,7 +202,8 @@
     var co = c.db.company;
     return {
       products: Object.keys(PRODUCTS).map(function (k) { var p = PRODUCTS[k]; return { id: k, label: p.label, price_cents: p.price, subscriber_price_cents: p.subscriber_price, available: p.available, esx_addon_allowed: p.esx, delivery_minutes: p.delivery_minutes }; }),
-      esx_price_cents: ESX_PRICE, free_reports_remaining: co.free_reports_remaining, subscribed: !!(co.subscription && co.subscription.status === 'active')
+      esx_price_cents: ESX_PRICE, free_reports_remaining: co.free_reports_remaining, subscribed: !!(co.subscription && co.subscription.status === 'active'),
+      trial_days: 30, trial_eligible: !co.trial_used && !(co.subscription && co.subscription.status === 'active')
     };
   });
 
@@ -210,7 +211,7 @@
   route('GET', '/api/public/products', function () {
     return {
       products: Object.keys(PRODUCTS).map(function (k) { var p = PRODUCTS[k]; return { id: k, label: p.label, price_cents: p.price, subscriber_price_cents: p.subscriber_price, available: p.available, esx_addon_allowed: p.esx, delivery_minutes: p.delivery_minutes }; }),
-      esx_price_cents: ESX_PRICE, free_reports_remaining: 0, subscribed: false, signup_free_reports: 3
+      esx_price_cents: ESX_PRICE, free_reports_remaining: 0, subscribed: false, signup_free_reports: 0, trial_days: 30
     };
   });
   route('POST', '/api/guest-orders', function (c) {
@@ -389,7 +390,8 @@
     }
     invoices.sort(function (a, b) { return b.date < a.date ? -1 : 1; });
     return {
-      subscription: co.subscription ? clone(co.subscription) : { status: 'none' }, plans: { monthly_cents: 10000, yearly_cents: 100000 }, card: clone(co.card), free_reports_remaining: co.free_reports_remaining,
+      subscription: co.subscription ? clone(co.subscription) : { status: 'none' }, plans: { monthly_cents: 10000, yearly_cents: 100000 },
+      trial_days: 30, trial_eligible: !co.trial_used && !(co.subscription && co.subscription.status === 'active'), card: clone(co.card), free_reports_remaining: co.free_reports_remaining,
       reports_this_month: month.filter(charged).length, spend_this_month_cents: month.filter(charged).reduce(function (s, o) { return s + o.price_cents; }, 0),
       billing_email: co.billing_email, billing_address: co.billing_address, invoices: invoices.slice(0, 10)
     };
