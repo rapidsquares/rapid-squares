@@ -24,7 +24,7 @@
     <span class="brand-sub">Aerial Roof Reports</span>
   </a>
   <nav class="lp-nav" aria-label="Primary">
-    <a href="#how" class="lp-hide-sm">How it works</a>
+    <a href="#reports" class="lp-hide-sm">Our reports</a>
     <a href="#faq" class="lp-hide-sm">FAQ</a>
     <a href="#contact" class="lp-hide-sm">Contact</a>
     <a href="signin.html" id="lp-account">Sign in</a>
@@ -82,29 +82,53 @@
     </div>
   </section>
 
-  <!-- How it works -->
-  <section id="how" class="lp-section" aria-labelledby="how-h">
+  <!-- Our reports -->
+  <section id="reports" class="lp-section" aria-labelledby="rep-h">
     <div class="lp-wrap">
-      <p class="lp-eyebrow">How it works</p>
-      <h2 id="how-h">Three steps from address to report</h2>
-      <ol class="lp-steps">
-        <li>
-          <span class="lp-num">01</span>
-          <h3>Look up the address</h3>
-          <p>Type the property address and see a satellite view of the roof, so you know you've got the right building.</p>
-        </li>
-        <li>
-          <span class="lp-num">02</span>
-          <h3>Choose your report</h3>
-          <p>Pick Premium Residential or Commercial and add the Xactimate (ESX) file if you need it. You see the price before you order.</p>
-        </li>
-        <li>
-          <span class="lp-num">03</span>
-          <h3>Get your report</h3>
-          <p>You get a full report with PDF and full sketch. Premium Residential reports are delivered in under 2 hours.</p>
-        </li>
-      </ol>
-      <a href="new-sketch.html" class="btn btn-primary">Look up a roof</a>
+      <p class="lp-eyebrow">Our reports</p>
+      <h2 id="rep-h">The right roof numbers for every job</h2>
+      <div class="lp-reports">
+        <article class="lp-report">
+          <span class="lp-report-tag">Included with a subscription</span>
+          <h3>Instant Squares</h3>
+          <p class="lp-report-lede">Roof size in seconds, before you order anything.</p>
+          <ul>
+            <li>Roof area in squares and pitch for every building</li>
+            <li>Building outlines drawn on the satellite view</li>
+            <li>5 years of hail, wind and tornado history</li>
+            <li>Results in a few seconds, right on the order page</li>
+          </ul>
+          <div class="lp-report-price lp-report-price-text"><b>Included with a subscription</b><span>Try it free for 30 days</span></div>
+          <a href="account.html#billing" class="btn btn-outline">Start free trial</a>
+        </article>
+        <article class="lp-report lp-report-main">
+          <span class="lp-report-tag">Most popular · delivered in under 2 hours</span>
+          <h3>Premium Residential</h3>
+          <p class="lp-report-lede">A full measurement report for homes, ready for your estimate.</p>
+          <ul>
+            <li>Full report as a PDF, with the full roof sketch</li>
+            <li>Squares, pitch, ridges, hips, valleys, eaves and rakes</li>
+            <li>Your company's name, logo and colors on the report</li>
+            <li>Add the Xactimate (ESX) file for <span data-price="esx">$5</span></li>
+          </ul>
+          <div class="lp-report-price"><b data-price="premium_residential">$12</b><span><span data-price="premium_residential" data-sub>$8</span> with a subscription</span></div>
+          <a href="new-sketch.html" class="btn btn-primary">Order Premium Residential</a>
+        </article>
+        <article class="lp-report">
+          <span class="lp-report-tag">Large and complex roofs</span>
+          <h3>Commercial</h3>
+          <p class="lp-report-lede">Measurements for commercial buildings and multi-structure properties.</p>
+          <ul>
+            <li>Full report as a PDF, with the full roof sketch</li>
+            <li>Every building on the property measured</li>
+            <li>Your company's name, logo and colors on the report</li>
+            <li>Add the Xactimate (ESX) file for <span data-price="esx">$5</span></li>
+          </ul>
+          <div class="lp-report-price"><b data-price="commercial">$30</b><span><span data-price="commercial" data-sub>$25</span> with a subscription</span></div>
+          <a href="new-sketch.html" class="btn btn-outline">Order Commercial</a>
+        </article>
+      </div>
+      <p class="lp-small lp-soon">Certified Residential Rapid Squares is coming soon.</p>
     </div>
   </section>
 
@@ -178,6 +202,16 @@
     document.getElementById('lp-year').textContent = new Date().getFullYear();
     var signedIn = window.RS && RS.api && (RS.api.mode === 'sample' || (RS.auth && RS.auth.signedIn()));
     if (signedIn) { var a = document.getElementById('lp-account'); a.textContent = 'My account'; a.href = 'orders.html'; }
+    // Prices on the report cards come from the live price list (the numbers in the page are a fallback).
+    if (window.RS && RS.api) RS.api.get('/api/public/products').then(function (r) {
+      var money = function (c) { return '$' + (c / 100).toFixed(2).replace(/\.00$/, ''); };
+      var byId = {}; (r.products || []).forEach(function (p) { byId[p.id] = p; });
+      document.querySelectorAll('[data-price]').forEach(function (n) {
+        var id = n.getAttribute('data-price');
+        if (id === 'esx') { if (r.esx_price_cents != null) n.textContent = money(r.esx_price_cents); return; }
+        var p = byId[id]; if (p) n.textContent = money(n.hasAttribute('data-sub') ? p.subscriber_price_cents : p.price_cents);
+      });
+    }).catch(function () { /* keep the fallback prices */ });
   })();
 </script>
 </body>

@@ -312,21 +312,21 @@ export function registerRoutes(r) {
     return { order: orderOut(saved, prods, { [m.user.id]: m.user }), checkout_url: null, charged_cents: price, used_free_report: usedFree, receipt_url: saved.receipt_url || null };
   });
 
-  // ---------- Instant estimate (RoofQuery Instant Query): subscribers only ----------
+  // ---------- Instant Squares (RoofQuery Instant Query): subscribers only ----------
   r.post('/api/instant-query', async ({ req }) => {
     const m = await member(req); m.need('orders.create'); const b = await readJson(req);
-    if (m.company.subscription_status !== 'active') fail(403, 'subscribers_only', 'Instant estimates are for subscribers. Start a free trial on the Account page to use them.');
+    if (m.company.subscription_status !== 'active') fail(403, 'subscribers_only', 'Instant Squares is for subscribers. Start a free trial on the Account page to use them.');
     const lat = Number(b.lat), lon = Number(b.lon);
     if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) fail(422, 'invalid', 'Look up the property first.');
-    if (!roofquery.connected()) fail(503, 'not_connected', 'Instant estimates will work once RoofQuery is connected.');
-    rateLimit(null, 'iq|' + m.company.id, 120, 60 * 60 * 1000, 'You\u2019ve run a lot of instant estimates this hour. Try again in a little while.');
+    if (!roofquery.connected()) fail(503, 'not_connected', 'Instant Squares will work once RoofQuery is connected.');
+    rateLimit(null, 'iq|' + m.company.id, 120, 60 * 60 * 1000, 'You\u2019ve used Instant Squares a lot this hour. Try again in a little while.');
     let q;
     try { q = await roofquery.instantQuery(lat, lon); }
     catch (e) {
-      if (e.status === 404) fail(503, 'not_enabled', 'Instant estimates aren\u2019t switched on for this account yet.');
-      if (e.status === 503) fail(503, 'busy', 'The instant estimate service is busy. Try again in a minute.');
+      if (e.status === 404) fail(503, 'not_enabled', 'Instant Squares isn\u2019t switched on for this account yet.');
+      if (e.status === 503) fail(503, 'busy', 'Instant Squares is busy. Try again in a minute.');
       if (e.status === 400) fail(422, 'invalid', 'That location couldn\u2019t be estimated. Move the pin onto the roof and try again.');
-      fail(502, 'estimate_failed', 'The instant estimate didn\u2019t work this time. Try again in a moment.');
+      fail(502, 'estimate_failed', 'Instant Squares didn\u2019t work this time. Try again in a moment.');
     }
     const r1 = (n) => (typeof n === 'number' ? Math.round(n * 10) / 10 : null);
     const pt = (p) => ({ lat: p.lat, lng: p.lng });

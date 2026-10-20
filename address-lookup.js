@@ -533,7 +533,7 @@
   }
   if (/[?&]resume=1/.test(location.search) && !RS.guest) document.addEventListener('rs:ready', resumePending, { once: true });
 
-  // ---------- Instant estimate (RoofQuery Instant Query): subscribers only ----------
+  // ---------- Instant Squares (RoofQuery Instant Query): subscribers only ----------
   var iq = { mode: 'off', result: null, at: null, source: null }; // mode: off (guest) · locked · on
   var iqBtn = $('iq-btn'), iqPanel = $('iq-panel');
   function iqInit() {
@@ -541,8 +541,8 @@
     loadCatalog().then(function (c) {
       iq.mode = c.subscribed ? 'on' : 'locked';
       iqBtn.classList.remove('hidden');
-      iqBtn.classList.toggle('locked', iq.mode === 'locked');
-      $('iq-btn-text').textContent = iq.mode === 'on' ? 'Instant estimate' : 'Instant estimate \u00b7 Subscribers';
+      iqBtn.classList.toggle('iq-locked', iq.mode === 'locked');
+      $('iq-btn-text').textContent = iq.mode === 'on' ? 'Instant Squares' : 'Instant Squares \u00b7 Subscribers';
     }).catch(function () { /* the button simply stays hidden */ });
   }
   if (window.RS && RS.me) iqInit(); else document.addEventListener('rs:ready', iqInit, { once: true });
@@ -560,7 +560,7 @@
   }
   function iqUpsell() {
     iqPanel.innerHTML = '';
-    var head = iqEl('div', 'iq-head'); var h = iqEl('h2', null, 'Instant estimate'); h.id = 'iq-h'; head.appendChild(h); head.appendChild(iqEl('span', 'iq-tag', 'Subscribers'));
+    var head = iqEl('div', 'iq-head'); var h = iqEl('h2', null, 'Instant Squares'); h.id = 'iq-h'; head.appendChild(h); head.appendChild(iqEl('span', 'iq-tag', 'Subscribers'));
     iqPanel.appendChild(head);
     iqPanel.appendChild(iqEl('p', 'hint', 'See roof area, pitch and 5 years of storm history in seconds, before you order. Included with a subscription.'));
     var foot = iqEl('div', 'iq-foot');
@@ -582,7 +582,7 @@
       iq.result = r; iqRender(r); iqDraw(r);
     }).catch(function (e) {
       if (e && e.code === 'subscribers_only') { iq.mode = 'locked'; iqInit(); iqUpsell(); return; }
-      iqPanel.innerHTML = ''; var p = iqEl('p', 'form-error', (e && e.message) || 'The instant estimate didn\u2019t work. Try again.'); iqPanel.appendChild(p);
+      iqPanel.innerHTML = ''; var p = iqEl('p', 'form-error', (e && e.message) || 'Instant Squares didn\u2019t work. Try again.'); iqPanel.appendChild(p);
     }).then(function () { iqBtn.disabled = false; iqBtn.setAttribute('aria-busy', 'false'); });
   }
   iqBtn.addEventListener('click', iqRun);
@@ -593,7 +593,7 @@
   function iqRender(r) {
     iqPanel.innerHTML = '';
     var bs = r.buildings || [], main = bs.filter(function (b) { return b.primary; })[0] || bs[0];
-    var head = iqEl('div', 'iq-head'); var h = iqEl('h2', null, 'Instant estimate'); h.id = 'iq-h'; head.appendChild(h);
+    var head = iqEl('div', 'iq-head'); var h = iqEl('h2', null, 'Instant Squares'); h.id = 'iq-h'; head.appendChild(h);
     if (main && main.confidence) head.appendChild(iqEl('span', 'iq-tag ' + main.confidence, main.confidence.charAt(0).toUpperCase() + main.confidence.slice(1) + ' confidence'));
     if (r.sandbox) head.appendChild(iqEl('span', 'iq-tag', 'Sample data'));
     iqPanel.appendChild(head);

@@ -630,7 +630,23 @@ body.embed .page-head h1 { font-size: 24px; }
 .iq-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
 .iq-foot .hint { flex: 1 1 280px; margin: 0; }
 .iq-stale { margin: 0; padding: 10px 14px; border-radius: 8px; background: var(--accent-soft); font-size: 14px; }
-.btn.locked { color: var(--muted); }
+.btn.iq-locked { color: var(--muted); }
 @media (max-width: 720px) { .order-bar-actions { width: 100%; flex-direction: column; } .iq-stat b { font-size: 19px; } .iq-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 .inv-expires { display: block; margin-top: 4px; font-size: 12px; }
+
+/* Landing: report types */
+.lp-reports { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 20px; margin-bottom: 16px; align-items: stretch; }
+.lp-report { display: flex; flex-direction: column; gap: 12px; padding: 26px 24px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); }
+.lp-report-main { border: 2px solid var(--accent); box-shadow: 0 12px 30px rgba(176, 58, 10, .10); }
+.lp-report-tag { align-self: flex-start; padding: 4px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-dark); font-size: 12px; font-weight: 600; }
+.lp-report h3 { margin: 0; font-family: 'Archivo', sans-serif; font-size: 22px; }
+.lp-report-lede { margin: 0; color: var(--ink-2); font-size: 15px; line-height: 1.5; }
+.lp-report ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; color: var(--ink-2); font-size: 14px; line-height: 1.45; flex: 1 1 auto; }
+.lp-report-price { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding-top: 12px; border-top: 1px solid var(--line-2); }
+.lp-report-price b { font-family: 'Archivo', sans-serif; font-size: 28px; font-weight: 800; }
+.lp-report-price span { color: var(--muted); font-size: 14px; }
+.lp-report .btn { align-self: stretch; }
+.lp-report-price-text { flex-direction: column; align-items: flex-start; gap: 2px; }
+.lp-report-price-text b { line-height: 1.15; }
+.lp-soon { color: var(--muted); }

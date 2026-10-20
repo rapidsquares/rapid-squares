@@ -69,7 +69,7 @@ export async function placeOrder(order) {
   const body = {
     country: parts.country, street: parts.street, city: parts.city, state: parts.state, postalCode: parts.postalCode,
     latitude: order.lat, longitude: order.lon,
-    scope: rq.scope,
+    scope: order.report_type === 'commercial' ? 'all_structures' : rq.scope, // commercial: every building on the property
     reportType: REPORT_TYPE[order.report_type] || 'residential',
     reportName: 'RS-' + order.report_number
   };

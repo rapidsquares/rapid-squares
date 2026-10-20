@@ -279,11 +279,11 @@
   }
   route('GET', '/api/orders/:id/pdf', notYet('The PDF report'));
   route('GET', '/api/orders/:id/esx', notYet('The Xactimate (ESX) file'));
-  // Instant estimate (sample): two buildings drawn around the pin, plus a storm history.
+  // Instant Squares (sample): two buildings drawn around the pin, plus a storm history.
   route('POST', '/api/instant-query', function (c) {
     need(c.me, 'orders.create');
     var co = c.db.company;
-    if (!(co.subscription && co.subscription.status === 'active')) fail(403, 'subscribers_only', 'Instant estimates are for subscribers. Start a free trial on the Account page to use them.');
+    if (!(co.subscription && co.subscription.status === 'active')) fail(403, 'subscribers_only', 'Instant Squares is for subscribers. Start a free trial on the Account page to use them.');
     var lat = Number(c.body && c.body.lat), lon = Number(c.body && c.body.lon);
     if (!isFinite(lat) || !isFinite(lon)) fail(422, 'invalid', 'Look up the property first.');
     var dLat = 1 / 111320, dLon = 1 / (111320 * Math.cos(lat * Math.PI / 180));

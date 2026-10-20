@@ -656,7 +656,7 @@
     var nav = document.querySelector('.topnav');
     if (nav) {
       nav.innerHTML = '';
-      nav.appendChild(el('a', { href: 'index.html#how', text: 'How it works' }));
+      nav.appendChild(el('a', { href: 'index.html#reports', text: 'Our reports' }));
       nav.appendChild(el('a', { href: 'signin.html?next=' + next, text: 'Sign in' }));
       nav.appendChild(el('a', { href: 'signin.html?step=signup&next=' + next, class: 'nav-cta', text: 'Create free account' }));
     }
