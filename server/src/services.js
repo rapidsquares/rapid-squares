@@ -9,8 +9,14 @@ export * as stripe from './stripe.js';
 
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 // Plain text → simple HTML: links become clickable, line breaks are kept.
+// A line like "Download the PDF report: https://…" becomes a link reading "Download the PDF report".
 function toHtml(text) {
-  const body = esc(text).replace(/https?:\/\/[^\s<]+/g, (u) => `<a href="${u}" style="color:#1d4ed8">${u}</a>`).replace(/\n/g, '<br>');
+  const link = (u, label) => `<a href="${u}" style="color:#B03A0A;font-weight:600">${label}</a>`;
+  const body = String(text).split('\n').map((line) => {
+    const m = line.match(/^([^:]{2,60}):\s*(https?:\/\/\S+)$/);
+    if (m) return link(esc(m[2]), esc(m[1]));
+    return esc(line).replace(/https?:\/\/[^\s<]+/g, (u) => link(u, u));
+  }).join('<br>');
   return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;color:#111827;max-width:560px">${body}` +
     `<p style="margin-top:28px;font-size:12px;color:#6b7280">Rapid Squares · <a href="${esc(config.appUrl)}" style="color:#6b7280">${esc(config.appUrl.replace(/^https?:\/\//, ''))}</a></p></div>`;
 }

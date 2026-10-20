@@ -70,6 +70,33 @@
             </label>
           </div>
         </div>
+        <div class="fld">
+          <span class="label" id="bc-label">Brand colour</span>
+          <div class="color-row">
+            <label class="color-swatch" title="Pick a colour">
+              <input id="bc-picker" type="color" value="#B03A0A" aria-labelledby="bc-label">
+            </label>
+            <input id="bc-hex" class="color-hex" type="text" inputmode="text" maxlength="7" spellcheck="false" autocomplete="off" placeholder="#B03A0A" aria-label="Brand colour hex code" aria-describedby="bc-hint" data-field="brand_color">
+            <div class="swatches" role="group" aria-label="Quick colours">
+              <button type="button" class="swatch" data-color="#B03A0A" style="background:#B03A0A" aria-label="Rust #B03A0A"></button>
+              <button type="button" class="swatch" data-color="#1F4E79" style="background:#1F4E79" aria-label="Navy #1F4E79"></button>
+              <button type="button" class="swatch" data-color="#0F7A4D" style="background:#0F7A4D" aria-label="Green #0F7A4D"></button>
+              <button type="button" class="swatch" data-color="#B91C1C" style="background:#B91C1C" aria-label="Red #B91C1C"></button>
+              <button type="button" class="swatch" data-color="#6B21A8" style="background:#6B21A8" aria-label="Purple #6B21A8"></button>
+              <button type="button" class="swatch" data-color="#1F2937" style="background:#1F2937" aria-label="Charcoal #1F2937"></button>
+            </div>
+            <button type="button" class="linkbtn" id="bc-reset">Use default</button>
+          </div>
+          <span class="hint" id="bc-hint">Colours the header band of your PDF reports. Text on it switches to black or white automatically so it stays readable.</span>
+          <div class="report-preview" aria-label="Report header preview">
+            <div class="rp-band" id="rp-band">
+              <img class="logo-img rp-logo hidden" alt="">
+              <div class="rp-text"><b id="rp-name">Your company</b><span id="rp-contact">Phone · Email</span></div>
+              <span class="rp-tag">Roof Report</span>
+            </div>
+            <div class="rp-body"><span></span><span></span><span style="width: 60%"></span></div>
+          </div>
+        </div>
       </section>
 
       <section class="card" aria-labelledby="sec-ct">

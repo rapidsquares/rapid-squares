@@ -135,6 +135,7 @@
     var out = clone(o); delete out.simulate;
     out.product_label = p.label;
     out.ordered_by_name = by ? by.full_name : 'Former team member';
+    out.esx_available = o.status === 'delivered' && !o.esx_purchased && !!p.esx;
     if (o.status === 'pending' || o.status === 'in_progress') {
       var mins = p.delivery_minutes || 120;
       out.eta = iso(new Date(o.created_at).getTime() + mins * MIN);
@@ -179,6 +180,7 @@
     var b = c.body || {};
     if ('name' in b && !str(b.name)) fail(422, 'invalid', 'Enter your company name.');
     if ('email' in b && str(b.email) && !emailOk(str(b.email))) fail(422, 'invalid', 'Enter a valid email address, like estimates@yourcompany.com.');
+    if (b.brand_color && !/^#[0-9A-Fa-f]{6}$/.test(str(b.brand_color))) fail(422, 'invalid', 'Enter the brand colour as a hex code like #0F7A4D.');
     ['name', 'license_number', 'contact_name', 'phone', 'email', 'website', 'address', 'brand_color'].forEach(function (k) { if (k in b) c.db.company[k] = str(b[k]); });
     save(c.db);
     return { company: companyOut(c.db.company) };
@@ -233,7 +235,7 @@
         (!text || (o.address + ' ' + o.report_number).toLowerCase().indexOf(text) !== -1);
     }).sort(function (a, b) { return b.created_at < a.created_at ? -1 : 1; });
     var size = Math.min(50, parseInt(q.page_size, 10) || 10), page = Math.max(1, parseInt(q.page, 10) || 1);
-    return { orders: list.slice((page - 1) * size, page * size).map(function (o) { return orderOut(c.db, o); }), total: list.length, page: page, page_size: size, counts: counts, scope: mine ? 'mine' : 'company' };
+    return { orders: list.slice((page - 1) * size, page * size).map(function (o) { return orderOut(c.db, o); }), total: list.length, page: page, page_size: size, counts: counts, scope: mine ? 'mine' : 'company', esx_price_cents: ESX_PRICE, can_buy_esx: true };
   });
   route('GET', '/api/orders/:id', function (c) {
     advance(c.db);
@@ -274,6 +276,12 @@
   }
   route('GET', '/api/orders/:id/pdf', notYet('The PDF report'));
   route('GET', '/api/orders/:id/esx', notYet('The Xactimate (ESX) file'));
+  route('POST', '/api/orders/:id/buy-esx', function (c) {
+    need(c.me, 'orders.create'); var o = findOrder(c);
+    if (o.status !== 'delivered') fail(409, 'not_ready', 'The ESX file can be bought once the report is ready.');
+    o.esx_purchased = true; save(c.db);
+    return { purchased: true, url: null, charged_cents: ESX_PRICE };
+  });
   route('POST', '/api/orders/:id/details', function (c) { findOrder(c); need(c.me, 'orders.create'); fail(501, 'not_connected', 'Sending details to RoofQuery will work once RoofQuery is connected. This is sample data.'); });
   function findOrder(c) {
     var mine = permsOf(c.me).indexOf('orders.view_all') === -1;

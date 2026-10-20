@@ -84,7 +84,8 @@ export async function cardSetupUrl(company, returnPath = 'account.html') {
 // ---------- charging for an order ----------
 // Charges the saved card right away. Returns { paid: true, payment_id, receipt_url } or, when there is no
 // saved card or the bank wants the customer to confirm, { checkout_url } for a Stripe payment page.
-export async function chargeOrder(company, amountCents, description, order) {
+// purpose: 'order' (the report) or 'esx' (the ESX file bought later). Each has its own idempotency key.
+export async function chargeOrder(company, amountCents, description, order, { purpose = 'order' } = {}) {
   const customer = await ensureCustomer(company);
   const card = company.stripe_config && company.stripe_config.card;
   if (card && card.id) {
@@ -92,29 +93,39 @@ export async function chargeOrder(company, amountCents, description, order) {
       const pi = await api('POST', '/payment_intents', {
         amount: amountCents, currency: 'usd', customer, payment_method: card.id, off_session: true, confirm: true,
         description, receipt_email: company.email || undefined,
-        metadata: { order_id: order.id, company_id: company.id, report_number: 'RS-' + order.report_number }
-      }, { idempotencyKey: 'order-' + order.id });
+        metadata: { order_id: order.id, company_id: company.id, report_number: 'RS-' + order.report_number, purpose }
+      }, { idempotencyKey: (purpose === 'order' ? 'order-' : purpose + '-') + order.id });
       if (pi.status === 'succeeded') return { paid: true, payment_id: pi.id, receipt_url: await receiptUrl(pi) };
     } catch (e) {
       // Bank wants the customer present (authentication_required) → fall through to a payment page.
       if (!(e.stripe && e.stripe.code === 'authentication_required')) throw e;
     }
   }
-  return { checkout_url: await checkoutForOrder({ customer, amountCents, description, order, saveCard: true, email: null }) };
+  return { checkout_url: await checkoutForOrder({ customer, amountCents, description, order, saveCard: true, email: null, purpose }) };
 }
 
-export async function checkoutForOrder({ customer, amountCents, description, order, saveCard, email, guest }) {
+export async function checkoutForOrder({ customer, amountCents, description, order, saveCard, email, guest, purpose = 'order', successUrl, cancelUrl }) {
   const back = guest ? 'new-sketch.html' : 'orders.html';
+  const esx = purpose === 'esx';
   const s = await api('POST', '/checkout/sessions', {
     mode: 'payment', customer: customer || undefined, customer_email: customer ? undefined : (email || undefined),
     line_items: [{ quantity: 1, price_data: { currency: 'usd', unit_amount: amountCents, product_data: { name: description } } }],
-    payment_intent_data: { description, metadata: { order_id: order.id, report_number: 'RS-' + order.report_number }, ...(saveCard ? { setup_future_usage: 'off_session' } : {}) },
-    metadata: { kind: 'order', order_id: order.id },
-    success_url: `${config.appUrl}/${back}?paid=RS-${order.report_number}`,
-    cancel_url: `${config.appUrl}/${back}?unpaid=RS-${order.report_number}`
-  }, { idempotencyKey: 'checkout-' + order.id });
-  await db.update('report_orders', { id: eq(order.id) }, { stripe_checkout_session_id: s.id });
+    payment_intent_data: { description, metadata: { order_id: order.id, report_number: 'RS-' + order.report_number, purpose }, ...(saveCard ? { setup_future_usage: 'off_session' } : {}) },
+    metadata: { kind: purpose, order_id: order.id },
+    success_url: successUrl || `${config.appUrl}/${back}?${esx ? 'esx' : 'paid'}=RS-${order.report_number}`,
+    cancel_url: cancelUrl || `${config.appUrl}/${back}?unpaid=RS-${order.report_number}${esx ? '&for=esx' : ''}`
+  }, { idempotencyKey: (esx ? 'checkout-esx-' : 'checkout-') + order.id + (esx ? '-' + Math.floor(Date.now() / 86400000) : '') });
+  await db.update('report_orders', { id: eq(order.id) }, esx ? { esx_checkout_session_id: s.id } : { stripe_checkout_session_id: s.id });
   return s.url;
+}
+// Looks up a payment page (used when the buyer comes back before Stripe's webhook arrives).
+export async function paidSession(sessionId) {
+  if (!connected() || !sessionId) return null;
+  const s = await api('GET', `/checkout/sessions/${sessionId}`);
+  if (s.payment_status !== 'paid') return null;
+  let receipt = null;
+  if (s.payment_intent) { try { receipt = await receiptUrl(await api('GET', `/payment_intents/${s.payment_intent}`)); } catch { /* receipt is optional */ } }
+  return { payment_id: s.payment_intent || null, receipt_url: receipt };
 }
 
 async function receiptUrl(pi) {
@@ -168,7 +179,7 @@ async function companyByCustomer(customerId) {
 }
 
 // What to do for each Stripe event. `onOrderPaid(orderId, paymentIntentId, receiptUrl)` is supplied by routes.
-export async function handleEvent(event, { onOrderPaid, onOrderCancelled }) {
+export async function handleEvent(event, { onOrderPaid, onOrderCancelled, onEsxPaid }) {
   const o = event.data && event.data.object || {};
   switch (event.type) {
     case 'checkout.session.completed': {
@@ -177,14 +188,14 @@ export async function handleEvent(event, { onOrderPaid, onOrderCancelled }) {
       if (kind === 'card_setup' && company && o.setup_intent) {
         const si = await api('GET', `/setup_intents/${o.setup_intent}`);
         if (si.payment_method) await saveDefaultCard(company, si.payment_method);
-      } else if (kind === 'order' && o.metadata.order_id) {
+      } else if ((kind === 'order' || kind === 'esx') && o.metadata.order_id) {
         let receipt = null, pmId = null;
         if (o.payment_intent) {
           const pi = await api('GET', `/payment_intents/${o.payment_intent}`);
           receipt = await receiptUrl(pi); pmId = pi.payment_method;
         }
         if (company && pmId && !(company.stripe_config && company.stripe_config.card)) await saveDefaultCard(company, pmId).catch(() => {});
-        if (o.payment_status === 'paid') await onOrderPaid(o.metadata.order_id, o.payment_intent || null, receipt);
+        if (o.payment_status === 'paid') await (kind === 'esx' ? onEsxPaid : onOrderPaid)(o.metadata.order_id, o.payment_intent || null, receipt);
       } else if (kind === 'subscription' && company && o.subscription) {
         await syncSubscription(company, await api('GET', `/subscriptions/${o.subscription}`));
       }
@@ -192,6 +203,7 @@ export async function handleEvent(event, { onOrderPaid, onOrderCancelled }) {
     }
     case 'checkout.session.async_payment_succeeded':
       if (o.metadata && o.metadata.kind === 'order') await onOrderPaid(o.metadata.order_id, o.payment_intent || null, null);
+      if (o.metadata && o.metadata.kind === 'esx') await onEsxPaid(o.metadata.order_id, o.payment_intent || null, null);
       break;
     case 'checkout.session.expired':
     case 'checkout.session.async_payment_failed':

@@ -118,7 +118,7 @@
   };
   function initReports() {
     var FILTERS = { all: '', ready: 'delivered', processing: 'in_progress', ordered: 'pending,awaiting_payment', needs: 'needs_info' };
-    var state = { filter: 'all', q: '', page: 1 }, timer = null, refresh = null;
+    var state = { filter: 'all', q: '', page: 1, esxPrice: 500, canBuyEsx: false }, timer = null, refresh = null;
     var tbody = $('report-rows'), tabs = document.querySelectorAll('.tab');
 
     tabs.forEach(function (t) {
@@ -143,6 +143,8 @@
     }
 
     function render(data) {
+      if (data.esx_price_cents != null) state.esxPrice = data.esx_price_cents;
+      state.canBuyEsx = !!data.can_buy_esx;
       var c = data.counts || {};
       var n = { all: c.all || 0, ready: c.delivered || 0, processing: c.in_progress || 0, ordered: (c.pending || 0) + (c.awaiting_payment || 0), needs: c.needs_info || 0 };
       tabs.forEach(function (t) { t.querySelector('.count').textContent = n[t.getAttribute('data-filter')]; });
@@ -172,6 +174,17 @@
       if (data.orders.some(function (o) { return o.status === 'pending' || o.status === 'in_progress'; })) refresh = setTimeout(load, 10000);
     }
 
+    // Buy the ESX file after the fact: charged to the saved card (or Stripe's page), then it downloads.
+    function buyEsx(o, btn) {
+      if (!window.confirm('Buy the Xactimate (ESX) file for ' + o.report_number + ' for ' + money(state.esxPrice) + '? It\u2019s charged to the card on file and downloads right away.')) return;
+      btn.disabled = true;
+      api.post('/api/orders/' + o.id + '/buy-esx', {}).then(function (r) {
+        if (r.checkout_url) { location.href = r.checkout_url; return; }
+        toast('ESX file added to ' + o.report_number + (r.url ? '. Downloading now.' : '.'));
+        if (r.url) location.href = r.url;
+        load();
+      }).catch(function (e) { btn.disabled = false; showError(e); });
+    }
     // The server hands back a short-lived link; opening it starts the download.
     function download(id, kind) {
       api.get('/api/orders/' + id + '/' + kind).then(function (r) { if (r && r.url) location.href = r.url; }).catch(showError);
@@ -185,6 +198,7 @@
           actions.appendChild(el('button', { type: 'button', class: 'linkbtn', text: 'Download PDF', onclick: function () { download(o.id, 'pdf'); } }));
           if (o.esx_purchased) actions.appendChild(el('button', { type: 'button', class: 'linkbtn', text: 'ESX file', onclick: function () { download(o.id, 'esx'); } }));
         }
+        if (o.esx_available && state.canBuyEsx && can('orders.create')) actions.appendChild(el('button', { type: 'button', class: 'linkbtn', text: 'Buy ESX · ' + money(state.esxPrice), onclick: function (e) { buyEsx(o, e.currentTarget); } }));
       } else if (o.status === 'needs_info') {
         if (can('orders.create')) actions.appendChild(el('button', { type: 'button', class: 'linkbtn', text: 'Add details', onclick: function () { api.post('/api/orders/' + o.id + '/details', {}).catch(showError); } }));
       } else if (o.eta) {
@@ -205,8 +219,10 @@
     setupQuickOrder(function () { state.page = 1; load(); });
     var back = new URLSearchParams(location.search);
     if (back.get('paid')) { toast('Payment received for ' + back.get('paid') + '. Your order is placed.'); setTimeout(load, 2500); }
+    else if (back.get('esx')) { toast('ESX file bought for ' + back.get('esx') + '. Use “ESX file” to download it.'); setTimeout(load, 2500); }
+    else if (back.get('unpaid') && back.get('for') === 'esx') toast('Payment wasn\u2019t finished, so the ESX file for ' + back.get('unpaid') + ' wasn\u2019t bought.', { error: true });
     else if (back.get('unpaid')) toast('Payment wasn\u2019t finished, so ' + back.get('unpaid') + ' wasn\u2019t placed. Order again when you\u2019re ready.', { error: true });
-    if (back.get('paid') || back.get('unpaid')) history.replaceState(null, '', location.pathname);
+    if (back.get('paid') || back.get('unpaid') || back.get('esx')) history.replaceState(null, '', location.pathname);
   }
 
   // "Order new report" opens the Place order page inside a pop-up instead of leaving Order history.
@@ -251,14 +267,55 @@
       document.querySelectorAll('.logo-img').forEach(function (img) { if (url) { img.src = url; img.classList.remove('hidden'); } else img.classList.add('hidden'); });
       document.querySelectorAll('.logo-empty').forEach(function (n) { n.classList.toggle('hidden', !!url); });
     }
+    // Brand colour: picker, hex box and swatches stay in step; the preview shows the PDF header.
+    var DEFAULT_COLOR = '#B03A0A';
+    var picker = $('bc-picker'), hex = $('bc-hex'), band = $('rp-band');
+    function normHex(v) {
+      v = String(v || '').trim().toUpperCase(); if (v && v[0] !== '#') v = '#' + v;
+      if (/^#[0-9A-F]{3}$/.test(v)) v = '#' + v[1] + v[1] + v[2] + v[2] + v[3] + v[3];
+      return /^#[0-9A-F]{6}$/.test(v) ? v : null;
+    }
+    function textOn(c) { // black or white, whichever reads better on the colour
+      var n = parseInt(c.slice(1), 16), ch = [n >> 16 & 255, n >> 8 & 255, n & 255].map(function (x) { x /= 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); });
+      var L = 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+      return (1.05 / (L + 0.05)) >= ((L + 0.05) / 0.05) ? '#FFFFFF' : '#111111';
+    }
+    function showColor(c, from) {
+      var shown = c || DEFAULT_COLOR;
+      band.style.background = shown; band.style.color = textOn(shown);
+      if (from !== 'picker') picker.value = shown.toLowerCase();
+      if (from !== 'hex') hex.value = c || '';
+      hex.setAttribute('aria-invalid', 'false');
+      document.querySelectorAll('.swatch').forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-color') === shown)); });
+    }
+    picker.addEventListener('input', function () { showColor(normHex(picker.value), 'picker'); });
+    hex.addEventListener('input', function () {
+      var c = normHex(hex.value);
+      if (c) showColor(c, 'hex'); else hex.setAttribute('aria-invalid', hex.value.trim() ? 'true' : 'false');
+      if (!hex.value.trim()) showColor('', 'hex');
+    });
+    hex.addEventListener('blur', function () { var c = normHex(hex.value); if (c) hex.value = c; });
+    document.querySelectorAll('.swatch').forEach(function (b) { b.addEventListener('click', function () { showColor(b.getAttribute('data-color')); }); });
+    $('bc-reset').addEventListener('click', function () { showColor(''); });
+    function showPreviewText() {
+      var v = function (k) { var f = document.querySelector('[data-field="' + k + '"]'); return f ? f.value.trim() : ''; };
+      $('rp-name').textContent = v('name') || 'Your company';
+      $('rp-contact').textContent = [v('phone'), v('email')].filter(Boolean).join(' · ') || 'Phone · Email';
+    }
+    fields.forEach(function (f) { f.addEventListener('input', showPreviewText); });
+
     api.get('/api/company').then(function (r) {
       fields.forEach(function (f) { f.value = r.company[f.getAttribute('data-field')] || ''; });
       showLogo(r.company.logo_url);
+      showColor(normHex(r.company.brand_color) || '');
+      showPreviewText();
     }).catch(showError);
 
     $('save-company').addEventListener('click', function () {
       var btn = this, body = {};
       fields.forEach(function (f) { body[f.getAttribute('data-field')] = f.value.trim(); });
+      if (body.brand_color && !normHex(body.brand_color)) { showError({ message: 'Enter the brand colour as a hex code like #0F7A4D, or pick one.' }); hex.focus(); return; }
+      body.brand_color = normHex(body.brand_color) || '';
       busy(btn, true);
       api.patch('/api/company', body).then(function () { toast('Report settings saved.'); }).catch(showError).then(function () { busy(btn, false); });
     });

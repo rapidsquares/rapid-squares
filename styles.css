@@ -553,3 +553,26 @@ body.embed { padding-bottom: 0; }
 body.embed .topbar, body.embed .tabbar, body.embed .demo, body.embed .page-head .eyebrow { display: none !important; }
 body.embed .page { padding-top: 20px; }
 body.embed .page-head h1 { font-size: 24px; }
+
+/* Report settings: brand colour picker + report header preview */
+.color-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.color-swatch { position: relative; width: 44px; height: 44px; border-radius: 8px; border: 1px solid var(--field); overflow: hidden; cursor: pointer; flex: 0 0 auto; }
+.fld .color-swatch input, .color-swatch input { position: absolute; inset: -8px; width: calc(100% + 16px); height: calc(100% + 16px); border: 0; padding: 0; cursor: pointer; background: none; }
+.color-swatch:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.fld .color-row .color-hex, .color-row .color-hex { width: 120px; flex: 0 0 120px; height: 44px; box-sizing: border-box; padding: 0 12px; border: 1px solid var(--field); border-radius: 6px; font: inherit; font-family: 'IBM Plex Mono', monospace; font-size: 15px; text-transform: uppercase; color: var(--ink); background: var(--paper); }
+.color-hex:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
+.color-hex[aria-invalid="true"] { border-color: var(--danger); }
+.swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+.swatch { width: 32px; height: 32px; border-radius: 50%; border: 2px solid var(--paper); box-shadow: 0 0 0 1px var(--line); cursor: pointer; padding: 0; }
+.swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--ink); }
+.swatch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.report-preview { margin-top: 4px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--paper); max-width: 520px; }
+.rp-band { display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: #B03A0A; color: #FFFFFF; transition: background .15s, color .15s; }
+.rp-logo { width: 40px; height: 40px; object-fit: contain; background: rgba(255,255,255,.9); border-radius: 4px; flex: 0 0 auto; }
+.rp-text { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
+.rp-text b { font-family: 'Archivo', sans-serif; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rp-text span { font-size: 12px; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rp-tag { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; opacity: .85; flex: 0 0 auto; }
+.rp-body { display: flex; flex-direction: column; gap: 8px; padding: 16px; }
+.rp-body span { display: block; height: 8px; border-radius: 4px; background: var(--line-2); }
+@media (max-width: 720px) { .rp-tag { display: none; } }

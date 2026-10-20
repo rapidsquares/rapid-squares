@@ -232,6 +232,12 @@ alter table public.report_orders add column if not exists ready_notified boolean
 alter table public.report_orders add column if not exists refunded_at    timestamptz;
 alter table public.report_orders add column if not exists refund_id      text;
 alter table public.companies     add column if not exists roofquery_brand_hash text;
+-- The ESX file bought after the report was delivered.
+alter table public.report_orders add column if not exists esx_price_cents         integer;
+alter table public.report_orders add column if not exists esx_purchased_at        timestamptz;
+alter table public.report_orders add column if not exists esx_payment_id          text;
+alter table public.report_orders add column if not exists esx_receipt_url         text;
+alter table public.report_orders add column if not exists esx_checkout_session_id text;
 create index if not exists report_orders_rq_retry_idx on public.report_orders (rq_next_try_at) where roofquery_order_id is null and rq_attempts > 0;
 do $$ begin
   alter table public.report_orders add constraint report_orders_owner_check check (company_id is not null or guest_email is not null);

@@ -161,20 +161,62 @@ async function tellReady(order) {
   if (!claimed.length) return;
   if (config.orderAlerts && config.adminEmail) {
     await email.send({ to: config.adminEmail, subject: `[Rapid Squares] Order RS-${order.report_number} completed`,
-      text: `RS-${order.report_number} is ready.\n\nProperty: ${order.address}${order.total_squares != null ? `\n${order.total_squares} squares, ${order.predominant_pitch} predominant pitch` : ''}\nOrdered by: ${await orderedBy(order)}` });
+      text: `RS-${order.report_number} is ready.\n\nProperty: ${order.address}${order.total_squares != null ? `\n${order.total_squares} squares, ${order.predominant_pitch} predominant pitch` : ''}\nOrdered by: ${await orderedBy(order)}\n\nPDF (link works for 30 days): ${downloadUrl(order.id, 'pdf', 30 * 24 * 60 * MIN)}` });
   }
   const who = await recipient(order);
   if (!who) return;
   const first = String(who.name || '').split(' ')[0];
   const size = order.total_squares != null ? `\n${order.total_squares} squares, ${order.predominant_pitch} predominant pitch.` : '';
-  let links;
-  if (who.guest) {
-    const year = 365 * 24 * 60 * MIN;
-    links = `\n\nDownload the PDF report: ${downloadUrl(order.id, 'pdf', year)}` + (order.esx_purchased ? `\nDownload the Xactimate (ESX) file: ${downloadUrl(order.id, 'esx', year)}` : '') + '\n\nThese links work for a year. Keep this email.';
-  } else links = `\n\nDownload it from your order history: ${config.appUrl}/orders.html`;
+  // Direct download links (no attachment: links stay small, avoid spam filters and always give the latest version).
+  const ttl = (who.guest ? 365 : 30) * 24 * 60 * MIN;
+  let links = `\n\nDownload the PDF report: ${downloadUrl(order.id, 'pdf', ttl)}` + (order.esx_purchased ? `\nDownload the Xactimate (ESX) file: ${downloadUrl(order.id, 'esx', ttl)}` : '');
+  // Didn't buy the ESX? Offer it (RoofQuery makes one for every report, so it's ready right away).
+  const p = await db.one('products', { id: eq(order.report_type), select: 'esx_addon_allowed' });
+  if (!order.esx_purchased && p && p.esx_addon_allowed && stripe.connected()) {
+    const price = await esxPriceFor(order);
+    links += who.guest ? `\n\nNeed the Xactimate (ESX) file? Get it for ${money(price)}: ${downloadUrl(order.id, 'buy-esx', 365 * 24 * 60 * MIN)}`
+      : `\n\nNeed the Xactimate (ESX) file? Add it for ${money(price)} from your order history: ${config.appUrl}/orders.html`;
+  }
+  links += who.guest ? '\n\nThese links work for a year. Keep this email.'
+    : `\n\nThese links work for 30 days. After that, download the report any time from your order history: ${config.appUrl}/orders.html`;
   await email.send({ to: who.to, subject: `Your roof report RS-${order.report_number} is ready`,
     text: `Hi${first ? ' ' + first : ''},\n\nYour report for ${order.address} is ready.${size}${links}` });
 }
+// ---------- ESX bought after delivery ----------
+export async function esxPriceFor(order) {
+  const p = await db.one('products', { id: eq('esx_addon') });
+  if (!p) return 500;
+  if (order.company_id) {
+    const c = await db.one('companies', { id: eq(order.company_id), select: 'subscription_status' });
+    if (c && c.subscription_status === 'active') return p.subscriber_price_cents;
+  }
+  return p.price_cents;
+}
+// Marks the ESX as bought (once) and emails the download link.
+export async function esxPaid(orderId, paymentId, receiptUrl, priceCents) {
+  const order = await db.one('report_orders', { id: eq(orderId) });
+  if (!order || order.esx_purchased) return order;
+  const patch = { esx_purchased: true, esx_purchased_at: now(), esx_payment_id: paymentId || null, esx_receipt_url: receiptUrl || null };
+  if (priceCents != null) patch.esx_price_cents = priceCents;
+  else if (order.esx_price_cents == null) patch.esx_price_cents = await esxPriceFor(order);
+  const claimed = await db.update('report_orders', { id: eq(order.id), esx_purchased: eq(false) }, patch);
+  if (!claimed.length) return order;
+  const saved = claimed[0];
+  try {
+    const who = await recipient(saved);
+    if (who) {
+      const ttl = (who.guest ? 365 : 30) * 24 * 60 * MIN;
+      await email.send({ to: who.to, subject: `Your ESX file for RS-${saved.report_number}`,
+        text: `Thanks for your purchase.\n\nDownload the Xactimate (ESX) file: ${downloadUrl(saved.id, 'esx', ttl)}\nProperty: ${saved.address}\nTotal: ${money(saved.esx_price_cents || 0)}${saved.esx_receipt_url ? '\nReceipt: ' + saved.esx_receipt_url : ''}` });
+    }
+    if (config.orderAlerts && config.adminEmail) {
+      await email.send({ to: config.adminEmail, subject: `[Rapid Squares] ESX file bought for RS-${saved.report_number}`,
+        text: `ESX file bought for RS-${saved.report_number} (${money(saved.esx_price_cents || 0)}).\n\nProperty: ${saved.address}\nOrdered by: ${await orderedBy(saved)}` });
+    }
+  } catch (e) { console.error('[email] ESX purchase for RS-' + saved.report_number, e.message); }
+  return saved;
+}
+
 async function refundAndTell(order, reason) {
   // Claim the refund first so it can only happen once.
   const claimed = await db.update('report_orders', { id: eq(order.id), refunded_at: 'is.null' }, { refunded_at: now() });

@@ -33,7 +33,8 @@ function orderOut(o, prods, people) {
     report_type: o.report_type, product_label: p.label, address: o.address, lat: o.lat, lon: o.lon, status: o.status,
     status_detail: o.status_detail, price_cents: o.price_cents, esx_purchased: o.esx_purchased, used_free_report: o.used_free_report,
     total_squares: o.total_squares === null ? null : Number(o.total_squares), predominant_pitch: o.predominant_pitch,
-    measurements: o.measurements, created_at: o.created_at, completed_at: o.completed_at, refunded: !!o.refunded_at
+    measurements: o.measurements, created_at: o.created_at, completed_at: o.completed_at, refunded: !!o.refunded_at,
+    esx_available: o.status === 'delivered' && !o.esx_purchased && !!p.esx_addon_allowed
   };
   if (o.status === 'pending' || o.status === 'in_progress') out.eta = new Date(new Date(o.created_at).getTime() + (p.delivery_minutes || 120) * 60000).toISOString();
   return out;
@@ -187,6 +188,12 @@ export function registerRoutes(r) {
     ['name', 'license_number', 'contact_name', 'phone', 'email', 'website', 'address', 'brand_color'].forEach((k) => { if (k in b) patch[k] = str(b[k]); });
     if ('name' in patch && !patch.name) fail(422, 'invalid', 'Enter your company name.');
     if (patch.email && !emailOk(patch.email)) fail(422, 'invalid', 'Enter a valid email address, like estimates@yourcompany.com.');
+    if ('brand_color' in patch) {
+      let c = patch.brand_color.toUpperCase(); if (c && c[0] !== '#') c = '#' + c;
+      if (/^#[0-9A-F]{3}$/.test(c)) c = '#' + c[1] + c[1] + c[2] + c[2] + c[3] + c[3];
+      if (c && !/^#[0-9A-F]{6}$/.test(c)) fail(422, 'invalid', 'Enter the brand colour as a hex code like #0F7A4D.');
+      patch.brand_color = c || null;
+    }
     const [c] = await db.update('companies', { id: eq(m.company.id) }, patch);
     roofquery.ensureBrand(c); // keep the PDF branding in step (background; never fails the save)
     return { company: companyOut(c) };
@@ -234,7 +241,9 @@ export function registerRoutes(r) {
     ]);
     const counts = { all: statuses.length };
     statuses.forEach((s) => { counts[s.status] = (counts[s.status] || 0) + 1; });
-    return { orders: rows.map((o) => orderOut(o, prods, people)), total, page, page_size: size, counts, scope: mine ? 'mine' : 'company' };
+    const esxAddon = prods.esx_addon || { price_cents: 500, subscriber_price_cents: 500 };
+    const esxPrice = m.company.subscription_status === 'active' ? esxAddon.subscriber_price_cents : esxAddon.price_cents;
+    return { orders: rows.map((o) => orderOut(o, prods, people)), total, page, page_size: size, counts, scope: mine ? 'mine' : 'company', esx_price_cents: esxPrice, can_buy_esx: stripe.connected() || config.allowUnpaidTestOrders };
   });
 
   async function findOrder(m, id) {
@@ -307,13 +316,50 @@ export function registerRoutes(r) {
   r.get('/api/orders/:id/esx', async ({ req, params }) => fileLink(req, params.id, 'esx'));
   r.post('/api/orders/:id/details', async ({ req, params }) => { const m = await member(req); m.need('orders.create'); await findOrder(m, params.id); fail(501, 'not_available', 'Adding details to an order isn\u2019t available yet. Email us and we\u2019ll pass them on.'); });
 
+  // Buy the ESX file for a finished report: saved card → charged now; otherwise Stripe's payment page.
+  r.post('/api/orders/:id/buy-esx', async ({ req, params }) => {
+    const m = await member(req); m.need('orders.create'); const o = await findOrder(m, params.id);
+    const prods = await products();
+    if (o.esx_purchased) return { purchased: true, url: fulfillment.downloadUrl(o.id, 'esx', 10 * 60 * 1000), charged_cents: 0 };
+    if (o.status !== 'delivered' || !o.roofquery_order_id) fail(409, 'not_ready', 'The ESX file can be bought once the report is ready.');
+    if (!(prods[o.report_type] || {}).esx_addon_allowed) fail(422, 'invalid', 'The ESX file isn\u2019t available for this report type.');
+    const price = await fulfillment.esxPriceFor(o);
+    const desc = `ESX file (Xactimate) \u00b7 RS-${o.report_number}`;
+    let pay = null;
+    if (stripe.connected() && price > 0) pay = await stripe.chargeOrder(m.company, price, desc, o, { purpose: 'esx' });
+    else if (!stripe.connected() && !config.allowUnpaidTestOrders) fail(503, 'payments_not_connected', 'Payments aren\u2019t connected yet.');
+    if (pay && pay.checkout_url) return { purchased: false, checkout_url: pay.checkout_url };
+    await fulfillment.esxPaid(o.id, pay && pay.payment_id, pay && pay.receipt_url, price);
+    return { purchased: true, url: fulfillment.downloadUrl(o.id, 'esx', 10 * 60 * 1000), charged_cents: pay ? price : 0, receipt_url: (pay && pay.receipt_url) || null };
+  });
+
   // The file itself: checked by the signed link, streamed from RoofQuery in the company's branding.
   r.get('/files/:id/:kind', async ({ res, params, query }) => {
     const { id, kind } = params;
     const bad = () => fail(404, 'not_found', 'This download link isn\u2019t valid or has expired. Download the report again from your order history.');
-    if (!['pdf', 'esx'].includes(kind) || !/^[0-9a-f-]{36}$/i.test(id) || !fulfillment.checkDownload(id, kind, query.get('exp'), query.get('sig'))) bad();
-    const o = await db.one('report_orders', { id: eq(id) });
-    if (!o || !o.roofquery_order_id || o.status !== 'delivered' || (kind === 'esx' && !o.esx_purchased)) bad();
+    if (!['pdf', 'esx', 'buy-esx'].includes(kind) || !/^[0-9a-f-]{36}$/i.test(id) || !fulfillment.checkDownload(id, kind, query.get('exp'), query.get('sig'))) bad();
+    let o = await db.one('report_orders', { id: eq(id) });
+    if (!o || !o.roofquery_order_id || o.status !== 'delivered') bad();
+    const year = 365 * 24 * 60 * 60 * 1000;
+    // "Get the ESX file" link from the ready email: straight to Stripe's payment page (or the file, if already bought).
+    if (kind === 'buy-esx') {
+      if (o.esx_purchased) { res.writeHead(303, { Location: fulfillment.downloadUrl(o.id, 'esx', year) }); return res.end(); }
+      if (!((await products())[o.report_type] || {}).esx_addon_allowed) bad();
+      if (!stripe.connected()) fail(503, 'payments_not_connected', 'Buying the ESX file isn\u2019t available right now.');
+      const company = o.company_id ? await db.one('companies', { id: eq(o.company_id) }) : null;
+      const url = await stripe.checkoutForOrder({
+        purpose: 'esx', order: o, amountCents: await fulfillment.esxPriceFor(o), description: `ESX file (Xactimate) \u00b7 RS-${o.report_number}`,
+        customer: company ? await stripe.ensureCustomer(company) : null, email: company ? null : o.guest_email, guest: !company, saveCard: false,
+        successUrl: fulfillment.downloadUrl(o.id, 'esx', year), cancelUrl: `${config.appUrl}/index.html`
+      });
+      res.writeHead(303, { Location: url }); return res.end();
+    }
+    // Back from Stripe before its webhook arrived: check the payment page directly.
+    if (kind === 'esx' && !o.esx_purchased && o.esx_checkout_session_id) {
+      const paid = await stripe.paidSession(o.esx_checkout_session_id).catch(() => null);
+      if (paid) o = (await fulfillment.esxPaid(o.id, paid.payment_id, paid.receipt_url)) || o;
+    }
+    if (kind === 'esx' && !o.esx_purchased) bad();
     const company = o.company_id ? await db.one('companies', { id: eq(o.company_id) }) : null;
     const brand = kind === 'pdf' && company ? await roofquery.ensureBrand(company) : null;
     let up;
@@ -468,13 +514,19 @@ export function registerRoutes(r) {
     const charged = await db.select('report_orders', { company_id: eq(c.id), price_cents: 'gt.0', status: 'not.in.(failed,cancelled,awaiting_payment)', order: 'created_at.desc', limit: 10 });
     const month = await db.select('report_orders', { company_id: eq(c.id), created_at: gte(startOfMonth()), status: 'not.in.(failed,cancelled,awaiting_payment)', select: 'price_cents' });
     const prods = await products();
+    const esxBuys = await db.select('report_orders', { company_id: eq(c.id), esx_purchased_at: 'not.is.null', esx_price_cents: 'gt.0', order: 'esx_purchased_at.desc', limit: 10 });
+    const monthStart = startOfMonth();
+    const esxThisMonth = esxBuys.filter((o) => o.esx_purchased_at >= monthStart).reduce((t, o) => t + o.esx_price_cents, 0);
+    const lines = charged.map((o) => ({ date: o.created_at, description: `${(prods[o.report_type] || {}).label || o.report_type}${o.esx_purchased && !o.esx_purchased_at ? ' + ESX' : ''} · RS-${o.report_number}`, amount_cents: o.price_cents, receipt_url: o.receipt_url || null }))
+      .concat(esxBuys.map((o) => ({ date: o.esx_purchased_at, description: `ESX file (Xactimate) · RS-${o.report_number}`, amount_cents: o.esx_price_cents, receipt_url: o.esx_receipt_url || null })))
+      .sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 10);
     return {
       subscription: c.subscription_status === 'active' ? { plan: c.subscription_plan, status: 'active', price_cents: c.subscription_plan === 'yearly' ? config.stripe.yearlyCents : config.stripe.monthlyCents, renews_at: c.subscription_renews_at, cancel_at_period_end: !!cfg.cancel_at_period_end } : { status: c.subscription_status || 'none' },
       plans: { monthly_cents: config.stripe.monthlyCents, yearly_cents: config.stripe.yearlyCents },
       card: cfg.card ? { brand: cfg.card.brand, last4: cfg.card.last4, exp: cfg.card.exp } : null, free_reports_remaining: c.free_reports_remaining,
-      reports_this_month: month.length, spend_this_month_cents: month.reduce((s, o) => s + o.price_cents, 0),
+      reports_this_month: month.length, spend_this_month_cents: month.reduce((s, o) => s + o.price_cents, 0) + esxThisMonth,
       billing_email: cfg.billing_email || c.email, billing_address: cfg.billing_address || c.address,
-      invoices: charged.map((o) => ({ date: o.created_at, description: `${(prods[o.report_type] || {}).label || o.report_type}${o.esx_purchased ? ' + ESX' : ''} · RS-${o.report_number}`, amount_cents: o.price_cents, receipt_url: o.receipt_url || null })),
+      invoices: lines,
       payments_connected: stripe.connected()
     };
   });
@@ -517,7 +569,7 @@ export function registerRoutes(r) {
     try { await db.insert('webhook_events', { id: event.id, source: 'stripe' }); }
     catch (e) { if (e.status === 409) return { received: true, duplicate: true }; throw e; }
     try {
-      await stripe.handleEvent(event, { onOrderPaid: orderPaid, onOrderCancelled: orderCancelled });
+      await stripe.handleEvent(event, { onOrderPaid: orderPaid, onOrderCancelled: orderCancelled, onEsxPaid: (id, pi, receipt) => fulfillment.esxPaid(id, pi, receipt) });
     } catch (e) {
       await db.remove('webhook_events', { id: eq(event.id) }).catch(() => {}); // let Stripe retry
       throw e;
