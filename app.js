@@ -267,7 +267,7 @@
       document.querySelectorAll('.logo-img').forEach(function (img) { if (url) { img.src = url; img.classList.remove('hidden'); } else img.classList.add('hidden'); });
       document.querySelectorAll('.logo-empty').forEach(function (n) { n.classList.toggle('hidden', !!url); });
     }
-    // Brand colour + header text colour: picker, hex box and buttons stay in step; the preview shows the PDF header.
+    // Brand color + header text color: picker, hex box and buttons stay in step; the preview shows the PDF header.
     var DEFAULT_COLOR = '#B03A0A';
     var picker = $('bc-picker'), hex = $('bc-hex'), band = $('rp-band'), tPicker = $('tc-picker'), tHex = $('tc-hex');
     var col = { bc: '', tc: '' };
@@ -295,7 +295,7 @@
       document.querySelectorAll('.seg-btn').forEach(function (b) { b.setAttribute('aria-checked', String(b.getAttribute('data-tc') === tcKey)); });
       var warn = $('tc-warn'), ratio = contrast(bg, fg);
       warn.classList.toggle('hidden', ratio >= 3);
-      if (ratio < 3) warn.textContent = 'This text will be hard to read on your brand colour (contrast ' + ratio.toFixed(1) + ':1). Try ' + (contrast(bg, '#000000') > contrast(bg, '#FFFFFF') ? 'Black' : 'White') + '.';
+      if (ratio < 3) warn.textContent = 'This text may be hard to read on your brand color.';
     }
     function hexInput(input, key, from) {
       input.addEventListener('input', function () {
@@ -329,8 +329,8 @@
     $('save-company').addEventListener('click', function () {
       var btn = this, body = {};
       fields.forEach(function (f) { body[f.getAttribute('data-field')] = f.value.trim(); });
-      if (body.brand_color && !normHex(body.brand_color)) { showError({ message: 'Enter the brand colour as a hex code like #0F7A4D, or pick one.' }); hex.focus(); return; }
-      if (body.brand_text_color && !normHex(body.brand_text_color)) { showError({ message: 'Enter the header text colour as a hex code like #FFFFFF, or choose White or Black.' }); tHex.focus(); return; }
+      if (body.brand_color && !normHex(body.brand_color)) { showError({ message: 'Enter the brand color as a hex code like #0F7A4D, or pick one.' }); hex.focus(); return; }
+      if (body.brand_text_color && !normHex(body.brand_text_color)) { showError({ message: 'Enter the header text color as a hex code like #FFFFFF, or choose White or Black.' }); tHex.focus(); return; }
       body.brand_color = normHex(body.brand_color) || ''; body.brand_text_color = normHex(body.brand_text_color) || '';
       busy(btn, true);
       api.patch('/api/company', body).then(function () { toast('Report settings saved.'); }).catch(showError).then(function () { busy(btn, false); });

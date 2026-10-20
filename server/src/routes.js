@@ -188,7 +188,7 @@ export function registerRoutes(r) {
     ['name', 'license_number', 'contact_name', 'phone', 'email', 'website', 'address', 'brand_color', 'brand_text_color'].forEach((k) => { if (k in b) patch[k] = str(b[k]); });
     if ('name' in patch && !patch.name) fail(422, 'invalid', 'Enter your company name.');
     if (patch.email && !emailOk(patch.email)) fail(422, 'invalid', 'Enter a valid email address, like estimates@yourcompany.com.');
-    [['brand_color', 'brand colour', '#0F7A4D'], ['brand_text_color', 'header text colour', '#FFFFFF']].forEach(([k, what, eg]) => {
+    [['brand_color', 'brand color', '#0F7A4D'], ['brand_text_color', 'header text color', '#FFFFFF']].forEach(([k, what, eg]) => {
       if (!(k in patch)) return;
       let c = patch[k].toUpperCase(); if (c && c[0] !== '#') c = '#' + c;
       if (/^#[0-9A-F]{3}$/.test(c)) c = '#' + c[1] + c[1] + c[2] + c[2] + c[3] + c[3];

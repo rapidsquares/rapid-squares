@@ -554,7 +554,7 @@ body.embed .topbar, body.embed .tabbar, body.embed .demo, body.embed .page-head 
 body.embed .page { padding-top: 20px; }
 body.embed .page-head h1 { font-size: 24px; }
 
-/* Report settings: brand colour picker + report header preview */
+/* Report settings: brand color picker + report header preview */
 .color-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .color-swatch { position: relative; width: 44px; height: 44px; border-radius: 8px; border: 1px solid var(--field); overflow: hidden; cursor: pointer; flex: 0 0 auto; }
 .fld .color-swatch input, .color-swatch input { position: absolute; inset: -8px; width: calc(100% + 16px); height: calc(100% + 16px); border: 0; padding: 0; cursor: pointer; background: none; }

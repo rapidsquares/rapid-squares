@@ -87,7 +87,7 @@ export async function fetchFile(rqId, kind, { brand } = {}) {
   return api('GET', `/api/v1/reports/orders/${encodeURIComponent(rqId)}/${kind}${q ? '?' + q : ''}`, { auth: false });
 }
 
-// ---------- brand profiles: one per company, so PDFs carry the company's own name, logo and colours ----------
+// ---------- brand profiles: one per company, so PDFs carry the company's own name, logo and colors ----------
 const cut = (v, n) => { const s = String(v || '').trim(); return s ? s.slice(0, n) : undefined; };
 function brandFields(c) {
   const hex = (v) => (/^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(String(v || '').trim()) ? String(v).trim() : undefined);

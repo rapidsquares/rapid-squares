@@ -180,8 +180,8 @@
     var b = c.body || {};
     if ('name' in b && !str(b.name)) fail(422, 'invalid', 'Enter your company name.');
     if ('email' in b && str(b.email) && !emailOk(str(b.email))) fail(422, 'invalid', 'Enter a valid email address, like estimates@yourcompany.com.');
-    if (b.brand_color && !/^#[0-9A-Fa-f]{6}$/.test(str(b.brand_color))) fail(422, 'invalid', 'Enter the brand colour as a hex code like #0F7A4D.');
-    if (b.brand_text_color && !/^#[0-9A-Fa-f]{6}$/.test(str(b.brand_text_color))) fail(422, 'invalid', 'Enter the header text colour as a hex code like #FFFFFF.');
+    if (b.brand_color && !/^#[0-9A-Fa-f]{6}$/.test(str(b.brand_color))) fail(422, 'invalid', 'Enter the brand color as a hex code like #0F7A4D.');
+    if (b.brand_text_color && !/^#[0-9A-Fa-f]{6}$/.test(str(b.brand_text_color))) fail(422, 'invalid', 'Enter the header text color as a hex code like #FFFFFF.');
     ['name', 'license_number', 'contact_name', 'phone', 'email', 'website', 'address', 'brand_color', 'brand_text_color'].forEach(function (k) { if (k in b) c.db.company[k] = str(b[k]); });
     save(c.db);
     return { company: companyOut(c.db.company) };
