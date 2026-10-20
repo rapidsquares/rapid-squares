@@ -172,21 +172,25 @@
       if (data.orders.some(function (o) { return o.status === 'pending' || o.status === 'in_progress'; })) refresh = setTimeout(load, 10000);
     }
 
+    // The server hands back a short-lived link; opening it starts the download.
+    function download(id, kind) {
+      api.get('/api/orders/' + id + '/' + kind).then(function (r) { if (r && r.url) location.href = r.url; }).catch(showError);
+    }
     function orderRow(o) {
       var addr = splitAddress(o.address), s = STATUS[o.status] || ['cancelled', o.status];
       var detail = o.total_squares != null ? o.total_squares + ' squares · ' + o.predominant_pitch + ' pitch' : '';
       var actions = el('td', {});
       if (o.status === 'delivered') {
         if (can('orders.download')) {
-          actions.appendChild(el('button', { type: 'button', class: 'linkbtn', text: 'Download PDF', onclick: function () { api.get('/api/orders/' + o.id + '/pdf').catch(showError); } }));
-          if (o.esx_purchased) actions.appendChild(el('button', { type: 'button', class: 'linkbtn', text: 'ESX file', onclick: function () { api.get('/api/orders/' + o.id + '/esx').catch(showError); } }));
+          actions.appendChild(el('button', { type: 'button', class: 'linkbtn', text: 'Download PDF', onclick: function () { download(o.id, 'pdf'); } }));
+          if (o.esx_purchased) actions.appendChild(el('button', { type: 'button', class: 'linkbtn', text: 'ESX file', onclick: function () { download(o.id, 'esx'); } }));
         }
       } else if (o.status === 'needs_info') {
         if (can('orders.create')) actions.appendChild(el('button', { type: 'button', class: 'linkbtn', text: 'Add details', onclick: function () { api.post('/api/orders/' + o.id + '/details', {}).catch(showError); } }));
       } else if (o.eta) {
         actions.appendChild(el('span', { class: 'hint', text: 'Ready by ' + fmtTime(o.eta) }));
       } else if (o.status === 'failed') {
-        actions.appendChild(el('span', { class: 'hint', text: 'Couldn’t be measured' }));
+        actions.appendChild(el('span', { class: 'hint', text: (o.status_detail || 'Couldn’t be measured') + (o.refunded ? ' · Refunded' : '') }));
       }
       return el('tr', { 'data-status': o.status, 'data-id': o.id }, [
         el('td', { class: 'mono', style: 'font-size: 13px;', text: o.report_number }),

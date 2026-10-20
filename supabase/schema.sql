@@ -221,6 +221,18 @@ alter table public.report_orders add column if not exists guest_email text;
 alter table public.report_orders add column if not exists guest_name  text;
 alter table public.report_orders add column if not exists guest_phone text;
 alter table public.report_orders add column if not exists receipt_url text;
+-- RoofQuery: address parts for ordering, retry bookkeeping, refunds and the "report ready" email.
+alter table public.report_orders add column if not exists address_parts  jsonb;
+alter table public.report_orders add column if not exists rq_status      text;
+alter table public.report_orders add column if not exists rq_error       text;
+alter table public.report_orders add column if not exists rq_attempts    integer not null default 0;
+alter table public.report_orders add column if not exists rq_next_try_at timestamptz;
+alter table public.report_orders add column if not exists rq_checked_at  timestamptz;
+alter table public.report_orders add column if not exists ready_notified boolean not null default false;
+alter table public.report_orders add column if not exists refunded_at    timestamptz;
+alter table public.report_orders add column if not exists refund_id      text;
+alter table public.companies     add column if not exists roofquery_brand_hash text;
+create index if not exists report_orders_rq_retry_idx on public.report_orders (rq_next_try_at) where roofquery_order_id is null and rq_attempts > 0;
 do $$ begin
   alter table public.report_orders add constraint report_orders_owner_check check (company_id is not null or guest_email is not null);
 exception when duplicate_object then null; end $$;

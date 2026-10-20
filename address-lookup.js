@@ -70,7 +70,15 @@
       line2: rest,
       lon: coords ? coords[0] : null,
       lat: coords ? coords[1] : null,
-      confidence: f.properties && f.properties.confidence
+      confidence: f.properties && f.properties.confidence,
+      // Address pieces RoofQuery needs to place the order.
+      parts: {
+        street: a.addressLine || '',
+        city: a.locality || '',
+        state: (a.adminDistricts && a.adminDistricts[0] && (a.adminDistricts[0].shortName || a.adminDistricts[0].name)) || '',
+        postalCode: a.postalCode || '',
+        country: (a.countryRegion && a.countryRegion.ISO) || ''
+      }
     };
   }
   function geocode(query, top) {
@@ -395,7 +403,7 @@
     var btn = $('od-submit'), err = $('od-error'), place = selected, esx = $('od-esx').checked;
     if (RS.guest) { placeGuestOrder(p, esx); return; }
     btn.disabled = true; btn.setAttribute('aria-busy', 'true'); err.classList.add('hidden');
-    RS.api.post('/api/orders', { address: place.label, lat: place.lat, lon: place.lon, report_type: p.id, esx: esx })
+    RS.api.post('/api/orders', { address: place.label, parts: place.parts, lat: place.lat, lon: place.lon, report_type: p.id, esx: esx })
       .then(function (r) {
         if (r.checkout_url) { goToPayment(r.checkout_url); return; }
         catalog = null; // free-report count may have changed
@@ -437,7 +445,7 @@
     if (!name) { err.textContent = 'Enter your name.'; err.classList.remove('hidden'); $('og-name').focus(); return; }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { err.textContent = 'Enter the email address where we should send the report.'; err.classList.remove('hidden'); $('og-email').focus(); return; }
     btn.disabled = true; btn.setAttribute('aria-busy', 'true'); err.classList.add('hidden');
-    RS.api.post('/api/guest-orders', { address: place.label, lat: place.lat, lon: place.lon, report_type: p.id, esx: esx, name: name, email: email, phone: $('og-phone').value.trim() })
+    RS.api.post('/api/guest-orders', { address: place.label, parts: place.parts, lat: place.lat, lon: place.lon, report_type: p.id, esx: esx, name: name, email: email, phone: $('og-phone').value.trim() })
       .then(function (r) {
         if (r.checkout_url) { goToPayment(r.checkout_url); return; }
         closeDialog();

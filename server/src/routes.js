@@ -6,6 +6,7 @@ import { fail, readJson, readForm, readBody } from './http.js';
 import { db, storage, eq, inList, gte } from './supabase.js';
 import { member, signedIn, effectivePerms, cleanPerms, userOut, ALL_PERMS } from './access.js';
 import { roofquery, stripe, email } from './services.js';
+import * as fulfillment from './fulfillment.js';
 
 const DAY = 86400000;
 const str = (v, max = 200) => String(v ?? '').trim().slice(0, max);
@@ -32,7 +33,7 @@ function orderOut(o, prods, people) {
     report_type: o.report_type, product_label: p.label, address: o.address, lat: o.lat, lon: o.lon, status: o.status,
     status_detail: o.status_detail, price_cents: o.price_cents, esx_purchased: o.esx_purchased, used_free_report: o.used_free_report,
     total_squares: o.total_squares === null ? null : Number(o.total_squares), predominant_pitch: o.predominant_pitch,
-    measurements: o.measurements, created_at: o.created_at, completed_at: o.completed_at
+    measurements: o.measurements, created_at: o.created_at, completed_at: o.completed_at, refunded: !!o.refunded_at
   };
   if (o.status === 'pending' || o.status === 'in_progress') out.eta = new Date(new Date(o.created_at).getTime() + (p.delivery_minutes || 120) * 60000).toISOString();
   return out;
@@ -66,14 +67,21 @@ function publicProducts(p) {
 }
 
 // Paid (or free): mark the order pending and send it to RoofQuery when that's connected.
+// A placement problem never fails the customer's request: it's recorded and retried in the background.
 async function markPaidAndPlace(order, company, payment) {
   const patch = { status: 'pending', status_detail: roofquery.connected() ? null : 'Waiting for RoofQuery to be connected' };
   if (payment && payment.payment_id) patch.stripe_payment_id = payment.payment_id;
   if (payment && payment.receipt_url) patch.receipt_url = payment.receipt_url;
-  const placed = roofquery.connected() ? await roofquery.placeOrder(order, company) : null;
-  if (placed) patch.roofquery_order_id = placed.roofquery_order_id;
   const [saved] = await db.update('report_orders', { id: eq(order.id) }, patch);
-  return saved;
+  if (!roofquery.connected()) return saved;
+  try { return (await fulfillment.place(saved.id)) || saved; }
+  catch (e) { console.error('[roofquery] placing RS-' + saved.report_number, e.message); return saved; }
+}
+// Street / city / state / postal code / country from the address lookup (Azure Maps).
+function addressPartsIn(b) {
+  const p = b && typeof b.parts === 'object' && b.parts ? b.parts : {};
+  const out = { street: str(p.street, 200), city: str(p.city, 100), state: str(p.state, 40), postalCode: str(p.postalCode, 12), country: str(p.country, 3).toUpperCase() };
+  return Object.values(out).some(Boolean) ? out : null;
 }
 // Called from the Stripe webhook when a payment page is paid.
 async function orderPaid(orderId, paymentIntentId, receiptUrl) {
@@ -121,7 +129,7 @@ export function registerRoutes(r) {
     const price = p.price_cents + (esx ? esxPrice : 0);
     const [order] = await db.insert('report_orders', {
       company_id: null, ordered_by: null, guest_email: emailAddr, guest_name: name, guest_phone: str(b.phone, 40) || null,
-      report_type: type, address: str(b.address, 300), lat: b.lat, lon: b.lon, status: 'awaiting_payment', price_cents: price, esx_purchased: esx,
+      report_type: type, address: str(b.address, 300), address_parts: addressPartsIn(b), lat: b.lat, lon: b.lon, status: 'awaiting_payment', price_cents: price, esx_purchased: esx,
       status_detail: stripe.connected() ? 'Waiting for payment' : 'Test order: payment and RoofQuery aren\u2019t connected yet'
     });
     if (stripe.connected()) {
@@ -183,12 +191,14 @@ export function registerRoutes(r) {
     if ('name' in patch && !patch.name) fail(422, 'invalid', 'Enter your company name.');
     if (patch.email && !emailOk(patch.email)) fail(422, 'invalid', 'Enter a valid email address, like estimates@yourcompany.com.');
     const [c] = await db.update('companies', { id: eq(m.company.id) }, patch);
+    roofquery.ensureBrand(c); // keep the PDF branding in step (background; never fails the save)
     return { company: companyOut(c) };
   });
   r.post('/api/company/logo', async ({ req }) => {
     const m = await member(req); m.need('branding.edit'); const f = await imageUpload(req);
     const url = await storage.uploadPublic('logos', `${m.company.id}/logo.${f.ext}`, f.bytes, f.type);
-    await db.update('companies', { id: eq(m.company.id) }, { logo_url: url });
+    const [c] = await db.update('companies', { id: eq(m.company.id) }, { logo_url: url });
+    if (c) roofquery.ensureBrand(c);
     return { logo_url: url };
   });
 
@@ -269,7 +279,7 @@ export function registerRoutes(r) {
     const price = usedFree ? 0 : (subscribed ? p.subscriber_price_cents : p.price_cents) + (esx ? esxPrice : 0);
 
     const [order] = await db.insert('report_orders', {
-      company_id: m.company.id, ordered_by: m.user.id, report_type: type, address: str(b.address, 300), lat: b.lat, lon: b.lon,
+      company_id: m.company.id, ordered_by: m.user.id, report_type: type, address: str(b.address, 300), address_parts: addressPartsIn(b), lat: b.lat, lon: b.lon,
       status: 'awaiting_payment', price_cents: price, esx_purchased: esx, used_free_report: usedFree
     });
     let payment = null;
@@ -289,9 +299,42 @@ export function registerRoutes(r) {
     return { order: orderOut(saved, prods, { [m.user.id]: m.user }), checkout_url: null, charged_cents: price, used_free_report: usedFree, receipt_url: saved.receipt_url || null };
   });
 
-  r.get('/api/orders/:id/pdf', async ({ req, params }) => { const m = await member(req); m.need('orders.download'); await findOrder(m, params.id); roofquery.notConnected('The PDF report'); });
-  r.get('/api/orders/:id/esx', async ({ req, params }) => { const m = await member(req); m.need('orders.download'); await findOrder(m, params.id); roofquery.notConnected('The Xactimate (ESX) file'); });
-  r.post('/api/orders/:id/details', async ({ req, params }) => { const m = await member(req); m.need('orders.create'); await findOrder(m, params.id); roofquery.notConnected('Sending details'); });
+  // Downloads: the website asks for a short-lived link, then opens it (works for any browser download).
+  async function fileLink(req, id, kind) {
+    const m = await member(req); m.need('orders.download'); const o = await findOrder(m, id);
+    if (kind === 'esx' && !o.esx_purchased) fail(403, 'not_purchased', 'The ESX file wasn\u2019t added to this order.');
+    if (o.status !== 'delivered' || !o.roofquery_order_id) fail(409, 'not_ready', 'This report isn\u2019t ready yet.');
+    return { url: fulfillment.downloadUrl(o.id, kind, 10 * 60 * 1000) };
+  }
+  r.get('/api/orders/:id/pdf', async ({ req, params }) => fileLink(req, params.id, 'pdf'));
+  r.get('/api/orders/:id/esx', async ({ req, params }) => fileLink(req, params.id, 'esx'));
+  r.post('/api/orders/:id/details', async ({ req, params }) => { const m = await member(req); m.need('orders.create'); await findOrder(m, params.id); fail(501, 'not_available', 'Adding details to an order isn\u2019t available yet. Email us and we\u2019ll pass them on.'); });
+
+  // The file itself: checked by the signed link, streamed from RoofQuery in the company's branding.
+  r.get('/files/:id/:kind', async ({ res, params, query }) => {
+    const { id, kind } = params;
+    const bad = () => fail(404, 'not_found', 'This download link isn\u2019t valid or has expired. Download the report again from your order history.');
+    if (!['pdf', 'esx'].includes(kind) || !/^[0-9a-f-]{36}$/i.test(id) || !fulfillment.checkDownload(id, kind, query.get('exp'), query.get('sig'))) bad();
+    const o = await db.one('report_orders', { id: eq(id) });
+    if (!o || !o.roofquery_order_id || o.status !== 'delivered' || (kind === 'esx' && !o.esx_purchased)) bad();
+    const company = o.company_id ? await db.one('companies', { id: eq(o.company_id) }) : null;
+    const brand = kind === 'pdf' && company ? await roofquery.ensureBrand(company) : null;
+    let up;
+    try { up = await roofquery.fetchFile(o.roofquery_order_id, kind, { brand }); }
+    catch (e) {
+      if (e.status === 409) fail(409, 'not_ready', 'This report is being updated. Try again in a few minutes.');
+      fail(502, 'download_failed', 'The file couldn\u2019t be downloaded right now. Try again in a minute.');
+    }
+    const street = String(o.address || '').split(',')[0].replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40);
+    const name = `RS-${o.report_number}${street ? '_' + street : ''}.${kind}`;
+    res.writeHead(200, {
+      'Content-Type': kind === 'pdf' ? 'application/pdf' : 'application/octet-stream',
+      'Content-Disposition': `attachment; filename="${name}"`, 'Cache-Control': 'no-store',
+      ...(up.headers.get('content-length') ? { 'Content-Length': up.headers.get('content-length') } : {})
+    });
+    for await (const chunk of up.body) res.write(chunk);
+    res.end();
+  });
 
   // ---------- team & invites ----------
   r.get('/api/team', async ({ req }) => {
@@ -455,6 +498,20 @@ export function registerRoutes(r) {
     if (!stripe.connected()) return { url: null, message: 'Subscriptions will work once Stripe is connected.' };
     return { url: await stripe.subscribeUrl(m.company, str(b.plan)) };
   });
+
+  // ---------- RoofQuery webhook (called by RoofQuery, not the website) ----------
+  // Set in the RoofQuery portal as https://<your site>/webhooks/roofquery/<ROOFQUERY_WEBHOOK_SECRET>.
+  async function rqWebhook({ req, params, query }) {
+    const secret = config.roofquery.webhookSecret;
+    const given = String(params.key || query.get('key') || '');
+    if (secret && !(given.length === secret.length && crypto.timingSafeEqual(Buffer.from(given), Buffer.from(secret)))) fail(401, 'unauthorized', 'Unknown webhook key.');
+    const raw = await readBody(req, 2 * 1024 * 1024);
+    let body = null;
+    try { body = JSON.parse(raw.toString('utf8')); } catch { fail(400, 'bad_json', 'Expected JSON.'); }
+    return fulfillment.onWebhook(body);
+  }
+  r.post('/webhooks/roofquery', rqWebhook);
+  r.post('/webhooks/roofquery/:key', rqWebhook);
 
   // ---------- Stripe webhook (called by Stripe, not the website) ----------
   r.post('/webhooks/stripe', async ({ req }) => {

@@ -25,7 +25,18 @@ export const config = {
     secretKey: String(env.SUPABASE_SECRET_KEY || env.SUPABASE_SERVICE_ROLE_KEY || '').trim().replace(/^['"]|['"]$/g, ''),
     jwtSecret: String(env.SUPABASE_JWT_SECRET || '').trim()
   },
-  roofquery: { apiKey: String(env.ROOFQUERY_API_KEY || '').trim(), webhookSecret: String(env.ROOFQUERY_WEBHOOK_SECRET || '').trim(), baseUrl: trimSlash(env.ROOFQUERY_BASE_URL) || 'https://api.roofquery.com' },
+  roofquery: {
+    apiKey: String(env.ROOFQUERY_API_KEY || '').trim().replace(/^["']|["']$/g, ''),
+    webhookSecret: String(env.ROOFQUERY_WEBHOOK_SECRET || '').trim().replace(/^["']|["']$/g, ''),
+    baseUrl: trimSlash(env.ROOFQUERY_BASE_URL) || 'https://api.roofquery.com',
+    // What gets measured: primary_only · primary_and_garage · all_structures
+    scope: ['primary_only', 'primary_and_garage', 'all_structures'].includes(String(env.ROOFQUERY_SCOPE || '').trim()) ? String(env.ROOFQUERY_SCOPE).trim() : 'primary_and_garage',
+    syncEverySeconds: Math.max(30, parseInt(env.ROOFQUERY_SYNC_SECONDS, 10) || 120)
+  },
+  // Who hears about problems that need a person (RoofQuery balance too low, an order that couldn't be placed).
+  adminEmail: String(env.ADMIN_EMAIL || env.EMAIL_REPLY_TO || '').trim(),
+  // Signs download links. Defaults to a value derived from the Supabase secret key.
+  downloadSecret: String(env.DOWNLOAD_LINK_SECRET || '').trim(),
   stripe: {
     secretKey: String(env.STRIPE_SECRET_KEY || '').trim(), webhookSecret: String(env.STRIPE_WEBHOOK_SECRET || '').trim(),
     apiBase: trimSlash(env.STRIPE_API_BASE) || 'https://api.stripe.com',
@@ -54,6 +65,8 @@ export function configProblems() {
   const k = config.stripe.secretKey;
   if (k && !/^(sk|rk)_(test|live)_/.test(k)) p.push('STRIPE_SECRET_KEY should start with sk_test_ (test mode) or sk_live_. The pk_ key is the wrong one.');
   if (k && !config.stripe.webhookSecret) console.warn('[stripe] STRIPE_WEBHOOK_SECRET is empty: card saving, subscriptions and payment pages won\u2019t finish until it\u2019s set.');
+  const rqk = config.roofquery.apiKey;
+  if (rqk && !/^rq_(test|live)_sk_/.test(rqk)) p.push('ROOFQUERY_API_KEY should start with rq_test_sk_ (sandbox) or rq_live_sk_. Copy it again from the RoofQuery portal.');
   const rk = config.email.resendKey;
   if (rk && !/^re_/.test(rk)) p.push('RESEND_API_KEY should start with re_. Copy it again from Resend › API Keys.');
   if (!/@[^@\s>]+\.[a-z]{2,}/i.test(config.email.from)) p.push('EMAIL_FROM should be an address like Rapid Squares <reports@rapidsquares.com>.');

@@ -3,6 +3,7 @@ import http from 'node:http';
 import { config, configProblems, connected } from './config.js';
 import { createRouter, sendJson, sendError, serveStatic } from './http.js';
 import { registerRoutes } from './routes.js';
+import { startSync } from './fulfillment.js';
 
 const problems = configProblems();
 if (problems.length) {
@@ -58,6 +59,21 @@ const server = http.createServer(async (req, res) => {
       if (!res.headersSent) sendJson(res, 200, out ?? {});
       return;
     }
+    // Report downloads (signed links). Errors show as a small page, since a person clicked the link.
+    if (pathname.startsWith('/files/') && (req.method === 'GET' || req.method === 'HEAD')) {
+      const hit = router.match('GET', pathname);
+      try {
+        if (!hit || hit.methodNotAllowed) throw Object.assign(new Error('That download link isn\u2019t valid.'), { status: 404 });
+        await hit.handler({ req, res, params: hit.params, query: url.searchParams });
+      } catch (e) {
+        if (res.headersSent) return res.end();
+        if (!e.status) console.error('[download]', e);
+        const msg = String(e.status ? e.message : 'Something went wrong. Try again in a moment.').replace(/[<>&]/g, '');
+        res.writeHead(e.status || 500, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Download</title><link rel="stylesheet" href="/styles.css"><main style="max-width:520px;margin:15vh auto;padding:0 16px;font-family:system-ui,sans-serif"><h1 style="font-size:22px">Download unavailable</h1><p>${msg}</p><p><a href="/orders.html">Go to order history</a></p></main>`);
+      }
+      return;
+    }
     if (pathname.startsWith('/api/')) {
       if (!cors(req, res)) return sendJson(res, 403, { error: { code: 'origin_not_allowed', message: 'This website isn’t allowed to use the Rapid Squares API.' } });
       if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
@@ -92,8 +108,9 @@ server.listen(config.port, () => {
   const mark = (on) => (on ? 'connected' : 'not connected yet');
   console.log(`\nRapid Squares is running: ${config.appUrl}\n`);
   console.log(`  Supabase   ${mark(c.supabase)}`);
-  console.log(`  RoofQuery  ${mark(c.roofquery)}`);
+  console.log(`  RoofQuery  ${mark(c.roofquery)}${c.roofquery ? (/^rq_test_/.test(config.roofquery.apiKey) ? ' (sandbox: no real reports)' : ' (LIVE: real reports, uses your balance)') : ''}`);
   console.log(`  Stripe     ${mark(c.stripe)}${!c.stripe && config.allowUnpaidTestOrders ? ' (test orders allowed without payment)' : ''}`);
   console.log(`  Resend     ${mark(c.email)}${c.email ? '' : ' (emails print here instead)'}`);
   console.log('\nPress Ctrl+C to stop.\n');
+  startSync();
 });

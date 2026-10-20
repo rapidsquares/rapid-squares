@@ -232,3 +232,17 @@ async function syncSubscription(company, sub) {
     stripe_config: { ...(company.stripe_config || {}), subscription_id: sub.id, cancel_at_period_end: !!sub.cancel_at_period_end }
   });
 }
+
+// ---------- refunds ----------
+// Full refund of an order's payment (used when RoofQuery can't measure the roof). Safe to call twice.
+export async function refundOrder(order) {
+  const pi = order.stripe_payment_id;
+  if (!connected() || !pi || !/^pi_/.test(pi)) return null;
+  try {
+    const r = await api('POST', '/refunds', { payment_intent: pi, reason: 'requested_by_customer', metadata: { order_id: order.id, report_number: 'RS-' + order.report_number } }, { idempotencyKey: 'refund-' + order.id });
+    return r.id;
+  } catch (e) {
+    if (e.stripe && e.stripe.code === 'charge_already_refunded') return 'already_refunded';
+    throw e;
+  }
+}

@@ -52,7 +52,31 @@ if (b.ok) {
 else if (b.status) skip('Couldn\u2019t list file storage buckets. If logo uploads fail, run supabase/schema.sql again.');
 
 // 4. Later connections.
-config.roofquery.apiKey ? ok('RoofQuery key: set') : skip('RoofQuery: not connected yet');
+if (config.roofquery.apiKey) {
+  const rh = { Authorization: 'Bearer ' + config.roofquery.apiKey };
+  const idr = await tryFetch(`${config.roofquery.baseUrl}/api/v1/identity`, { headers: rh });
+  if (idr.status === 0) bad('Can\u2019t reach RoofQuery.');
+  else if (idr.status === 401) bad('RoofQuery rejected ROOFQUERY_API_KEY. Copy the key again from the RoofQuery portal.');
+  else if (!idr.ok) bad(`RoofQuery answered with an error (${idr.status}).`);
+  else {
+    const me = await idr.json();
+    const bal = me.balance || {};
+    ok(`RoofQuery: connected as ${me.companyName || 'your account'} (${me.sandbox ? 'sandbox: test orders, no real reports' : 'LIVE: real reports, uses your balance'})`);
+    if (bal.canOrder === false) bad(`RoofQuery balance ($${bal.available ?? 0}) can\u2019t cover a report. Add a card or credit in the RoofQuery portal; paid orders wait until you do.`);
+    else ok(`RoofQuery balance: $${bal.available ?? '?'}`);
+    const wr = await tryFetch(`${config.roofquery.baseUrl}/api/v1/webhooks`, { headers: rh });
+    const hooks = wr.ok ? ((await wr.json()).webhooks || []) : [];
+    const want = `${config.appUrl}/webhooks/roofquery`;
+    const env = me.sandbox ? 'test' : 'live';
+    const mine = hooks.filter((h) => h.active && String(h.url).startsWith(want) && (!h.env || h.env === env || (env === 'test' && h.env === 'sandbox')));
+    const shown = want + (config.roofquery.webhookSecret ? '/<your ROOFQUERY_WEBHOOK_SECRET>' : '');
+    if (!wr.ok) skip('Couldn\u2019t list RoofQuery webhooks.');
+    else if (!mine.length) bad(`No active RoofQuery webhook points at this site. In the RoofQuery portal, add ${shown}. (Orders still update every few minutes without it.)`);
+    else if (config.roofquery.webhookSecret && !mine.some((h) => String(h.url).includes(config.roofquery.webhookSecret))) bad(`The RoofQuery webhook doesn\u2019t include your ROOFQUERY_WEBHOOK_SECRET, so the site will refuse it. Set it to ${shown}.`);
+    else ok('RoofQuery webhook: set');
+    if (!config.roofquery.webhookSecret) skip('ROOFQUERY_WEBHOOK_SECRET is empty. Optional, but it stops junk requests to the webhook.');
+  }
+} else skip('RoofQuery: not connected yet');
 if (config.stripe.secretKey) {
   const st = await tryFetch(`${config.stripe.apiBase}/v1/customers?limit=1`, { headers: { Authorization: 'Bearer ' + config.stripe.secretKey } });
   if (st.status === 0) bad('Can\u2019t reach Stripe.');
@@ -76,5 +100,6 @@ if (config.email.resendKey) {
 } else skip('Resend: not connected yet (emails print in the server window)');
 if (!/^https:/.test(config.appUrl) && !/localhost|127\.0\.0\.1/.test(config.appUrl)) bad('APP_URL should start with https:// when the site is online.');
 
+if (!config.adminEmail) skip('ADMIN_EMAIL is empty: problems that need you (low RoofQuery balance, failed refunds) only show in the logs.');
 console.log(failed ? '\nSome checks failed. Fix them, then run `npm run check` again.\n' : '\nAll set. Start the app with `npm start`.\n');
 process.exit(failed ? 1 : 0);
