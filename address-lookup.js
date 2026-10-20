@@ -224,6 +224,7 @@
 
   function show(p) {
     selected = p;
+    p.found = { lat: p.lat, lon: p.lon }; // where the address lookup put it; the pin can be moved from here
     $('sel-empty').classList.add('hidden');
     $('sel-details').classList.remove('hidden');
     $('order-bar').classList.remove('hidden');
@@ -234,6 +235,7 @@
     $('sel-lat').textContent = p.lat.toFixed(6);
     $('sel-lon').textContent = p.lon.toFixed(6);
     $('sel-conf').textContent = p.confidence ? p.confidence + ' confidence' : '—';
+    showPin();
     $('order-msg').classList.add('hidden');
     say('Showing aerial view of ' + p.label + '.');
     showOnMap(p).catch(function () { say('Found the address, but the aerial view couldn’t load.', true); });
@@ -256,6 +258,7 @@
   function showOnMap(p) {
     return loadSdk().then(function (atlas) {
       mapEmpty.classList.add('hidden');
+      $('pin-tip').classList.remove('hidden');
       var pos = [p.lon, p.lat];
       if (!map) {
         map = new atlas.Map(mapEl, {
@@ -268,8 +271,11 @@
             new atlas.control.ZoomControl(),
             new atlas.control.StyleControl({ mapStyles: ['satellite', 'satellite_road_labels', 'road'] })
           ], { position: 'top-right' });
-          marker = new atlas.HtmlMarker({ position: pos, color: '#B03A0A' });
+          // The pin marks the roof to measure. Drag it, or click the roof, if the address lands in the wrong spot.
+          marker = new atlas.HtmlMarker({ position: [selected.lon, selected.lat], color: '#B03A0A', draggable: true });
           map.markers.add(marker);
+          map.events.add('dragend', marker, function () { var c = marker.getOptions().position; movePin(c[1], c[0]); });
+          map.events.add('click', function (e) { if (e.position) { marker.setOptions({ position: e.position }); movePin(e.position[1], e.position[0]); } });
         });
       } else {
         map.setCamera({ center: pos, zoom: ZOOM, type: 'fly', duration: 900 });
@@ -280,6 +286,40 @@
 
   $('recenter-btn').addEventListener('click', function () {
     if (map && selected) map.setCamera({ center: [selected.lon, selected.lat], zoom: ZOOM, type: 'ease', duration: 500 });
+  });
+
+  // ---------- The pin: the report is ordered for wherever it sits ----------
+  function metersBetween(a, b) {
+    var R = 6371000, r = Math.PI / 180, dLat = (b.lat - a.lat) * r, dLon = (b.lon - a.lon) * r;
+    var h = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return 2 * R * Math.asin(Math.sqrt(h));
+  }
+  function movePin(lat, lon) {
+    if (!selected) return;
+    selected.lat = Math.round(lat * 1e7) / 1e7; selected.lon = Math.round(lon * 1e7) / 1e7;
+    showPin();
+    say('Pin moved. The report will be ordered for the roof under the pin.');
+  }
+  function showPin() {
+    var p = selected; if (!p) return;
+    $('sel-lat').textContent = p.lat.toFixed(6);
+    $('sel-lon').textContent = p.lon.toFixed(6);
+    var moved = p.found && (p.lat !== p.found.lat || p.lon !== p.found.lon);
+    var far = moved ? metersBetween(p.found, p) : 0;
+    $('pin-moved').classList.toggle('hidden', !moved);
+    $('pin-reset').classList.toggle('hidden', !moved);
+    $('ob-pin').classList.toggle('hidden', !moved);
+    var warn = $('pin-warn');
+    warn.classList.toggle('hidden', far <= 150);
+    if (far > 150) warn.textContent = 'The pin is ' + (far >= 1000 ? (far / 1609.34).toFixed(1) + ' mi' : Math.round(far * 3.281) + ' ft') + ' from the address. Make sure it’s on the right roof.';
+  }
+  $('pin-reset').addEventListener('click', function () {
+    if (!selected || !selected.found) return;
+    selected.lat = selected.found.lat; selected.lon = selected.found.lon;
+    if (marker) marker.setOptions({ position: [selected.lon, selected.lat] });
+    if (map) map.setCamera({ center: [selected.lon, selected.lat], type: 'ease', duration: 400 });
+    showPin();
+    say('Pin back on the address.');
   });
   // ---------- Ordering: pick a report type in a pop-up, then place the order ----------
   var dlg = $('order-dialog'), catalog = null, preselect = null;

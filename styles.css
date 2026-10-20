@@ -485,8 +485,10 @@ body.lp { padding-bottom: 0; background: var(--paper); }
 .lp-small { margin: 0; font-size: 14px; color: #AEB8C1; }
 .lp-small b { color: #FFFFFF; }
 .lp-search { position: relative; display: flex; gap: 8px; background: #FFFFFF; padding: 6px; border-radius: 10px; max-width: 580px; }
-.lp-search > svg { position: absolute; left: 20px; top: 50%; transform: translateY(-50%); }
-.lp-search input { flex: 1; min-width: 0; height: 48px; border: 0; padding: 0 12px 0 42px; font: inherit; font-size: 16px; color: var(--ink); background: transparent; border-radius: 6px; }
+.lp-combo { position: relative; flex: 1; min-width: 0; display: flex; }
+.lp-combo > svg { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); pointer-events: none; }
+.lp-combo .suggestions { text-align: left; color: var(--ink); }
+.lp-search input { flex: 1; width: 100%; min-width: 0; height: 48px; border: 0; padding: 0 12px 0 42px; font: inherit; font-size: 16px; color: var(--ink); background: transparent; border-radius: 6px; }
 .lp-search input:focus { outline: 2px solid var(--accent); outline-offset: 0; }
 .lp-search .btn { height: 48px; flex: 0 0 auto; }
 .lp-hero-art { flex: 1 1 340px; min-width: 0; margin: 0; max-width: 460px; }
@@ -533,7 +535,6 @@ body.lp { padding-bottom: 0; background: var(--paper); }
   .lp-hero { padding: 36px 0 44px; }
   .lp-hero-in { gap: 28px; }
   .lp-search { flex-direction: column; padding: 8px; }
-  .lp-search > svg { top: 32px; transform: none; }
   .lp-search .btn { width: 100%; }
   .lp-section { padding: 48px 0; }
 }
@@ -602,3 +603,8 @@ body.embed .page-head h1 { font-size: 24px; }
 .trial-banner > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .trial-banner b { font-size: 16px; }
 @media (max-width: 720px) { .trial-banner .btn { width: 100%; } }
+
+/* Place order: movable pin */
+.pin-tip { position: absolute; left: 12px; bottom: 12px; z-index: 5; margin: 0; padding: 8px 12px; border-radius: 6px; background: rgba(22, 34, 44, .85); color: #FFFFFF; font-size: 13px; pointer-events: none; max-width: calc(100% - 24px); }
+.pin-warn { margin: 0; color: var(--danger); font-size: 13px; font-weight: 500; }
+.ob-pin { align-self: flex-start; margin-top: 4px; padding: 2px 8px; border-radius: 999px; background: var(--paper); border: 1px solid var(--accent); color: var(--accent-dark); font-size: 12px; font-weight: 600; }

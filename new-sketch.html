@@ -70,6 +70,7 @@
         <span class="hint">Selected property</span>
         <b id="ob-line1"></b>
         <span id="ob-line2" class="hint"></span>
+        <span id="ob-pin" class="ob-pin hidden">Using your pin location</span>
       </div>
       <button type="button" id="order-btn" class="btn btn-primary order-bar-btn">Order report for this roof</button>
     </div>
@@ -81,6 +82,7 @@
       <h2 id="map-h" class="sr">Aerial view</h2>
       <div class="map-wrap">
         <div id="map" aria-label="Aerial view of the selected property"></div>
+        <p id="pin-tip" class="pin-tip hidden">Pin not on the right roof? Drag it, or click the roof.</p>
         <div id="map-empty" class="map-empty">
           <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#56616B" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11.5 L12 4 L21 11.5"/><path d="M6 9.5 V20 H18 V9.5"/><path d="M12 4 V20"/></svg>
           <b>No property selected</b>
@@ -104,9 +106,13 @@
             <div><dt>Longitude</dt><dd id="sel-lon" class="mono"></dd></div>
             <div><dt>Match</dt><dd id="sel-conf"></dd></div>
           </dl>
+          <p id="pin-moved" class="hint hidden" style="margin: 0;">You moved the pin. The report will be ordered for the roof under it.</p>
+          <p id="pin-warn" class="pin-warn hidden" role="status"></p>
           <div class="actions" style="flex-direction: column;">
             <button type="button" id="recenter-btn" class="btn">Re-center on roof</button>
+            <button type="button" id="pin-reset" class="btn hidden">Put pin back on the address</button>
           </div>
+          <p class="hint" style="margin: 0;">Not on the right roof? Drag the pin on the map, or click the roof to move it there.</p>
         </div>
       </div>
     </aside>

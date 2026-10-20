@@ -41,8 +41,11 @@
         <p class="lp-lede">Look up any address, see the roof from the sky, and order a measurement report. Premium reports are delivered in under 2 hours.</p>
         <form class="lp-search" action="new-sketch.html" method="get" role="search">
           <label for="lp-addr" class="sr">Property address</label>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#56616B" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
-          <input id="lp-addr" name="address" type="text" placeholder="Enter a property address" autocomplete="street-address" required>
+          <div class="lp-combo">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#56616B" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+            <input id="lp-addr" name="address" type="text" placeholder="Enter a property address" autocomplete="off" required role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="lp-sugg">
+            <ul id="lp-sugg" class="suggestions hidden" role="listbox" aria-label="Address suggestions"></ul>
+          </div>
           <button type="submit" class="btn btn-primary">Look up roof</button>
         </form>
         <p class="lp-small">No account needed to look up a roof or order. Create a free account and try a subscription <b>free for 30 days</b>: lower prices on every report.</p>
@@ -167,6 +170,7 @@
 <script src="config.js"></script>
 <script src="api.js"></script>
 <script src="auth.js"></script>
+<script src="landing-search.js"></script>
 <script>
   // Signed-in visitors (or sample data) get a shortcut into the app instead of "Sign in".
   (function () {
