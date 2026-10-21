@@ -125,7 +125,7 @@ create table if not exists public.products (
   sort                    integer not null default 0
 );
 insert into public.products (id, label, price_cents, subscriber_price_cents, esx_addon_allowed, available, delivery_minutes, sort) values
-  ('certified_residential', 'Certified Residential Rapid Squares',  700,  500, false, false,  30, 1),
+  ('certified_residential', 'Certified Residential Rapid Squares',  800,  500, false, true,   30, 1),
   ('premium_residential',   'Premium Residential Report',          1200,  800, true,  true,  120, 2),
   ('commercial',            'Commercial Report',                   3000, 2500, true,  true,  null, 3),
   ('esx_addon',             'ESX file (Xactimate)',                 500,  500, false, true,  null, 9)

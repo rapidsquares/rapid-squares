@@ -376,7 +376,7 @@ export function registerRoutes(r) {
   // The file itself: checked by the signed link, streamed from RoofQuery in the company's branding.
   r.get('/files/:id/:kind', async ({ res, params, query }) => {
     const { id, kind } = params;
-    const bad = () => fail(404, 'not_found', 'This download link isn\u2019t valid or has expired. Download the report again from your order history.');
+    const bad = () => fail(404, 'not_found', 'This download link isn\u2019t valid or has expired. Download the report again from your Home page.');
     if (!['pdf', 'esx', 'buy-esx'].includes(kind) || !/^[0-9a-f-]{36}$/i.test(id) || !fulfillment.checkDownload(id, kind, query.get('exp'), query.get('sig'))) bad();
     let o = await db.one('report_orders', { id: eq(id) });
     if (!o || !o.roofquery_order_id || o.status !== 'delivered') bad();

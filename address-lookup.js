@@ -466,7 +466,7 @@
         m.classList.remove('hidden', 'error');
         m.innerHTML = '';
         m.appendChild(document.createTextNode('Ordered ' + o.report_number + ' · ' + o.product_label + (o.esx_purchased ? ' + ESX' : '') + ' for ' + place.label + '. ' + paid + ' '));
-        var a = document.createElement('a'); a.href = 'orders.html'; a.textContent = 'Track it in Order history';
+        var a = document.createElement('a'); a.href = 'orders.html'; a.textContent = 'Track it on Home';
         m.appendChild(a);
       })
       .catch(function (x) {
@@ -476,7 +476,7 @@
       .then(function () { btn.disabled = false; btn.setAttribute('aria-busy', 'false'); });
   });
 
-  // Stripe's payment page can't open inside the Order history pop-up, so leave the whole page.
+  // Stripe's payment page can't open inside the Home order pop-up, so leave the whole page.
   function goToPayment(url) {
     var btn = $('od-submit'); btn.textContent = 'Opening secure payment\u2026';
     try { (RS.embed && window.top !== window ? window.top : window).location.href = url; } catch (_) { location.href = url; }

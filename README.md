@@ -7,10 +7,10 @@ Clickable mockups for an aerial roof report tool. These are design mockups only:
 | File | Screen |
 | --- | --- |
 | `index.html` | **Landing page**: what Rapid Squares is, address search, how it works, FAQ and contact |
-| `orders.html` | **Order history**: ordered reports with status filters and search |
-| `new-sketch.html` | **Place order**: look up an address and see the roof in Azure Maps satellite imagery |
-| `report-settings.html` | **Report settings**: company name, logo, license number, contact info, and roof photos |
-| `team.html` | **Team & invites** (admin): invite employees, pick a role, and set ordering and settings permissions |
+| `orders.html` | **Home**: order a new report (pop-up) and see ordered reports with status filters and search |
+| `new-sketch.html` | **Order form**: look up an address and see the roof in Azure Maps satellite imagery. Shown inside the Home pop-up; visitors without an account use it as a page, and signed-in visits forward to Home |
+| `report-settings.html` | **Report settings** (under Account): company name, logo, license number, contact info, and roof photos |
+| `team.html` | **Team & invites** (under Account, admin): invite employees, pick a role, and set ordering and settings permissions |
 | `account.html` | **Account settings**: locked company field, profile, contact info, billing, and security |
 
 The top nav links all five screens together.
@@ -40,7 +40,7 @@ The placeholder works like the real backend will:
 
 What works on sample data:
 
-- **Order history:** filters, search and paging, from the data.
+- **Home:** filters, search and paging, from the data.
 - **Place order:** places an order.
 - **Report settings:** saves company details and the logo.
 - **Team:** invite, edit permissions, remove, resend and revoke.
@@ -167,7 +167,7 @@ Set `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` (in `server\.env` and on Ren
 
 - Supabase emails a confirmation link to new accounts, and its built-in email only sends a few an hour. For testing, you can turn off **Confirm email** under Authentication › Sign In / Providers › Email. Turn it back on before launch.
 - **RoofQuery:** set `ROOFQUERY_API_KEY` (and `ROOFQUERY_WEBHOOK_SECRET`, `ADMIN_EMAIL`) in `server/.env` and on Render, then add the webhook `https://rapidsquares.com/webhooks/roofquery/<ROOFQUERY_WEBHOOK_SECRET>` in the RoofQuery portal. Paid and free orders are sent to RoofQuery straight away; status, squares and pitch update from the webhook (and every few minutes as a backup). When a report is ready the person who ordered it gets an email; guests get download links. PDFs carry the ordering company's name, logo, color and contact details (a RoofQuery brand profile per company, kept in step with Report settings); guest PDFs use the default branding set in the RoofQuery portal. Downloads go through this server, so the ESX file is only available on orders that paid for it. If RoofQuery can't measure a roof, the order is marked failed and the customer is refunded automatically (or gets their free report back). If the RoofQuery balance runs out, orders queue, `ADMIN_EMAIL` is told, and they're retried automatically. With a `rq_test_sk_` key, only RoofQuery's sandbox addresses complete (e.g. 6515 Turnbridge Pl, Prospect, KY 40059); any other address is cancelled, which also tests the refund.
-- **Buying the ESX later:** RoofQuery makes an ESX file for every report, so a finished order without one shows **Buy ESX · $5.00** in Order history (saved card charged, file downloads at once; no card → Stripe's payment page). Guests get a "Get it for $5" link in their ready email. The purchase shows on Account billing, and the buyer gets an email with the download link.
+- **Buying the ESX later:** RoofQuery makes an ESX file for every report, so a finished order without one shows **Buy ESX · $5.00** on Home (saved card charged, file downloads at once; no card → Stripe's payment page). Guests get a "Get it for $5" link in their ready email. The purchase shows on Account billing, and the buyer gets an email with the download link.
 - **Instant Squares (subscribers, including the free trial):** on Place order, after looking up a roof, "Instant Squares" calls RoofQuery's Instant Query for the pin location and shows roof area in squares, pitch, confidence per building, the building outlines on the map, and 5 years of storm history. Non-subscribers see it locked with a free-trial link; guests don't see it. Instant Query is in beta at RoofQuery and must be switched on for your account by their support (until then the site says it isn't switched on yet). Limited to 120 estimates per company per hour.
 - **Order emails:** the customer gets an order confirmation as soon as an order is paid (or covered by a free report) and a "report ready" email when it's done. `ADMIN_EMAIL` gets a copy of both (turn off with `ORDER_ALERTS=false`).
 - **Email (Resend):** set `RESEND_API_KEY` and `EMAIL_FROM` (an address on a domain verified in Resend › Domains) in `server/.env` and on Render. The site then emails guest order confirmations, payment confirmations and team invites. Supabase's sign-up and password-reset emails are separate: point Supabase › Authentication › Emails › SMTP Settings at Resend (host `smtp.resend.com`, port `465`, username `resend`, password = a Resend API key) to send them from your domain and lift the few-an-hour limit. `npm run check` tells you whether the key works and the domain is verified.

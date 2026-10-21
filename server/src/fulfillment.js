@@ -136,7 +136,7 @@ export async function tellPlaced(order) {
     const who = await recipient(order);
     if (who) {
       const first = String(who.name || '').split(' ')[0];
-      const track = who.guest ? '\n\nWe\u2019ll email you here with download links when it\u2019s ready.' : `\n\nTrack it in your order history: ${config.appUrl}/orders.html\nWe\u2019ll email you when it\u2019s ready.`;
+      const track = who.guest ? '\n\nWe\u2019ll email you here with download links when it\u2019s ready.' : `\n\nTrack it on your Rapid Squares home page: ${config.appUrl}/orders.html\nWe\u2019ll email you when it\u2019s ready.`;
       await email.send({ to: who.to, subject: `Order RS-${order.report_number} received`,
         text: `Hi${first ? ' ' + first : ''},\n\nThanks for your order.\n\nOrder: RS-${order.report_number}\nReport: ${label}\nProperty: ${order.address}\nTotal: ${total}${order.receipt_url ? '\nReceipt: ' + order.receipt_url : ''}${eta}${track}` });
     }
@@ -175,10 +175,10 @@ async function tellReady(order) {
   if (!order.esx_purchased && p && p.esx_addon_allowed && stripe.connected()) {
     const price = await esxPriceFor(order);
     links += who.guest ? `\n\nNeed the Xactimate (ESX) file? Get it for ${money(price)}: ${downloadUrl(order.id, 'buy-esx', 365 * 24 * 60 * MIN)}`
-      : `\n\nNeed the Xactimate (ESX) file? Add it for ${money(price)} from your order history: ${config.appUrl}/orders.html`;
+      : `\n\nNeed the Xactimate (ESX) file? Add it for ${money(price)} from your Rapid Squares home page: ${config.appUrl}/orders.html`;
   }
   links += who.guest ? '\n\nThese links work for a year. Keep this email.'
-    : `\n\nThese links work for 30 days. After that, download the report any time from your order history: ${config.appUrl}/orders.html`;
+    : `\n\nThese links work for 30 days. After that, download the report any time from your Rapid Squares home page: ${config.appUrl}/orders.html`;
   await email.send({ to: who.to, subject: `Your roof report RS-${order.report_number} is ready`,
     text: `Hi${first ? ' ' + first : ''},\n\nYour report for ${order.address} is ready.${size}${links}` });
 }

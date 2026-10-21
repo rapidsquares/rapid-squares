@@ -68,10 +68,10 @@
   }
 
   // ---------- navigation by permission ----------
-  var NEEDS = { 'new-sketch.html': 'orders.create', 'report-settings.html': 'branding.edit', 'team.html': 'users.manage' };
+  var NEEDS = { 'new-sketch.html': 'orders.create', 'orders.html?order=1': 'orders.create', 'report-settings.html': 'branding.edit', 'team.html': 'users.manage' };
   var PAGE_NEEDS = { 'new-sketch': ['orders.create', 'Order reports'], 'report-settings': ['branding.edit', 'Edit report settings'], 'team': ['users.manage', 'Manage team'] };
   function setupNav() {
-    document.querySelectorAll('.topnav a, .tabbar a, a.btn-primary').forEach(function (a) {
+    document.querySelectorAll('.topnav a, .tabbar a, .subnav a, a.btn-primary').forEach(function (a) {
       var perm = NEEDS[a.getAttribute('href')];
       if (perm && !can(perm)) a.classList.add('hidden');
     });
@@ -84,7 +84,7 @@
     main.appendChild(el('section', { class: 'card no-access' }, [
       el('h1', { text: 'You don’t have access to this page', style: 'font-size: 26px;' }),
       el('p', { class: 'lede', text: 'This page needs the “' + need[1] + '” permission. Ask your company admin to turn it on for you.' }),
-      el('div', { class: 'actions' }, [el('a', { href: 'orders.html', class: 'btn btn-primary', text: 'Go to Order history' })])
+      el('div', { class: 'actions' }, [el('a', { href: 'orders.html', class: 'btn btn-primary', text: 'Go to Home' })])
     ]));
     return false;
   }
@@ -111,7 +111,7 @@
     document.querySelector('.topbar').appendChild(details);
   }
 
-  // ---------- Order history ----------
+  // ---------- Home (reports list + ordering) ----------
   var STATUS = {
     pending: ['ordered', 'Ordered'], awaiting_payment: ['ordered', 'Awaiting payment'], in_progress: ['processing', 'Processing'],
     needs_info: ['needs', 'Needs info'], delivered: ['ready', 'Ready'], failed: ['failed', 'Failed'], cancelled: ['cancelled', 'Cancelled']
@@ -229,14 +229,20 @@
     if (back.get('paid') || back.get('unpaid') || back.get('esx')) history.replaceState(null, '', location.pathname);
   }
 
-  // "Order new report" opens the Place order page inside a pop-up instead of leaving Order history.
+  // "Order new report" opens the order form in a pop-up on Home. Links to orders.html?order=1
+  // (and signed-in visits to new-sketch.html, which forward here) open it straight away.
   function setupQuickOrder(onOrdered) {
     var btn = document.querySelector('.page-head a[href="new-sketch.html"]');
     if (!btn) return;
-    var dlg = null;
+    var dlg = null, first = new URLSearchParams(location.search), src = 'new-sketch.html?embed=1';
+    if (first.get('order') && can('orders.create')) {
+      ['address', 'resume'].forEach(function (k) { if (first.get(k)) src += '&' + k + '=' + encodeURIComponent(first.get(k)); });
+      history.replaceState(null, '', location.pathname);
+      setTimeout(open);
+    }
     function open() {
       if (!dlg) {
-        var frame = el('iframe', { src: 'new-sketch.html?embed=1', title: 'Order a new report', class: 'qo-frame' });
+        var frame = el('iframe', { src: src, title: 'Order a new report', class: 'qo-frame' });
         dlg = el('dialog', { class: 'modal qo', 'aria-label': 'Order a new report' }, [
           el('div', { class: 'qo-head' }, [
             el('h2', { text: 'Order a new report' }),
@@ -679,6 +685,13 @@
   if (isGuest()) { setupGuest(); document.dispatchEvent(new CustomEvent('rs:ready', { detail: null })); return; }
   if (!RS.embed) setupSampleSwitcher();
   if (api.mode === 'live' && !(RS.auth && RS.auth.signedIn())) { RS.auth.toSignIn(); return; }
+  if (page === 'new-sketch' && !RS.embed) {
+    // Signed-in people order from Home now; this page is only for visitors without an account.
+    var fwd = new URLSearchParams(location.search), to = 'orders.html?order=1';
+    ['address', 'resume'].forEach(function (k) { if (fwd.get(k)) to += '&' + k + '=' + encodeURIComponent(fwd.get(k)); });
+    location.replace(to);
+    return;
+  }
   api.get('/api/me').then(function (me) {
     ME = me;
     RS.me = me;
