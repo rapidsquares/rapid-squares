@@ -68,8 +68,8 @@
   }
 
   // ---------- navigation by permission ----------
-  var NEEDS = { 'new-sketch.html': 'orders.create', 'orders.html?order=1': 'orders.create', 'report-settings.html': 'branding.edit', 'team.html': 'users.manage' };
-  var PAGE_NEEDS = { 'new-sketch': ['orders.create', 'Order reports'], 'report-settings': ['branding.edit', 'Edit report settings'], 'team': ['users.manage', 'Manage team'] };
+  var NEEDS = { 'new-sketch.html': 'orders.create', 'orders.html?order=1': 'orders.create', '#report-settings': 'branding.edit', '#team': 'users.manage' };
+  var PAGE_NEEDS = { 'new-sketch': ['orders.create', 'Order reports'] };
   function setupNav() {
     document.querySelectorAll('.topnav a, .tabbar a, .subnav a, a.btn-primary').forEach(function (a) {
       var perm = NEEDS[a.getAttribute('href')];
@@ -544,6 +544,21 @@
   }
 
   // ---------- Account ----------
+  // Account page tabs: Settings, Report settings and Team, picked by #report-settings / #team.
+  // Any other hash (#billing, #profile, …) is a section of the Settings tab.
+  var ACCT_TABS = { 'report-settings': 'branding.edit', team: 'users.manage' };
+  function setupAccountTabs() {
+    var links = document.querySelectorAll('[data-acct-tab]');
+    function show() {
+      var want = location.hash.slice(1), tab = ACCT_TABS[want] && can(ACCT_TABS[want]) ? want : 'settings';
+      links.forEach(function (a) { if (a.getAttribute('data-acct-tab') === tab) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+      document.querySelectorAll('.acct-panel').forEach(function (p) { p.classList.toggle('hidden', p.id !== 'tab-' + tab); });
+      if (ACCT_TABS[want] || want === 'settings') window.scrollTo(0, 0);
+    }
+    window.addEventListener('hashchange', show);
+    show();
+  }
+
   function initAccount() {
     var me = ME.user;
     function fill(u) {
@@ -699,9 +714,12 @@
     setupNav();
     if (!guardPage()) return;
     if (page === 'reports') initReports();
-    else if (page === 'report-settings') initReportSettings();
-    else if (page === 'team') initTeam();
-    else if (page === 'account') initAccount();
+    else if (page === 'account') {
+      setupAccountTabs();
+      if (can('branding.edit')) initReportSettings();
+      if (can('users.manage')) initTeam();
+      initAccount();
+    }
     document.dispatchEvent(new CustomEvent('rs:ready', { detail: me }));
   }).catch(showError);
 })();

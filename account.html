@@ -30,130 +30,316 @@
 </nav>
 </header>
 
-<main class="page" style="max-width: 1180px;">
+<main class="page" style="max-width: 1280px;">
   <nav class="subnav" aria-label="Account sections">
-    <a href="account.html" aria-current="page">Settings</a>
-    <a href="report-settings.html">Report settings</a>
-    <a href="team.html">Team</a>
+    <a href="#settings" data-acct-tab="settings" aria-current="page">Settings</a>
+    <a href="#report-settings" data-acct-tab="report-settings">Report settings</a>
+    <a href="#team" data-acct-tab="team">Team</a>
   </nav>
-  <div class="page-head">
-    <div>
-      <p class="eyebrow">Your account</p>
-      <h1>Settings</h1>
-    </div>
-    <div class="actions">
-      <button type="button" class="btn btn-outline" id="acct-cancel">Cancel</button>
-      <button type="button" class="btn btn-primary" id="acct-save">Save changes</button>
-    </div>
-  </div>
-
-  <div class="row">
-    <nav class="sidenav" aria-label="Settings sections">
-      <a href="#profile" class="current">Profile</a>
-      <a href="#contact">Contact info</a>
-      <a href="#billing" id="nav-billing">Billing</a>
-      <a href="#security">Password &amp; security</a>
-    </nav>
-
-    <div class="col-main">
-      <section class="card" aria-label="Company" style="gap: 8px;">
-        <div class="fld">
-          <label for="org">Company</label>
-          <div class="locked">
-            <input id="org" type="text" value="[Company Name]" disabled aria-describedby="org-hint">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#56616B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
-          </div>
-          <span id="org-hint" class="hint">Managed by your company admin. Contact them to change companies.</span>
-        </div>
-      </section>
-
-      <section id="profile" class="card" aria-labelledby="sec-pr">
-        <h2 id="sec-pr">Profile</h2>
-        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px;">
-          <div style="width: 80px; height: 80px; border-radius: 50%; overflow: hidden; background: var(--line-2); display: flex; align-items: center; justify-content: center; flex: 0 0 80px;">
-            <img id="avatar-img" class="hidden" alt="Profile photo" style="width: 100%; height: 100%; object-fit: cover;">
-            <svg id="avatar-empty" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#56616B" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>
-          </div>
-          <label class="btn drop" style="border-style: solid; border-width: 1px; padding: 0 16px; flex-direction: row;">Upload photo<input id="avatar-input" class="sr" type="file" accept="image/*"></label>
-          <span class="hint">Shown on reports you prepare.</span>
-        </div>
-        <div class="grid-fields" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
-          <div class="fld"><label for="fn">First name</label><input id="fn" type="text" placeholder="First name"></div>
-          <div class="fld"><label for="ln">Last name</label><input id="ln" type="text" placeholder="Last name"></div>
-          <div class="fld"><label for="ti">Job title</label><input id="ti" type="text" placeholder="e.g. Estimator"></div>
-          <div class="fld"><label for="tz">Time zone</label>
-            <select id="tz"><option>Central Time (CT)</option><option>Eastern Time (ET)</option><option>Mountain Time (MT)</option><option>Pacific Time (PT)</option></select></div>
-        </div>
-      </section>
-
-      <section id="contact" class="card" aria-labelledby="sec-ct">
-        <h2 id="sec-ct">Contact info</h2>
-        <div class="grid-fields" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
-          <div class="fld"><label for="em">Email</label><input id="em" type="email" placeholder="you@yourcompany.com"></div>
-          <div class="fld"><label for="ph">Mobile phone</label><input id="ph" type="tel" placeholder="(000) 000-0000"></div>
-          <div class="fld"><label for="op">Office phone</label><input id="op" type="tel" placeholder="(000) 000-0000"></div>
-          <div class="fld"><label for="ct">Preferred contact</label>
-            <select id="ct"><option>Email</option><option>Text message</option><option>Phone call</option></select></div>
-        </div>
-      </section>
-
-      <section id="billing" class="card" aria-labelledby="sec-bl">
-        <h2 id="sec-bl">Billing</h2>
-        <div class="split" style="gap: 16px; padding: 18px; border-radius: 8px; background: var(--ground);">
-          <div style="display: flex; flex-direction: column; gap: 4px;">
-            <span class="mono" style="font-size: 11px; letter-spacing: 0.1em; color: var(--accent);">SUBSCRIPTION</span>
-            <span class="display" id="bill-plan" style="font-size: 22px; font-weight: 800;">—</span>
-            <span class="hint" id="bill-plan-detail"></span>
-          </div>
-          <div class="actions" id="bill-plan-actions"></div>
-        </div>
-        <div class="stats">
-          <div><span class="hint">Reports this month</span><b id="bill-count">—</b></div>
-          <div><span class="hint">Spent this month</span><b id="bill-spend">—</b></div>
-          <div><span class="hint">Free reports left</span><b id="bill-free">—</b></div>
-        </div>
-        <div class="split" style="padding: 16px 0; border-top: 1px solid var(--line-2); border-bottom: 1px solid var(--line-2);">
-          <div style="display: flex; align-items: center; gap: 14px;">
-            <div style="width: 48px; height: 32px; border-radius: 4px; border: 1px solid var(--field); display: flex; align-items: center; justify-content: center;">
-              <svg width="22" height="16" viewBox="0 0 22 16" fill="none" stroke="#3E4A54" stroke-width="1.5" aria-hidden="true"><rect x="1" y="1" width="20" height="14" rx="2"/><path d="M1 5h20"/></svg>
-            </div>
-            <div style="display: flex; flex-direction: column; gap: 2px;"><b style="font-size: 14px;" id="bill-card">—</b><span class="hint" id="bill-card-exp"></span></div>
-          </div>
-          <button type="button" class="btn" id="bill-card-btn">Add a card</button>
-        </div>
-        <div class="grid-fields" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
-          <div class="fld"><label for="bem">Billing email</label><input id="bem" type="email" placeholder="billing@yourcompany.com" disabled></div>
-          <div class="fld"><label for="bad">Billing address</label><input id="bad" type="text" placeholder="Street, City, State ZIP" disabled></div>
-        </div>
-        <span class="hint">Billing email and address are changed on Stripe’s secure billing page. <button type="button" class="linkbtn" data-portal>Open billing page</button></span>
-        <div style="display: flex; flex-direction: column; gap: 8px;">
-          <b style="font-size: 14px;">Recent charges</b>
-          <div class="table-wrap">
-            <table class="stack" style="min-width: 440px;">
-              <thead><tr><th style="padding-left: 0; background: none;">Date</th><th style="background: none;">Description</th><th style="background: none;">Amount</th><th style="padding-right: 0; background: none;">Receipt</th></tr></thead>
-              <tbody id="invoice-rows"><tr class="loading-row"><td colspan="4" class="hint" style="padding-left: 0;">Loading…</td></tr></tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <section id="security" class="card" aria-labelledby="sec-sc" style="gap: 16px;">
-        <h2 id="sec-sc">Password &amp; security</h2>
-        <div class="split" style="padding-bottom: 16px; border-bottom: 1px solid var(--line-2);">
-          <div style="display: flex; flex-direction: column; gap: 2px;"><b style="font-size: 14px;">Password</b><span class="hint">Last changed [date]</span></div>
-          <button type="button" class="btn">Change password</button>
-        </div>
-        <div class="split">
-          <div style="display: flex; flex-direction: column; gap: 2px;"><b style="font-size: 14px;">Two-step verification</b><span class="hint">Add a code from your phone when signing in.</span></div>
-          <button type="button" class="btn">Turn on</button>
-        </div>
-      </section>
-
-      <div class="split" style="padding: 4px 4px 0;">
-        <span class="hint">Want to leave [Company Name]? Ask your admin to remove you.</span>
-        <button type="button" class="btn" id="sign-out" style="border: 0; background: transparent; color: var(--danger); text-decoration: underline; padding: 0 4px;">Sign out</button>
+  <div class="acct-panel" id="tab-settings">
+    <div class="page-head">
+      <div>
+        <p class="eyebrow">Your account</p>
+        <h1>Settings</h1>
+      </div>
+      <div class="actions">
+        <button type="button" class="btn btn-outline" id="acct-cancel">Cancel</button>
+        <button type="button" class="btn btn-primary" id="acct-save">Save changes</button>
       </div>
     </div>
+
+    <div class="row">
+      <nav class="sidenav" aria-label="Settings sections">
+        <a href="#profile" class="current">Profile</a>
+        <a href="#contact">Contact info</a>
+        <a href="#billing" id="nav-billing">Billing</a>
+        <a href="#security">Password &amp; security</a>
+      </nav>
+
+      <div class="col-main">
+        <section class="card" aria-label="Company" style="gap: 8px;">
+          <div class="fld">
+            <label for="org">Company</label>
+            <div class="locked">
+              <input id="org" type="text" value="[Company Name]" disabled aria-describedby="org-hint">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#56616B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+            </div>
+            <span id="org-hint" class="hint">Managed by your company admin. Contact them to change companies.</span>
+          </div>
+        </section>
+
+        <section id="profile" class="card" aria-labelledby="sec-pr">
+          <h2 id="sec-pr">Profile</h2>
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px;">
+            <div style="width: 80px; height: 80px; border-radius: 50%; overflow: hidden; background: var(--line-2); display: flex; align-items: center; justify-content: center; flex: 0 0 80px;">
+              <img id="avatar-img" class="hidden" alt="Profile photo" style="width: 100%; height: 100%; object-fit: cover;">
+              <svg id="avatar-empty" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#56616B" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>
+            </div>
+            <label class="btn drop" style="border-style: solid; border-width: 1px; padding: 0 16px; flex-direction: row;">Upload photo<input id="avatar-input" class="sr" type="file" accept="image/*"></label>
+            <span class="hint">Shown on reports you prepare.</span>
+          </div>
+          <div class="grid-fields" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+            <div class="fld"><label for="fn">First name</label><input id="fn" type="text" placeholder="First name"></div>
+            <div class="fld"><label for="ln">Last name</label><input id="ln" type="text" placeholder="Last name"></div>
+            <div class="fld"><label for="ti">Job title</label><input id="ti" type="text" placeholder="e.g. Estimator"></div>
+            <div class="fld"><label for="tz">Time zone</label>
+              <select id="tz"><option>Central Time (CT)</option><option>Eastern Time (ET)</option><option>Mountain Time (MT)</option><option>Pacific Time (PT)</option></select></div>
+          </div>
+        </section>
+
+        <section id="contact" class="card" aria-labelledby="sec-ct">
+          <h2 id="sec-ct">Contact info</h2>
+          <div class="grid-fields" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+            <div class="fld"><label for="em">Email</label><input id="em" type="email" placeholder="you@yourcompany.com"></div>
+            <div class="fld"><label for="ph">Mobile phone</label><input id="ph" type="tel" placeholder="(000) 000-0000"></div>
+            <div class="fld"><label for="op">Office phone</label><input id="op" type="tel" placeholder="(000) 000-0000"></div>
+            <div class="fld"><label for="ct">Preferred contact</label>
+              <select id="ct"><option>Email</option><option>Text message</option><option>Phone call</option></select></div>
+          </div>
+        </section>
+
+        <section id="billing" class="card" aria-labelledby="sec-bl">
+          <h2 id="sec-bl">Billing</h2>
+          <div class="split" style="gap: 16px; padding: 18px; border-radius: 8px; background: var(--ground);">
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              <span class="mono" style="font-size: 11px; letter-spacing: 0.1em; color: var(--accent);">SUBSCRIPTION</span>
+              <span class="display" id="bill-plan" style="font-size: 22px; font-weight: 800;">—</span>
+              <span class="hint" id="bill-plan-detail"></span>
+            </div>
+            <div class="actions" id="bill-plan-actions"></div>
+          </div>
+          <div class="stats">
+            <div><span class="hint">Reports this month</span><b id="bill-count">—</b></div>
+            <div><span class="hint">Spent this month</span><b id="bill-spend">—</b></div>
+            <div><span class="hint">Free reports left</span><b id="bill-free">—</b></div>
+          </div>
+          <div class="split" style="padding: 16px 0; border-top: 1px solid var(--line-2); border-bottom: 1px solid var(--line-2);">
+            <div style="display: flex; align-items: center; gap: 14px;">
+              <div style="width: 48px; height: 32px; border-radius: 4px; border: 1px solid var(--field); display: flex; align-items: center; justify-content: center;">
+                <svg width="22" height="16" viewBox="0 0 22 16" fill="none" stroke="#3E4A54" stroke-width="1.5" aria-hidden="true"><rect x="1" y="1" width="20" height="14" rx="2"/><path d="M1 5h20"/></svg>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 2px;"><b style="font-size: 14px;" id="bill-card">—</b><span class="hint" id="bill-card-exp"></span></div>
+            </div>
+            <button type="button" class="btn" id="bill-card-btn">Add a card</button>
+          </div>
+          <div class="grid-fields" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+            <div class="fld"><label for="bem">Billing email</label><input id="bem" type="email" placeholder="billing@yourcompany.com" disabled></div>
+            <div class="fld"><label for="bad">Billing address</label><input id="bad" type="text" placeholder="Street, City, State ZIP" disabled></div>
+          </div>
+          <span class="hint">Billing email and address are changed on Stripe’s secure billing page. <button type="button" class="linkbtn" data-portal>Open billing page</button></span>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <b style="font-size: 14px;">Recent charges</b>
+            <div class="table-wrap">
+              <table class="stack" style="min-width: 440px;">
+                <thead><tr><th style="padding-left: 0; background: none;">Date</th><th style="background: none;">Description</th><th style="background: none;">Amount</th><th style="padding-right: 0; background: none;">Receipt</th></tr></thead>
+                <tbody id="invoice-rows"><tr class="loading-row"><td colspan="4" class="hint" style="padding-left: 0;">Loading…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section id="security" class="card" aria-labelledby="sec-sc" style="gap: 16px;">
+          <h2 id="sec-sc">Password &amp; security</h2>
+          <div class="split" style="padding-bottom: 16px; border-bottom: 1px solid var(--line-2);">
+            <div style="display: flex; flex-direction: column; gap: 2px;"><b style="font-size: 14px;">Password</b><span class="hint">Last changed [date]</span></div>
+            <button type="button" class="btn">Change password</button>
+          </div>
+          <div class="split">
+            <div style="display: flex; flex-direction: column; gap: 2px;"><b style="font-size: 14px;">Two-step verification</b><span class="hint">Add a code from your phone when signing in.</span></div>
+            <button type="button" class="btn">Turn on</button>
+          </div>
+        </section>
+
+        <div class="split" style="padding: 4px 4px 0;">
+          <span class="hint">Want to leave [Company Name]? Ask your admin to remove you.</span>
+          <button type="button" class="btn" id="sign-out" style="border: 0; background: transparent; color: var(--danger); text-decoration: underline; padding: 0 4px;">Sign out</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="acct-panel hidden" id="tab-report-settings" style="max-width: 980px;">
+    <div class="page-head">
+      <div>
+        <p class="eyebrow">Account · Report branding</p>
+        <h1>Set up your roof reports</h1>
+        <p class="lede">Everything here appears on every aerial roof sketch report you send to homeowners and adjusters.</p>
+      </div>
+      <div class="actions">
+        <button type="button" class="btn btn-outline" id="save-company">Save settings</button>
+        <a href="orders.html?order=1" class="btn btn-primary">Order a report</a>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col-main">
+
+        <section class="card" aria-labelledby="sec-co">
+          <div class="card-title"><span class="num">01</span><h2 id="sec-co">Company</h2></div>
+          <div class="grid-fields">
+            <div class="fld"><label for="co-name">Company name</label><input id="co-name" type="text" placeholder="e.g. Summit Roofing &amp; Exteriors" data-field="name"></div>
+            <div class="fld"><label for="co-lic">License number</label><input id="co-lic" type="text" placeholder="e.g. TX-RC-000000" data-field="license_number"><span class="hint">Shown in the report header and footer.</span></div>
+          </div>
+          <div class="fld">
+            <span class="label">Company logo</span>
+            <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center;">
+              <div style="width: 112px; height: 112px; border-radius: 8px; background: var(--ground); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                <img class="logo-img hidden" alt="Company logo preview" style="max-height: 100%; object-fit: contain;">
+                <span class="logo-empty hint" style="text-align: center; padding: 8px;">No logo yet</span>
+              </div>
+              <button type="button" class="btn btn-outline logo-remove hidden" id="logo-remove">Remove logo</button>
+              <label class="drop" style="flex: 1 1 260px; min-height: 112px; padding: 16px;">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#B03A0A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 16v4h16v-4"/></svg>
+                <strong>Upload logo</strong>
+                <span class="hint">PNG, JPG or SVG · transparent background works best</span>
+                <input id="logo-input" class="sr" type="file" accept="image/*">
+              </label>
+            </div>
+          </div>
+          <div class="fld">
+            <span class="label" id="bc-label">Brand color</span>
+            <div class="color-row">
+              <label class="color-swatch" title="Pick a color">
+                <input id="bc-picker" type="color" value="#B03A0A" aria-labelledby="bc-label">
+              </label>
+              <input id="bc-hex" class="color-hex" type="text" inputmode="text" maxlength="7" spellcheck="false" autocomplete="off" placeholder="#B03A0A" aria-label="Brand color hex code" aria-describedby="bc-hint" data-field="brand_color">
+              <div class="swatches" role="group" aria-label="Quick colors">
+                <button type="button" class="swatch" data-color="#B03A0A" style="background:#B03A0A" aria-label="Rust #B03A0A"></button>
+                <button type="button" class="swatch" data-color="#1F4E79" style="background:#1F4E79" aria-label="Navy #1F4E79"></button>
+                <button type="button" class="swatch" data-color="#0F7A4D" style="background:#0F7A4D" aria-label="Green #0F7A4D"></button>
+                <button type="button" class="swatch" data-color="#B91C1C" style="background:#B91C1C" aria-label="Red #B91C1C"></button>
+                <button type="button" class="swatch" data-color="#6B21A8" style="background:#6B21A8" aria-label="Purple #6B21A8"></button>
+                <button type="button" class="swatch" data-color="#1F2937" style="background:#1F2937" aria-label="Charcoal #1F2937"></button>
+              </div>
+              <button type="button" class="linkbtn" id="bc-reset">Use default</button>
+            </div>
+            <span class="hint" id="bc-hint">Colors the header band of your PDF reports.</span>
+          </div>
+          <div class="fld">
+            <span class="label" id="tc-label">Header text color</span>
+            <div class="color-row">
+              <div class="seg" role="radiogroup" aria-labelledby="tc-label">
+                <button type="button" class="seg-btn" role="radio" data-tc="" aria-checked="true">White</button>
+                <button type="button" class="seg-btn" role="radio" data-tc="#000000" aria-checked="false">Black</button>
+              </div>
+              <label class="color-swatch" title="Pick a text color">
+                <input id="tc-picker" type="color" value="#ffffff" aria-label="Header text color">
+              </label>
+              <input id="tc-hex" class="color-hex" type="text" maxlength="7" spellcheck="false" autocomplete="off" placeholder="#FFFFFF" aria-label="Header text color hex code" aria-describedby="tc-hint tc-warn" data-field="brand_text_color">
+            </div>
+            <span class="hint" id="tc-hint">The company name and contact details on the header band. White unless you choose another color.</span>
+            <span class="hint tc-warn hidden" id="tc-warn" role="status"></span>
+            <div class="report-preview" aria-label="Report header preview">
+              <div class="rp-band" id="rp-band">
+                <img class="logo-img rp-logo hidden" alt="Your logo">
+                <span class="logo-empty rp-logo-empty" aria-hidden="true">Your logo here</span>
+                <div class="rp-text"><b id="rp-name">Your company</b><span id="rp-contact">Phone · Email</span></div>
+                <span class="rp-tag">Roof Report</span>
+              </div>
+              <div class="rp-body"><span></span><span></span><span style="width: 60%"></span></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card" aria-labelledby="rs-sec-ct">
+          <div class="card-title"><span class="num">02</span><h2 id="rs-sec-ct">Contact info</h2></div>
+          <div class="grid-fields">
+            <div class="fld"><label for="ct-person">Contact name</label><input id="ct-person" type="text" placeholder="e.g. Jordan Reyes" data-field="contact_name"></div>
+            <div class="fld"><label for="ct-phone">Phone</label><input id="ct-phone" type="tel" placeholder="(000) 000-0000" data-field="phone"></div>
+            <div class="fld"><label for="ct-email">Email</label><input id="ct-email" type="email" placeholder="estimates@yourcompany.com" data-field="email"></div>
+            <div class="fld"><label for="ct-web">Website</label><input id="ct-web" type="text" inputmode="url" placeholder="yourcompany.com" data-field="website"></div>
+          </div>
+          <div class="fld"><label for="ct-addr">Business address</label><input id="ct-addr" type="text" placeholder="Street, City, State ZIP" data-field="address"></div>
+        </section>
+      </div>
+
+    </div>
+  </div>
+  <div class="acct-panel hidden" id="tab-team" style="display: flex; flex-direction: column; gap: 24px;">
+    <div class="page-head" style="margin-bottom: 0;">
+      <div>
+        <p class="eyebrow">Account · [Company Name]</p>
+        <h1>Team &amp; invites</h1>
+        <p class="lede">Invite employees to your company account and choose what each person can do.</p>
+      </div>
+    </div>
+
+    <div class="row" style="gap: 24px;">
+      <section class="card col-main" aria-labelledby="inv-h" style="gap: 20px;">
+        <div class="split" style="align-items: baseline;"><h2 id="inv-h">Invite employees</h2><button type="button" id="cancel-edit" class="linkbtn hidden">Cancel editing</button></div>
+        <div class="grid-fields">
+          <div class="fld" id="inv-em-fld" style="grid-column: 1 / -1;"><label for="inv-em">Email addresses</label><input id="inv-em" type="text" placeholder="name@yourcompany.com, another@yourcompany.com"><span class="hint">Separate multiple emails with commas. Everyone gets the same settings below.</span></div>
+          <div class="fld"><label for="inv-fn">Name (optional)</label><input id="inv-fn" type="text" placeholder="e.g. Jordan Reyes"></div>
+          <div class="fld"><label for="inv-ti">Job title (optional)</label><input id="inv-ti" type="text" placeholder="e.g. Estimator"></div>
+        </div>
+
+        <fieldset style="border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px;">
+          <legend style="font-size: 13px; font-weight: 600; padding: 0; margin-bottom: 10px;">Role</legend>
+          <div class="roles">
+            <button type="button" class="role" data-role="admin" aria-pressed="false"><b>Admin</b><small>Full access, team and billing</small></button>
+            <button type="button" class="role" data-role="manager" aria-pressed="false"><b>Manager</b><small>All reports and branding</small></button>
+            <button type="button" class="role" data-role="estimator" aria-pressed="true"><b>Estimator</b><small>Orders their own reports</small></button>
+            <button type="button" class="role" data-role="viewer" aria-pressed="false"><b>Viewer</b><small>View and download only</small></button>
+          </div>
+          <span class="hint" id="role-note">Pick a role to fill in permissions, then adjust any box below.</span>
+        </fieldset>
+
+        <fieldset style="border: 0; margin: 0; padding: 0; display: flex; flex-direction: column;">
+          <legend style="font-size: 13px; font-weight: 600; padding: 0; margin-bottom: 4px;">Permissions</legend>
+          <span class="mono" style="font-size: 11px; letter-spacing: 0.1em; color: var(--accent); margin-top: 12px;">ORDERING</span>
+          <label class="perm"><input type="checkbox" data-perm="order" checked><span><b>Order reports</b><span class="hint">Place new aerial roof report orders, charged to the company account.</span></span></label>
+          <label class="perm"><input type="checkbox" data-perm="viewAll"><span><b>See all company reports</b><span class="hint">Off: they only see reports they ordered.</span></span></label>
+          <label class="perm"><input type="checkbox" data-perm="download" checked><span><b>Download and share reports</b><span class="hint">Export PDFs and send reports to homeowners or adjusters.</span></span></label>
+          <span class="mono" style="font-size: 11px; letter-spacing: 0.1em; color: var(--accent); margin-top: 16px;">SETTINGS ACCESS</span>
+          <label class="perm"><input type="checkbox" data-perm="branding"><span><b>Edit report settings</b><span class="hint">Change company name, logo, license number and contact info on reports.</span></span></label>
+          <label class="perm"><input type="checkbox" data-perm="billing"><span><b>Manage billing</b><span class="hint">View invoices, change plan and update the payment method.</span></span></label>
+          <label class="perm"><input type="checkbox" data-perm="team"><span><b>Manage team</b><span class="hint">Invite, edit and remove employees. Gives admin-level control.</span></span></label>
+        </fieldset>
+
+        <div class="split" style="padding-top: 16px; border-top: 1px solid var(--line-2);">
+          <p id="inv-error" class="form-error hidden" role="alert"></p>
+          <span class="hint" id="inv-note"><b>Invitations expire after 7 days.</b> If one expires, use <b>Resend</b> in the team list to send a new link.</span>
+          <button type="button" class="btn btn-primary" id="send-invites">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+            <span id="send-label">Send invites</span>
+          </button>
+        </div>
+      </section>
+
+      <aside class="col-side" style="flex-basis: 300px;" aria-labelledby="seat-h">
+        <div style="background: var(--navy); color: var(--ground); border-radius: 10px; padding: 22px; display: flex; flex-direction: column; gap: 10px;">
+          <h2 id="seat-h" class="mono" style="margin: 0; font-size: 11px; font-weight: 500; letter-spacing: 0.1em; color: var(--accent-light);">YOUR TEAM</h2>
+          <span class="display" id="team-size" style="font-size: 28px; font-weight: 800;">—</span>
+          <span id="team-pending" style="font-size: 13px; color: #C3CCD3;"></span>
+          <span style="font-size: 13px; color: #C3CCD3;">Everyone orders on the company account. There’s no charge per person.</span>
+        </div>
+        <div class="card" style="padding: 22px; gap: 12px;">
+          <h3 class="display" style="margin: 0; font-size: 16px; font-weight: 700;">What roles can do</h3>
+          <div style="display: flex; flex-direction: column; gap: 10px; font-size: 13px;">
+            <div><strong>Admin</strong><span class="hint" style="display: block;">Everything, including team, billing and branding.</span></div>
+            <div><strong>Manager</strong><span class="hint" style="display: block;">Orders and sees all company reports. No billing or team.</span></div>
+            <div><strong>Estimator</strong><span class="hint" style="display: block;">Orders reports and sees only their own.</span></div>
+            <div><strong>Viewer</strong><span class="hint" style="display: block;">Can view and download reports shared with them.</span></div>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <section class="card" aria-labelledby="mem-h" style="padding: 0; gap: 0;">
+      <div class="split" style="padding: 20px 24px;">
+        <h2 id="mem-h">Team members</h2>
+        <span class="hint" id="team-counts"></span>
+      </div>
+      <div class="table-wrap">
+        <table class="stack" style="min-width: 820px;">
+          <thead>
+            <tr><th style="border-top: 1px solid var(--line);">Name</th><th style="border-top: 1px solid var(--line);">Role</th><th style="border-top: 1px solid var(--line);">Can order</th><th style="border-top: 1px solid var(--line);">Settings access</th><th style="border-top: 1px solid var(--line);">Status</th><th style="border-top: 1px solid var(--line);">Actions</th></tr>
+          </thead>
+          <tbody id="member-rows">
+            <tr class="loading-row"><td colspan="6" class="hint">Loading team…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
   </div>
 </main>
 
