@@ -169,33 +169,6 @@ drop trigger if exists report_orders_touch on public.report_orders;
 create trigger report_orders_touch before update on public.report_orders
   for each row execute function public.touch_updated_at();
 
--- ---------- roof photos ----------
-create table if not exists public.report_photos (
-  id           uuid primary key default gen_random_uuid(),
-  order_id     uuid not null references public.report_orders (id) on delete cascade,
-  company_id   uuid not null references public.companies (id) on delete cascade,
-  file_path    text not null,
-  caption      text,
-  uploaded_by  uuid references public.users (id) on delete set null,
-  created_at   timestamptz not null default now()
-);
-create index if not exists report_photos_order_idx on public.report_photos (order_id);
-
--- ---------- revisions ----------
-create table if not exists public.revisions (
-  id                     uuid primary key default gen_random_uuid(),
-  order_id               uuid not null references public.report_orders (id) on delete cascade,
-  company_id             uuid not null references public.companies (id) on delete cascade,
-  requested_by           uuid references public.users (id) on delete set null,
-  topic                  text,
-  message                text,
-  status                 text not null default 'submitted' check (status in ('submitted', 'in_progress', 'completed', 'rejected')),
-  roofquery_revision_id  text,
-  created_at             timestamptz not null default now(),
-  completed_at           timestamptz
-);
-create index if not exists revisions_order_idx on public.revisions (order_id);
-
 -- ---------- emails sent ----------
 create table if not exists public.email_log (
   id           uuid primary key default gen_random_uuid(),
@@ -258,8 +231,6 @@ alter table public.users enable row level security;
 alter table public.invites enable row level security;
 alter table public.products enable row level security;
 alter table public.report_orders enable row level security;
-alter table public.report_photos enable row level security;
-alter table public.revisions enable row level security;
 alter table public.email_log enable row level security;
 alter table public.webhook_events enable row level security;
 
@@ -269,8 +240,6 @@ revoke all on public.users from anon, authenticated;
 revoke all on public.invites from anon, authenticated;
 revoke all on public.products from anon, authenticated;
 revoke all on public.report_orders from anon, authenticated;
-revoke all on public.report_photos from anon, authenticated;
-revoke all on public.revisions from anon, authenticated;
 revoke all on public.email_log from anon, authenticated;
 revoke all on public.webhook_events from anon, authenticated;
 grant usage on schema public to service_role;
@@ -279,17 +248,14 @@ grant all on public.users to service_role;
 grant all on public.invites to service_role;
 grant all on public.products to service_role;
 grant all on public.report_orders to service_role;
-grant all on public.report_photos to service_role;
-grant all on public.revisions to service_role;
 grant all on public.email_log to service_role;
 grant all on public.webhook_events to service_role;
 grant usage, select on sequence public.report_number_seq to service_role;
 revoke all on sequence public.report_number_seq from anon, authenticated;
 
 -- ---------- file storage ----------
--- Logos and profile photos are public (they appear on reports). Roof photos stay private.
+-- Logos and profile photos are public (they appear on reports).
 insert into storage.buckets (id, name, public) values
   ('logos', 'logos', true),
-  ('avatars', 'avatars', true),
-  ('roof-photos', 'roof-photos', false)
+  ('avatars', 'avatars', true)
 on conflict (id) do nothing;

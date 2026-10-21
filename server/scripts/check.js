@@ -46,7 +46,7 @@ else {
 const b = await tryFetch(`${sb.url}/storage/v1/bucket`, { headers: h });
 if (b.ok) {
   const names = (await b.json()).map((x) => x.id);
-  const missing = ['logos', 'avatars', 'roof-photos'].filter((n) => !names.includes(n));
+  const missing = ['logos', 'avatars'].filter((n) => !names.includes(n));
   missing.length ? bad(`Storage buckets missing: ${missing.join(', ')}. Run supabase/schema.sql again.`) : ok('File storage: ready');
 }
 else if (b.status) skip('Couldn\u2019t list file storage buckets. If logo uploads fail, run supabase/schema.sql again.');

@@ -46,7 +46,7 @@ What works on sample data:
 - **Team:** invite, edit permissions, remove, resend and revoke.
 - **Account:** saves your profile and photo, and shows billing.
 
-PDF and ESX downloads, Stripe's billing page, and sign-out show a short message explaining they need RoofQuery, Stripe or Supabase connected first. Roof photos on Report settings preview only, because they'll attach to orders later.
+PDF and ESX downloads, Stripe's billing page, and sign-out show a short message explaining they need RoofQuery, Stripe or Supabase connected first.
 
 **Sample data:** the site signs you in as the company owner. To start over, clear this site’s data in your browser.
 
