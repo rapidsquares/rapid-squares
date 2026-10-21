@@ -3,7 +3,7 @@
 // Every page uses RS.api.get/post/patch/del/upload with the routes from the API contract
 // (e.g. RS.api.get('/api/orders?status=delivered')).
 //
-//   • Opened as plain files / the simple Windows server → "sample data" mode: answered by mock-api.js.
+//   • Opened as plain files / the simple Windows server → "sample data" mode: answered by sample-api.js.
 //   • Opened through the Node.js backend (npm start)     → "live" mode: real database and sign-in.
 //     The backend tells the page this through /runtime-config.js (window.RS_RUNTIME).
 //
@@ -55,8 +55,8 @@
 
   function request(method, path, body) {
     if (!LIVE) {
-      if (!RS.mock) return Promise.reject(ApiError(500, 'no_backend', 'Sample data isn’t loaded on this page.'));
-      return RS.mock.handle(method, path, body);
+      if (!RS.sample) return Promise.reject(ApiError(500, 'no_backend', 'Sample data isn’t loaded on this page.'));
+      return RS.sample.handle(method, path, body);
     }
     return live(method, path, body, false);
   }

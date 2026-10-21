@@ -133,6 +133,12 @@ export async function apply(order, r) {
   const [saved] = await db.update('report_orders', { id: eq(order.id) }, patch);
   if (!saved) return order;
   if (saved.status === 'delivered' && order.status !== 'delivered') await tellReady(saved);
+  // A delivered report came back corrected (a finished revision, or new measurements): send the new files.
+  else if (saved.status === 'delivered' && order.status === 'delivered' && order.roofquery_order_id) {
+    const revised = st === 'revision_completed' && order.rq_status !== 'revision_completed';
+    const changed = !!patch.measurements && JSON.stringify(patch.measurements) !== JSON.stringify(order.measurements);
+    if (revised || changed) await tellCorrected(saved);
+  }
   if (saved.status === 'failed' && order.status !== 'failed') await refundAndTell(saved, r.reason || 'The roof couldn’t be measured from the available imagery.');
   return saved;
 }
@@ -188,6 +194,38 @@ async function orderedBy(order) {
   ]);
   return [u && `${u.full_name} <${u.email}>`, c && c.name].filter(Boolean).join(', ') || 'Unknown';
 }
+// A finished file as an email attachment, in the company's branding. Null if it can't be fetched right now
+// (the email then gives a link for it instead).
+const MAX_ATTACH = 35 * 1024 * 1024; // Resend allows 40 MB per email in all
+export async function attachment(order, kind) {
+  if (!order.roofquery_order_id) return null;
+  try {
+    const template = /^storm-/.test(kind) ? kind.slice(6) : null;
+    const company = order.company_id ? await db.one('companies', { id: eq(order.company_id) }) : null;
+    const brand = (kind === 'pdf' || template) && company ? await rq.ensureBrand(company) : null;
+    const res = template ? await rq.fetchStormPdf(order.roofquery_order_id, template, { brand, details: order.order_details || {} })
+      : await rq.fetchFile(order.roofquery_order_id, kind, { brand });
+    const content = Buffer.from(await res.arrayBuffer());
+    const street = String(order.address || '').split(',')[0].replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40);
+    const filename = template ? `RS-${order.report_number}_${template}.pdf` : `RS-${order.report_number}${street ? '_' + street : ''}.${kind}`;
+    return { filename, content };
+  } catch (e) {
+    console.error('[email] couldn\u2019t attach', kind, 'for RS-' + order.report_number, e.message);
+    return null;
+  }
+}
+// Attaches what fits; anything that couldn't be fetched (or would make the email too big) gets a link line.
+async function attachOrLink(order, files, ttl) {
+  const attachments = [], links = [];
+  let total = 0;
+  for (const f of files) {
+    const a = await attachment(order, f.kind);
+    if (a && total + a.content.length <= MAX_ATTACH) { attachments.push(a); total += a.content.length; }
+    else links.push(`${f.label}: ${downloadUrl(order.id, f.kind, ttl)}`);
+  }
+  return { attachments, links };
+}
+
 async function tellReady(order) {
   // Only once, even if two webhooks race.
   const claimed = await db.update('report_orders', { id: eq(order.id), ready_notified: eq(false) }, { ready_notified: true });
@@ -201,28 +239,39 @@ async function tellReady(order) {
   const first = String(who.name || '').split(' ')[0];
   if (order.report_type === 'storm_report') {
     const ttl = (who.guest ? 365 : 30) * 24 * 60 * MIN;
-    // Links for the PDFs that need nothing more; Date of Loss is downloaded from the report page with a date.
-    const docs = stormDocuments().filter((d) => !d.needs_date_of_loss).map((d) => `${d.title}: ${downloadUrl(order.id, 'storm-' + d.template, ttl)}`).join('\n');
+    // The PDFs are attached. Date of Loss is only included when a date was given with the order.
+    const hasDate = !!(order.order_details && order.order_details.date_of_loss);
+    const files = stormDocuments().filter((d) => !d.needs_date_of_loss || hasDate).map((d) => ({ kind: 'storm-' + d.template, label: d.title }));
+    const { attachments, links } = await attachOrLink(order, files, ttl);
     const head = order.measurements && order.measurements.storm && order.measurements.storm.headline;
-    await email.send({ to: who.to, subject: `Your storm report RS-${order.report_number} is ready`,
-      text: `Hi${first ? ' ' + first : ''},\n\nYour storm report for ${order.address} is ready.${head ? '\n\n' + head : ''}\n\nDownload the PDFs:\n${docs}\n\n${who.guest ? 'These links work for a year. Keep this email.' : `See the full report, add a date of loss or claim number, and download every PDF: ${config.appUrl}/storm-report.html?id=${order.id}`}` });
+    const got = attachments.length ? `\n\nThe PDFs are attached${links.length ? '. These couldn\u2019t be attached; download them here:' : '.'}` : '\n\nDownload the PDFs:';
+    await email.send({ to: who.to, subject: `Your storm report RS-${order.report_number} is ready`, attachments,
+      text: `Hi${first ? ' ' + first : ''},\n\nYour storm report for ${order.address} is ready.${head ? '\n\n' + head : ''}${got}${links.length ? '\n' + links.join('\n') : ''}\n\n${who.guest ? (links.length ? 'These links work for a year. Keep this email.' : 'Keep this email for your records.') : `See the full report, add a date of loss or claim number, and download every PDF: ${config.appUrl}/storm-report.html?id=${order.id}`}` });
     return;
   }
   const size = order.total_squares != null ? `\n${order.total_squares} squares, ${order.predominant_pitch} predominant pitch.` : '';
-  // Direct download links (no attachment: links stay small, avoid spam filters and always give the latest version).
+  // The PDF (and the ESX file, if bought) are attached; anything that can't be fetched right now gets a link instead.
   const ttl = (who.guest ? 365 : 30) * 24 * 60 * MIN;
-  let links = `\n\nDownload the PDF report: ${downloadUrl(order.id, 'pdf', ttl)}` + (order.esx_purchased ? `\nDownload the Xactimate (ESX) file: ${downloadUrl(order.id, 'esx', ttl)}` : '');
-  // Didn't buy the ESX? Offer it (RoofQuery makes one for every report, so it's ready right away).
-  const p = await db.one('products', { id: eq(order.report_type), select: 'esx_addon_allowed' });
-  if (!order.esx_purchased && p && p.esx_addon_allowed && stripe.connected()) {
-    const price = await esxPriceFor(order);
-    links += who.guest ? `\n\nNeed the Xactimate (ESX) file? Get it for ${money(price)}: ${downloadUrl(order.id, 'buy-esx', 365 * 24 * 60 * MIN)}`
-      : `\n\nNeed the Xactimate (ESX) file? Add it for ${money(price)} from your Rapid Squares home page: ${config.appUrl}/orders.html`;
-  }
-  links += who.guest ? '\n\nThese links work for a year. Keep this email.'
-    : `\n\nThese links work for 30 days. After that, download the report any time from your Rapid Squares home page: ${config.appUrl}/orders.html`;
-  await email.send({ to: who.to, subject: `Your roof report RS-${order.report_number} is ready`,
+  const files = [{ kind: 'pdf', label: 'Download the PDF report' }, ...(order.esx_purchased ? [{ kind: 'esx', label: 'Download the Xactimate (ESX) file' }] : [])];
+  const { attachments, links: fileLinks } = await attachOrLink(order, files, ttl);
+  let links = (attachments.length ? `\n\n${attachments.length === 2 ? 'The PDF report and the Xactimate (ESX) file are attached.' : attachments[0].filename.endsWith('.esx') ? 'The Xactimate (ESX) file is attached.' : 'The PDF report is attached.'}` : '')
+    + (fileLinks.length ? '\n\n' + fileLinks.join('\n') : '');
+  links += who.guest ? (fileLinks.length ? '\n\nThese links work for a year. Keep this email.' : '\n\nKeep this email for your records.')
+    : `\n\nYou can download the report again any time from your Rapid Squares home page: ${config.appUrl}/orders.html`;
+  await email.send({ to: who.to, subject: `Your roof report RS-${order.report_number} is ready`, attachments,
     text: `Hi${first ? ' ' + first : ''},\n\nYour report for ${order.address} is ready.${size}${links}` });
+}
+// The corrected report, with the new PDF (and ESX, if bought) attached.
+async function tellCorrected(order) {
+  const who = await recipient(order);
+  if (!who) return;
+  const first = String(who.name || '').split(' ')[0];
+  const ttl = (who.guest ? 365 : 30) * 24 * 60 * MIN;
+  const files = [{ kind: 'pdf', label: 'Download the corrected PDF report' }, ...(order.esx_purchased ? [{ kind: 'esx', label: 'Download the corrected Xactimate (ESX) file' }] : [])];
+  const { attachments, links } = await attachOrLink(order, files, ttl);
+  const size = order.total_squares != null ? `\n${order.total_squares} squares, ${order.predominant_pitch} predominant pitch.` : '';
+  await email.send({ to: who.to, subject: `Your corrected report RS-${order.report_number} is ready`, attachments,
+    text: `Hi${first ? ' ' + first : ''},\n\nYour report for ${order.address} has been corrected.${size}${attachments.length ? `\n\nThe corrected ${attachments.length === 2 ? 'PDF report and ESX file are' : 'PDF report is'} attached. Use these instead of the earlier ones.` : ''}${links.length ? '\n\n' + links.join('\n') : ''}${who.guest ? '' : `\n\nYour Rapid Squares home page always has the latest version: ${config.appUrl}/orders.html`}` });
 }
 // ---------- ESX bought after delivery ----------
 export async function esxPriceFor(order) {
@@ -248,8 +297,9 @@ export async function esxPaid(orderId, paymentId, receiptUrl, priceCents) {
     const who = await recipient(saved);
     if (who) {
       const ttl = (who.guest ? 365 : 30) * 24 * 60 * MIN;
-      await email.send({ to: who.to, subject: `Your ESX file for RS-${saved.report_number}`,
-        text: `Thanks for your purchase.\n\nDownload the Xactimate (ESX) file: ${downloadUrl(saved.id, 'esx', ttl)}\nProperty: ${saved.address}\nTotal: ${money(saved.esx_price_cents || 0)}${saved.esx_receipt_url ? '\nReceipt: ' + saved.esx_receipt_url : ''}` });
+      const { attachments, links } = await attachOrLink(saved, [{ kind: 'esx', label: 'Download the Xactimate (ESX) file' }], ttl);
+      await email.send({ to: who.to, subject: `Your ESX file for RS-${saved.report_number}`, attachments,
+        text: `Thanks for your purchase.\n\n${attachments.length ? 'The Xactimate (ESX) file is attached.' : links[0]}\nProperty: ${saved.address}\nTotal: ${money(saved.esx_price_cents || 0)}${saved.esx_receipt_url ? '\nReceipt: ' + saved.esx_receipt_url : ''}` });
     }
     if (config.orderAlerts && config.adminEmail) {
       await email.send({ to: config.adminEmail, subject: `[Rapid Squares] ESX file bought for RS-${saved.report_number}`,

@@ -105,7 +105,7 @@ export async function chargeOrder(company, amountCents, description, order, { pu
 }
 
 export async function checkoutForOrder({ customer, amountCents, description, order, saveCard, email, guest, purpose = 'order', successUrl, cancelUrl }) {
-  const back = guest ? 'new-sketch.html' : 'orders.html';
+  const back = guest ? 'order.html' : 'orders.html';
   const esx = purpose === 'esx';
   const s = await api('POST', '/checkout/sessions', {
     mode: 'payment', customer: customer || undefined, customer_email: customer ? undefined : (email || undefined),

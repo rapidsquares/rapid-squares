@@ -1,5 +1,5 @@
 // Landing page search: Azure Maps address suggestions as you type. Picking one (or pressing
-// "Look up roof") opens the Place order page with that address looked up.
+// "Look up roof") opens the order page with that address looked up.
 (function () {
   'use strict';
   var cfg = window.RS_CONFIG || {}, rt = window.RS_RUNTIME || {};
@@ -48,7 +48,7 @@
   }
   function go(address) {
     input.value = address; render([]);
-    location.href = 'new-sketch.html?address=' + encodeURIComponent(address);
+    location.href = 'order.html?address=' + encodeURIComponent(address);
   }
 
   input.addEventListener('input', function () {

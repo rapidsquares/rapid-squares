@@ -458,8 +458,23 @@
     var p = current(), esx = $('od-esx'), allowed = !!(p && p.esx_addon_allowed);
     esx.disabled = !allowed; if (!allowed) esx.checked = false;
     $('od-esx-row').classList.toggle('hidden', !allowed);
+    updateScope();
     refresh();
   }
+  // What to measure (roof reports only). Each report type has its own starting choice until one is picked.
+  var SCOPE_LABEL = { primary_only: 'Main building only', primary_and_garage: 'Main building + detached garage', all_structures: 'Every building on the property' };
+  var scopePicked = false, scopeFor = null;
+  function scopeDefault(p) { return p.id === 'commercial' ? 'all_structures' : 'primary_and_garage'; }
+  function updateScope() {
+    var p = current(), roof = !!(p && p.id !== 'storm_report');
+    $('scope-opts').classList.toggle('hidden', !roof);
+    if (!roof || (scopePicked && scopeFor)) { scopeFor = p && p.id; return; }
+    var r = wiz.querySelector('input[name="scope"][value="' + scopeDefault(p) + '"]');
+    if (r) r.checked = true;
+    scopeFor = p.id;
+  }
+  function scope() { var p = current(), r = wiz.querySelector('input[name="scope"]:checked'); return p && p.id !== 'storm_report' && r ? r.value : null; }
+  wiz.querySelectorAll('input[name="scope"]').forEach(function (r) { r.addEventListener('change', function () { scopePicked = true; }); });
   function usesFree() { var p = current(); return !!(p && p.id === 'premium_residential' && catalog.free_reports_remaining > 0); }
   function total() {
     var p = current();
@@ -476,10 +491,15 @@
     $('rv-pin').classList.toggle('hidden', !moved());
     $('rv-report').textContent = p.label + ($('od-esx').checked ? ' + ESX file' : '');
     $('rv-report-hint').textContent = BLURB[p.id] || '';
+    $('rv-scope-row').classList.toggle('hidden', !scope());
+    $('rv-scope').textContent = SCOPE_LABEL[scope()] || '';
     $('od-guest').classList.toggle('hidden', !RS.guest);
     // Job details: printed on roof reports; for a Storm Report they fill in the PDF details.
-    $('job-hint').textContent = isStorm() ? 'Printed on the storm PDFs (you can change them when you download). Kept with the order.' : 'The claim number names the ESX file. Client details and notes go to the measuring team.';
-    $('jb-notes-l').textContent = isStorm() ? 'Notes for the PDFs' : 'Notes for the measuring team';
+    // Notes for the measuring team are only for roof reports; a Storm Report has no measuring.
+    var storm = isStorm();
+    $('job-hint').textContent = storm ? 'Printed on the storm PDFs. You can change them when you download each PDF.'
+      : 'Added to the report and the ESX file. The claim number also names the ESX file.';
+    $('notes-group').classList.toggle('hidden', storm);
     $('od-total').textContent = money(t);
     var note = '';
     if (usesFree()) note = 'Uses 1 of your free reports' + ($('od-esx').checked ? ', ESX file included.' : '.');
@@ -497,8 +517,8 @@
     var p = current(); if (!p || !selected || busyNow) return;
     if (!window.RS || !RS.api) { showError('Ordering isn’t available on this page.'); return; }
     var place = selected, esx = $('od-esx').checked;
-    var body = { address: place.label, parts: place.parts, lat: place.lat, lon: place.lon, report_type: p.id, esx: esx,
-      job: { claim: $('jb-claim').value.trim(), client_name: $('jb-name').value.trim(), client_email: $('jb-email').value.trim(), client_phone: $('jb-phone').value.trim(), notes: $('jb-notes').value.trim() } };
+    var body = { address: place.label, parts: place.parts, lat: place.lat, lon: place.lon, report_type: p.id, esx: esx, scope: scope() || undefined,
+      job: { claim: $('jb-claim').value.trim(), client_name: $('jb-name').value.trim(), client_email: $('jb-email').value.trim(), client_phone: $('jb-phone').value.trim(), notes: isStorm() ? '' : $('jb-notes').value.trim() } };
     if (body.job.client_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.job.client_email)) { showError('Check the client email, or leave it blank.', 'jb-email'); return; }
     if (RS.guest) {
       body.name = $('og-name').value.trim(); body.email = $('og-email').value.trim(); body.phone = $('og-phone').value.trim();
@@ -555,8 +575,8 @@
     var p = current();
     try { localStorage.setItem(PENDING, JSON.stringify({ place: selected, report_type: p ? p.id : null, esx: $('od-esx').checked, at: Date.now() })); } catch (_) { /* storage blocked */ }
   }
-  $('od-signin').addEventListener('click', function (e) { e.preventDefault(); savePending(); location.href = 'signin.html?next=' + encodeURIComponent('new-sketch.html?resume=1'); });
-  $('od-signup').addEventListener('click', function (e) { e.preventDefault(); savePending(); location.href = 'signin.html?step=signup&next=' + encodeURIComponent('new-sketch.html?resume=1'); });
+  $('od-signin').addEventListener('click', function (e) { e.preventDefault(); savePending(); location.href = 'signin.html?next=' + encodeURIComponent('order.html?resume=1'); });
+  $('od-signup').addEventListener('click', function (e) { e.preventDefault(); savePending(); location.href = 'signin.html?step=signup&next=' + encodeURIComponent('order.html?resume=1'); });
 
   function resumePending() {
     var saved = null;

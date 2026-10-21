@@ -18,11 +18,11 @@
 <link rel="stylesheet" href="styles.css">
 <script>if (/[?&]embed=1/.test(location.search)) document.documentElement.classList.add('embed'); // pop-up mode before the first paint</script>
 </head>
-<body data-page="new-sketch">
+<body data-page="order">
 
 <header class="topbar">
   <a class="brand" href="index.html" aria-label="Rapid Squares home">
-    <svg width="30" height="30" viewBox="0 0 30 30" fill="none" stroke="#F08A4B" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M3 16 L15 5 L27 16"/><path d="M7 13 V25 H23 V13"/><path d="M15 5 V25"/></svg>
+    <svg class="brand-mark" width="44" height="26" viewBox="130 300 994 594" aria-hidden="true"><path d="M260.7 653.0 L355.3 573.7 Q385.9 548.0 425.9 548.0 L627.0 548.0 Q641.0 548.0 630.7 557.5 L549.4 632.8 Q520.0 660.0 480.0 660.3 L264.0 661.9 Q250.0 662.0 260.7 653.0 Z" class="bm-bar"/><path d="M188.7 831.0 L297.2 739.7 Q327.8 714.0 367.8 714.0 L546.0 714.0 Q562.0 714.0 574.8 704.3 L608.1 679.1 Q640.0 655.0 680.0 655.0 L772.0 655.0 Q786.0 655.0 776.2 665.0 L634.7 809.4 Q606.7 838.0 566.7 838.2 L192.0 839.9 Q178.0 840.0 188.7 831.0 Z" class="bm-bar"/><path d="M478.6 503.1 L628.5 375.9 Q659.0 350.0 689.3 376.1 L1044.2 682.1 Q1080.6 713.4 1049.2 749.8 L1036.4 764.6 Q1005.0 801.0 968.7 769.7 L674.6 516.1 Q664.0 507.0 650.0 507.0 L480.0 507.0 Q474.0 507.0 478.6 503.1 Z" class="bm-roof"/></svg>
     <span class="brand-name">Rapid Squares</span>
     <span class="brand-sub">Aerial Roof Reports</span>
   </a>
@@ -72,6 +72,12 @@
           <legend class="sr">Report type</legend>
           <div id="od-options"><p class="hint">Loading report types…</p></div>
         </fieldset>
+        <fieldset class="scope-opts hidden" id="scope-opts">
+          <legend>What to measure</legend>
+          <label class="scope-opt"><input type="radio" name="scope" value="primary_only"><span><b>Main building only</b><span class="hint">Just the house.</span></span></label>
+          <label class="scope-opt"><input type="radio" name="scope" value="primary_and_garage"><span><b>Main building + detached garage</b><span class="hint">The house and its garage.</span></span></label>
+          <label class="scope-opt"><input type="radio" name="scope" value="all_structures"><span><b>Every building on the property</b><span class="hint">Including sheds and outbuildings.</span></span></label>
+        </fieldset>
         <label class="perm hidden" id="od-esx-row">
           <input type="checkbox" id="od-esx">
           <span class="esx-line"><b>Add Xactimate (ESX) file</b><span class="opt-price" id="od-esx-price">$5.00</span></span>
@@ -104,17 +110,22 @@
         <dl class="rv">
           <div><dt>Property</dt><dd><b id="rv-line1"></b><span id="rv-line2" class="hint"></span><span id="rv-pin" class="hint hidden">Using your pin location</span></dd><dd><button type="button" class="linkbtn" data-goto="report">Change</button></dd></div>
           <div><dt>Report</dt><dd><b id="rv-report"></b><span id="rv-report-hint" class="hint"></span></dd><dd><button type="button" class="linkbtn" data-goto="report">Change</button></dd></div>
+          <div id="rv-scope-row"><dt>Measure</dt><dd><b id="rv-scope"></b></dd><dd><button type="button" class="linkbtn" data-goto="report">Change</button></dd></div>
         </dl>
         <div class="wiz-group" id="job-fields">
           <h3>Job details <span class="hint">(optional)</span></h3>
-          <p class="hint" id="job-hint" style="margin: -6px 0 0;">Printed on the report and kept with the order.</p>
+          <p class="hint" id="job-hint" style="margin: -6px 0 0;">Added to the report and the ESX file. The claim number also names the ESX file.</p>
           <div class="grid-fields" style="grid-template-columns: repeat(2, minmax(0, 1fr));">
-            <div class="fld"><label for="jb-claim">Claim number</label><input id="jb-claim" type="text" maxlength="64" autocomplete="off"></div>
-            <div class="fld"><label for="jb-name">Client name</label><input id="jb-name" type="text" maxlength="120" autocomplete="off"></div>
-            <div class="fld"><label for="jb-email">Client email</label><input id="jb-email" type="email" maxlength="160" autocomplete="off" inputmode="email"></div>
-            <div class="fld"><label for="jb-phone">Client phone</label><input id="jb-phone" type="tel" maxlength="32" autocomplete="off"></div>
+            <div class="fld"><label for="jb-claim">Claim number</label><input id="jb-claim" type="text" maxlength="64" autocomplete="off" placeholder="e.g. CLM-20419"></div>
+            <div class="fld"><label for="jb-name">Client name</label><input id="jb-name" type="text" maxlength="120" autocomplete="off" placeholder="e.g. Jordan Smith"></div>
+            <div class="fld"><label for="jb-email">Client email</label><input id="jb-email" type="email" maxlength="160" autocomplete="off" inputmode="email" placeholder="e.g. jordan@example.com"></div>
+            <div class="fld"><label for="jb-phone">Client phone</label><input id="jb-phone" type="tel" maxlength="32" autocomplete="off" placeholder="e.g. (502) 555-0148"></div>
           </div>
-          <div class="fld"><label for="jb-notes" id="jb-notes-l">Notes for the measuring team</label><textarea id="jb-notes" rows="2" maxlength="450"></textarea></div>
+        </div>
+        <div class="wiz-group" id="notes-group">
+          <h3 id="jb-notes-h">Notes for the measuring team <span class="hint">(optional)</span></h3>
+          <p class="hint" id="jb-notes-hint" style="margin: -6px 0 0;">Anything the team should know about this roof. Only they see these notes.</p>
+          <div class="fld"><label for="jb-notes" class="sr" id="jb-notes-l">Notes</label><textarea id="jb-notes" rows="3" maxlength="450" placeholder="e.g. Only measure the main house, not the detached garage.&#10;The small shed's pitch is 5/12."></textarea></div>
         </div>
         <div class="od-guest hidden" id="od-guest">
           <p class="od-account"><b>Have an account?</b> <a href="#" id="od-signin">Sign in</a> to order. <b>New here?</b> <a href="#" id="od-signup">Create a free account</a><span id="od-trial-clause"> and try a subscription free for <span id="od-trial-n">30</span> days: subscriber prices on every report</span>. Or order as a guest below.</p>
@@ -156,8 +167,8 @@
 <script src="config.js"></script>
 <script src="api.js"></script>
 <script src="auth.js"></script>
-<script src="mock-api.js"></script>
+<script src="sample-api.js"></script>
 <script src="app.js"></script>
-<script src="address-lookup.js"></script>
+<script src="order-form.js"></script>
 </body>
 </html>

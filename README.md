@@ -1,36 +1,37 @@
-# Rapid Squares — UI mockups
+# Rapid Squares
 
-Clickable mockups for an aerial roof report tool. These are design mockups only: there is no backend, nothing is saved, and uploads only preview in your browser.
+Aerial roof reports: look up a property, order a measurement report or a Storm Report, and download branded PDFs and Xactimate (ESX) files. The website is plain HTML, CSS and JavaScript; the Node.js server in `server/` serves it, keeps the data in Supabase, takes payments through Stripe, orders reports from RoofQuery and sends email through Resend. Opened without the server, the site runs on made-up sample data (see below).
 
 ## Screens
 
 | File | Screen |
 | --- | --- |
-| `index.html` | **Landing page**: what Rapid Squares is, address search, how it works, FAQ and contact |
+| `index.html` | **Landing page**: what Rapid Squares is, address search, sample report, prices, FAQ and contact |
 | `orders.html` | **Home**: order a new report (pop-up) and see ordered reports with status filters and search |
-| `new-sketch.html` | **Order form**, step by step: address → report type → confirm the roof on the map (Azure Maps satellite imagery) → review and place. Shown in the Home pop-up; visitors without an account use it as a page, and signed-in visits forward to Home |
+| `order.html` | **Order form**, step by step: address and report type (and what to measure) → confirm the roof on the map (Azure Maps satellite imagery) → review, job details and place. Shown in the Home pop-up; visitors without an account use it as a page, and signed-in visits forward to Home |
+| `report.html` | **Roof report**: opens from a Home row. Summary, RoofQuery's drawings (Lengths, Area, Pitch; whole property or one building), edge measurements, waste factor, pitch breakdown, buildings and job details, loaded live from RoofQuery. The PDF and ESX are under Files, where the ESX can also be added (it downloads and is emailed) |
 | `storm-report.html` | **Storm Report**: the results (damage chance, hail, wind, tornadoes, every storm day) and its five PDFs. Date of loss, claim number, insured name and notes are asked when a PDF is downloaded |
-| `account.html` | **Account**, one side list: **Profile** (photo, name, job title, time zone, sign-in email), **Company & branding** (company name, license number, logo, colors and the one set of contact details printed on reports), **Team & invites** (admin), **Billing** and **Password & security** |
-| `report-settings.html`, `team.html` | Old links; they forward to the matching Account tab |
+| `account.html` | **Settings**: **Profile** (name, job title, time zone, sign-in email, sign out), **Company & branding** (company name, license number, logo, colors and the one set of contact details printed on reports), **Team & invites** (admin) and **Billing** |
 
-The top nav links all five screens together.
+On desktop the sidebar links Home, New order and Settings; on phones the bottom bar does.
 
 ## Mobile
 
 The site is a mobile-first website. On screens 720px wide or narrower it changes in several ways:
 
-- The top nav moves to a bottom tab bar: Reports, New, Branding, Team, Account.
-- Tables turn into stacked cards with labeled rows.
+- The sidebar becomes a bottom bar: Home, Order, Settings.
+- Tables turn into stacked cards with labeled rows, and Home's report cards stack.
 - Forms switch to a single column, with 16px inputs so iOS doesn't zoom in.
-- Filter tabs and section links become swipeable chips.
+- Settings sections become a row of buttons that wraps.
+- Pop-ups slide up from the bottom; swipe down to close them. The page behind stays still.
 
 You can also add it to a phone's home screen. In Safari use Share › Add to Home Screen, or in Chrome use the ⋮ menu › Add to Home screen. It then opens full-screen with its own icon, using `manifest.webmanifest`, `icon.svg` and the `icon-*.png` files.
 
-## Sample data (placeholder backend)
+## Sample data (no server)
 
-Every page loads and saves real data through the same calls the Node.js backend will answer. These calls are listed in the API contract in the Company Data Schema doc. Until the backend exists, `mock-api.js` answers them in the browser with sample data for a fictional company, "Lone Star Roofing Co." The data is saved in that browser's local storage, so changes stay after a reload. Nothing is sent anywhere.
+Opened without the Node.js server (as plain files, or with `start-windows.bat`), the pages have no server to talk to, so `sample-api.js` answers the same calls the server does in the browser with sample data for a fictional company, "Lone Star Roofing Co." The data is saved in that browser's local storage, so changes stay after a reload. Nothing is sent anywhere.
 
-The placeholder works like the real backend will:
+Sample data follows the server's rules:
 
 - Every request is limited to the signed-in person's company.
 - Permissions are checked. For example, a Viewer can't order reports, and an Estimator only sees reports they ordered.
@@ -41,20 +42,20 @@ The placeholder works like the real backend will:
 What works on sample data:
 
 - **Home:** filters, search and paging, from the data.
-- **Place order:** places an order.
-- **Report settings:** saves company details and the logo.
+- **Order pop-up:** places an order (Storm Reports are ready straight away).
+- **Settings › Company & branding:** saves company details and the logo.
 - **Team:** invite, edit permissions, remove, resend and revoke.
-- **Account:** saves your profile and photo, and shows billing.
+- **Settings › Profile and Billing:** saves your profile, and shows billing.
 
 PDF and ESX downloads, Stripe's billing page, and sign-out show a short message explaining they need RoofQuery, Stripe or Supabase connected first.
 
 **Sample data:** the site signs you in as the company owner. To start over, clear this site’s data in your browser.
 
-**Switching to the real backend:** set `apiBaseUrl` in `config.js` to the backend's address, for example `https://api.rapidsquares.com`. The pages stay the same. `api.js` sends the same calls to the server instead, and `mock-api.js` can then be deleted.
+**Switching to the real backend:** set `apiBaseUrl` in `config.js` to the backend's address, for example `https://api.rapidsquares.com`. The pages stay the same. `api.js` sends the same calls to the server instead.
 
 ## Address lookup (Azure Maps)
 
-The **Place order** page searches addresses and shows an aerial view of the property. It uses three parts of Azure Maps:
+The **order pop-up** (`order.html`) searches addresses and shows an aerial view of the property. It uses three parts of Azure Maps:
 
 - **Autocomplete** (`/geocode:autocomplete`, Search API 2026-01-01) suggests addresses as you type.
 - **Geocoding** (`/geocode`) turns the address you pick into coordinates.
@@ -68,7 +69,7 @@ The **Place order** page searches addresses and shows an aerial view of the prop
    ```js
    azureMapsKey: 'your-key-here',
    ```
-4. Open `new-sketch.html` and start typing an address.
+4. Open `order.html` and start typing an address.
 
 Until a key is added, the page shows a notice and makes no calls to Azure.
 
@@ -144,14 +145,14 @@ On Mac or Linux: `cd server`, `cp .env.example .env`, fill it in, then `npm run 
 
 ### What works now
 
-- **Landing page** at `/` (`index.html`) with an address search, how it works, FAQ and contact. Contact details are `[placeholders]` to fill in.
-- **No account needed** on the Place order page: visitors can look up a roof, see report types and regular prices, and either order as a guest (name + email) or create a free account, which brings them back to the same order. Guest orders are saved as "awaiting payment" and are never sent to RoofQuery until payment is connected. Order history, Report settings, Team and Account still need sign-in.
+- **Landing page** at `/` (`index.html`) with an address search, the sample report, prices, FAQ and contact.
+- **No account needed** on the order page (`order.html`): visitors can look up a roof, see report types and regular prices, and either order as a guest (name + email) or create a free account, which brings them back to the same order. Guest orders are saved as "awaiting payment" and are never sent to RoofQuery until payment is connected. Order history, Report settings, Team and Account still need sign-in.
 
 - **Create an account**, then name your company. Each company can try a subscription free for 30 days (`TRIAL_DAYS`): Stripe collects a card at the start, subscriber prices apply during the trial, and the plan begins on day 31 unless they cancel. Free reports on sign-up are off by default (`FREE_REPORTS_ON_SIGNUP=0`); any a company already has are still used first.
-- **Report settings, profile, logo and photo uploads** save to Supabase.
+- **Company & branding, profile and logo uploads** save to Supabase.
 - **Team invites:** until Resend is connected, invites aren't emailed. The Team page shows each person's invite link to send yourself, and the server window prints the email it would have sent. Each link works once, for that email address only.
 - **Ordering** creates the report record with the right price (free report, subscriber or regular price, ESX add-on). Until Stripe and RoofQuery are connected, nothing is charged and the report waits as "pending". `ALLOW_UNPAID_TEST_ORDERS=true` allows this; set it to `false` before launch.
-- **PDF and ESX downloads** say they're coming once RoofQuery is connected.
+- **Reports:** each one has its own page (`report.html` or `storm-report.html`) with the results and files. Report emails attach the PDFs.
 
 ### Payments (Stripe)
 
@@ -167,25 +168,21 @@ Set `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` (in `server\.env` and on Ren
 
 - Supabase emails a confirmation link to new accounts, and its built-in email only sends a few an hour. For testing, you can turn off **Confirm email** under Authentication › Sign In / Providers › Email. Turn it back on before launch.
 - **RoofQuery:** set `ROOFQUERY_API_KEY` (and `ROOFQUERY_WEBHOOK_SECRET`, `ADMIN_EMAIL`) in `server/.env` and on Render, then add the webhook `https://rapidsquares.com/webhooks/roofquery/<ROOFQUERY_WEBHOOK_SECRET>` in the RoofQuery portal. Paid and free orders are sent to RoofQuery straight away; status, squares and pitch update from the webhook (and every few minutes as a backup). When a report is ready the person who ordered it gets an email; guests get download links. PDFs carry the ordering company's name, logo, color and contact details (a RoofQuery brand profile per company, kept in step with Report settings); guest PDFs use the default branding set in the RoofQuery portal. Downloads go through this server, so the ESX file is only available on orders that paid for it. If RoofQuery can't measure a roof, the order is marked failed and the customer is refunded automatically (or gets their free report back). If the RoofQuery balance runs out, orders queue, `ADMIN_EMAIL` is told, and they're retried automatically. With a `rq_test_sk_` key, only RoofQuery's sandbox addresses complete (e.g. 6515 Turnbridge Pl, Prospect, KY 40059); any other address is cancelled, which also tests the refund.
-- **Buying the ESX later:** RoofQuery makes an ESX file for every report, so a finished order without one shows **Buy ESX · $5.00** on Home (saved card charged, file downloads at once; no card → Stripe's payment page). Guests get a "Get it for $5" link in their ready email. The purchase shows on Account billing, and the buyer gets an email with the download link.
+- **Buying the ESX later:** RoofQuery makes an ESX file for every report, so a finished report without one shows **Add ESX file · $5.00** under Files on its report page (saved card charged, the file downloads and is emailed; no card → Stripe's payment page). Guests get a "Get it for $5" link in their ready email. The purchase shows on Account billing, and the buyer gets an email with the download link.
 - **Instant Squares:** coming soon. The landing page lists it; the server already has the RoofQuery Instant Query route (`/api/instant-query`, subscribers only) for when it launches.
 - **Order emails:** the customer gets an order confirmation as soon as an order is paid (or covered by a free report) and a "report ready" email when it's done. `ADMIN_EMAIL` gets a copy of both (turn off with `ORDER_ALERTS=false`).
 - **Email (Resend):** set `RESEND_API_KEY` and `EMAIL_FROM` (an address on a domain verified in Resend › Domains) in `server/.env` and on Render. The site then emails guest order confirmations, payment confirmations and team invites. Supabase's sign-up and password-reset emails are separate: point Supabase › Authentication › Emails › SMTP Settings at Resend (host `smtp.resend.com`, port `465`, username `resend`, password = a Resend API key) to send them from your domain and lift the few-an-hour limit. `npm run check` tells you whether the key works and the domain is verified.
-- **Azure key on the real server:** put it in `server\.env` as `AZURE_MAPS_KEY=` (and in Render's environment variables when hosted) instead of `config.js`, so it never goes on GitHub. The server hands it to the Place order page.
+- **Azure key on the real server:** put it in `server\.env` as `AZURE_MAPS_KEY=` (and in Render's environment variables when hosted) instead of `config.js`, so it never goes on GitHub. The server hands it to the order page.
 - If your Azure Maps key has CORS rules, add `http://localhost:3000` to them.
-- Opening the site with `start-windows.bat` (port 8000) still uses sample data, so you can keep showing the mockups without signing in.
+- Opening the site with `start-windows.bat` (port 8000) uses sample data, so you can try every page without signing in.
 
-## Viewing
+## Without the server
 
-Besides running it locally, you can view the mockups in either of two ways:
-
-- **Open the file directly:** double-click `index.html`. Most things work, but use the local server above for the address lookup.
-- **GitHub Pages:** go to the repo's Settings › Pages. Set the source to "Deploy from a branch", then pick `main` and `/ (root)`.
+Double-click `index.html`, or run `start-windows.bat`, to try the site on sample data. Most things work; use `start-windows.bat` (a local web server) for the address lookup, since browsers block it from plain files.
 
 ## Notes for reviewers
 
-- Text in brackets, like `[Company Name]` or `[$00]`, is placeholder content.
 - Fonts load from Google Fonts: Archivo, IBM Plex Sans, and IBM Plex Mono.
 - `start-windows.bat` and `serve.ps1` run the site on sample data; `start-live.bat` runs the real server in `server/`. The website itself doesn't use any of them.
-- Shared styles are in `styles.css`. Page behavior is in `app.js`, the address lookup is in `address-lookup.js`, and calls to the backend go through `api.js`. On sample data, `mock-api.js` answers them; on the real server, the `server/` backend does, and `auth.js` and `signin.html` handle sign-in.
+- Shared styles are in `styles.css`. Page behavior is in `app.js`, the order pop-up is in `order-form.js`, address suggestions for other fields are in `address-suggest.js`, and calls to the server go through `api.js`. On sample data, `sample-api.js` answers them; on the real server, the `server/` backend does, and `auth.js` and `signin.html` handle sign-in.
 - Names, emails and addresses in the sample data are made up.

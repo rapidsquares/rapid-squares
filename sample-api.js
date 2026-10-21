@@ -1,13 +1,13 @@
-// Rapid Squares — placeholder backend ("sample data" mode).
+// Rapid Squares — sample-data mode: the site without the Node.js server.
 //
-// Answers the same calls as the future Node.js backend (see the API contract in the
-// Company Data Schema doc), using sample data kept in this browser's localStorage.
-// It follows the same rules the real backend will: every request is scoped to the
+// Opened as plain files (or with start-windows.bat), the pages have no server to talk to.
+// This answers the same /api calls the server does (server/src/routes.js), from made-up data
+// kept in this browser's localStorage, so every page can be tried and designed without
+// Supabase, RoofQuery or Stripe. It follows the server's rules: every request is scoped to the
 // signed-in user's company, permissions are checked, and errors come back as
 // { error: { code, message } } with the same status codes.
 //
-// Nothing here is sent anywhere. Delete this file (and set apiBaseUrl in config.js)
-// once the real backend is running.
+// Nothing here is sent anywhere. Through the real server (npm start), api.js never calls it.
 (function () {
   window.RS = window.RS || {};
   var STORE_KEY = 'rs.sample.v1';
@@ -47,8 +47,13 @@
   };
   var STORM_DOCS = { weather_history: 'Weather History', hail_verification: 'Hail Verification', wind_verification: 'Wind Verification', date_of_loss: 'Date of Loss', homeowner: 'Homeowner Storm Summary' };
   // Optional job details from the order form, same rules as the server.
+  var SCOPES = ['primary_only', 'primary_and_garage', 'all_structures'];
   function jobDetails(b, type) {
     var j = (b && b.job) || {}, out = {};
+    if (type !== 'storm_report') {
+      out.scope = str(b && b.scope) || (type === 'commercial' ? 'all_structures' : 'primary_and_garage');
+      if (SCOPES.indexOf(out.scope) === -1) fail(422, 'invalid', 'Choose what to measure: the main building, the main building and garage, or every building.');
+    }
     if (str(j.claim)) out.claim = str(j.claim, 64);
     if (str(j.client_name)) out.client_name = str(j.client_name, 120);
     if (str(j.client_email)) { out.client_email = str(j.client_email, 160).toLowerCase(); if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(out.client_email)) fail(422, 'invalid', 'Check the client email, or leave it blank.'); }
@@ -298,7 +303,7 @@
         (!text || (o.address + ' ' + o.report_number).toLowerCase().indexOf(text) !== -1);
     }).sort(function (a, b) { return b.created_at < a.created_at ? -1 : 1; });
     var size = Math.min(50, parseInt(q.page_size, 10) || 10), page = Math.max(1, parseInt(q.page, 10) || 1);
-    return { orders: list.slice((page - 1) * size, page * size).map(function (o) { return orderOut(c.db, o); }), total: list.length, page: page, page_size: size, counts: counts, scope: mine ? 'mine' : 'company', esx_price_cents: ESX_PRICE, can_buy_esx: true };
+    return { orders: list.slice((page - 1) * size, page * size).map(function (o) { return orderOut(c.db, o); }), total: list.length, page: page, page_size: size, counts: counts, scope: mine ? 'mine' : 'company' };
   });
   route('GET', '/api/orders/:id', function (c) {
     advance(c.db);
@@ -352,20 +357,36 @@
     if (!STORM_DOCS[c.params.template]) fail(404, 'not_found', 'That PDF isn\u2019t part of a storm report.');
     var d = stormDetails(c.body);
     if (c.params.template === 'date_of_loss' && !d.date_of_loss) fail(422, 'needs_date_of_loss', 'Enter the date of loss for this PDF.');
-    if (c.params.template !== 'homeowner') {
-      var keep = {}; Object.keys(o.order_details || {}).forEach(function (k) { if (/^client_/.test(k)) keep[k] = o.order_details[k]; });
-      o.order_details = Object.assign(keep, d); save(c.db);
-    }
+    var keep = {}; Object.keys(o.order_details || {}).forEach(function (k) { if (/^client_/.test(k)) keep[k] = o.order_details[k]; });
+    o.order_details = Object.assign(keep, d); save(c.db);
     fail(501, 'not_connected', 'Your details are saved. The ' + STORM_DOCS[c.params.template] + ' PDF will download once RoofQuery is connected. This is sample data.');
   });
   route('GET', '/api/orders/:id/esx', notYet('The Xactimate (ESX) file'));
+  // Roof report page (sample): numbers like RoofQuery's sample report, scaled to this order's squares. No drawings.
+  route('GET', '/api/orders/:id/report', function (c) {
+    advance(c.db);
+    var o = findOrder(c);
+    if (o.report_type === 'storm_report') fail(404, 'not_found', 'Storm reports have their own page.');
+    var out = { order: orderOut(c.db, o), can_download: permsOf(c.me).indexOf('orders.download') !== -1, can_buy_esx: permsOf(c.me).indexOf('orders.create') !== -1, esx_price_cents: o.status === 'delivered' && !o.esx_purchased ? ESX_PRICE : null, report: null, live: false };
+    if (o.status !== 'delivered') return out;
+    var sq = o.total_squares || 55.97, k = sq / 55.97, f = function (n) { return Math.round(n * k * 10) / 10; };
+    var edges = [['eave', 'Eaves', 276.3, 27], ['rake', 'Rakes', 169.2, 13], ['ridge', 'Ridges', 114.6, 12], ['hip', 'Hips', 304.2, 20], ['valley', 'Valleys', 237.3, 17], ['step_flashing', 'Step flashing', 72.8, 9], ['wall_flashing', 'Wall flashing', 55.4, 14], ['parapet', 'Parapet walls', 0, 0], ['bend', 'Bends (pitch changes)', 4.7, 1], ['other', 'Other', 0, 0]]
+      .map(function (e) { return { key: e[0], label: e[1], length_ft: f(e[2]), count: e[3] }; });
+    var area = Math.round(sq * 1000) / 10, pitch = o.predominant_pitch || '12/12';
+    out.report = {
+      summary: { squares: sq, area_sqft: area, pitch: pitch, facets: (o.measurements && o.measurements.facets) || 33, structures: 1, complexity: 'complex', attic_sqft: Math.round(area * 0.72), edges_ft: f(1234.6), hips_ridges_ft: f(418.8), edges: edges,
+        pitches: [{ pitch: pitch, area_sqft: Math.round(area * 0.93 * 10) / 10, pct: 93 }, { pitch: '5/12', area_sqft: Math.round(area * 0.046 * 10) / 10, pct: 4.6 }, { pitch: '11/12', area_sqft: Math.round(area * 0.024 * 10) / 10, pct: 2.4 }] },
+      buildings: [{ index: 1, squares: sq, area_sqft: area, pitch: pitch, facets: 33, complexity: 'complex', hips_ridges_ft: f(418.8), edges: edges }],
+      drawings: null, scope_label: 'Primary structure and detached garage', completed_at: o.completed_at, sandbox: true
+    };
+    return out;
+  });
   route('POST', '/api/orders/:id/buy-esx', function (c) {
     need(c.me, 'orders.create'); var o = findOrder(c);
     if (o.status !== 'delivered') fail(409, 'not_ready', 'The ESX file can be bought once the report is ready.');
     o.esx_purchased = true; save(c.db);
     return { purchased: true, url: null, charged_cents: ESX_PRICE };
   });
-  route('POST', '/api/orders/:id/details', function (c) { findOrder(c); need(c.me, 'orders.create'); fail(501, 'not_connected', 'Sending details to RoofQuery will work once RoofQuery is connected. This is sample data.'); });
   function findOrder(c) {
     var mine = permsOf(c.me).indexOf('orders.view_all') === -1;
     var o = c.db.orders.filter(function (x) { return x.id === c.params.id && (!mine || x.ordered_by === c.me.id); })[0];
@@ -512,7 +533,7 @@
     });
   }
 
-  RS.mock = {
+  RS.sample = {
     handle: handle,
     users: function () { return load().users.map(function (u) { return { id: u.id, name: u.full_name, preset: u.preset, role: u.role }; }); },
     currentUserId: function () { return currentUserId(load()); },

@@ -69,7 +69,8 @@ export async function placeOrder(order) {
   const body = {
     country: parts.country, street: parts.street, city: parts.city, state: parts.state, postalCode: parts.postalCode,
     latitude: order.lat, longitude: order.lon,
-    scope: order.report_type === 'commercial' ? 'all_structures' : rq.scope, // commercial: every building on the property
+    // What to measure, as chosen when ordering (older orders: commercial measures every building).
+    scope: (order.order_details && order.order_details.scope) || (order.report_type === 'commercial' ? 'all_structures' : rq.scope),
     reportType: REPORT_TYPE[order.report_type] || 'residential',
     reportName: 'RS-' + order.report_number
   };
@@ -104,6 +105,11 @@ export async function fetchStormPdf(rqId, template, { brand, details = {} } = {}
   // POST takes the same parameters as a JSON body, so long notes never hit a URL length limit.
   return api('POST', `/api/v1/storm/orders/${encodeURIComponent(rqId)}/pdf`, { body, auth: false });
 }
+// One roof drawing: target is 'all' or a building number; type is lengths, area or pitch.
+// SVG, because RoofQuery's PNGs currently come out with blank boxes where the numbers should be.
+export const DIAGRAM_TYPES = ['lengths', 'area', 'pitch'];
+export const fetchDiagram = (rqId, target, type, size = 1200) =>
+  api('GET', `/api/v1/reports/orders/${encodeURIComponent(rqId)}/diagrams/${encodeURIComponent(target)}/${type}?format=svg&size=${size}`, { auth: false });
 export const fetchStormMap = (rqId) => api('GET', `/api/v1/storm/orders/${encodeURIComponent(rqId)}/map.png`, { auth: false });
 export const getOrder = (rqId) => json('GET', `/api/v1/reports/orders/${encodeURIComponent(rqId)}/status`);
 export const identity = () => json('GET', '/api/v1/identity');

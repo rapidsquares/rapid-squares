@@ -1,5 +1,5 @@
-// All /api routes. Matches the API contract in the Company Data Schema doc and the
-// placeholder in the website's mock-api.js, so pages behave the same on either.
+// All /api routes. The website's sample-data mode (sample-api.js) answers the same calls
+// the same way, so pages behave the same on either.
 import crypto from 'node:crypto';
 import { config, connected } from './config.js';
 import { fail, readJson, readForm, readBody } from './http.js';
@@ -90,11 +90,18 @@ function addressPartsIn(b) {
 }
 // Optional job details entered when ordering: claim number, client name / email / phone, notes.
 // A Storm Report also uses them as the starting details for its PDFs (claim number, insured name, notes).
+// What RoofQuery measures on a roof report: the main building, + its detached garage, or every building.
+const SCOPES = ['primary_only', 'primary_and_garage', 'all_structures'];
+const defaultScope = (type) => (type === 'commercial' ? 'all_structures' : config.roofquery.scope);
 function jobDetailsIn(b, type) {
   const j = b && typeof b.job === 'object' && b.job ? b.job : {};
+  const roof = type !== 'storm_report';
+  const scope = roof ? (str(b && b.scope, 30) || defaultScope(type)) : null;
+  if (roof && !SCOPES.includes(scope)) fail(422, 'invalid', 'Choose what to measure: the main building, the main building and garage, or every building.');
   const out = { claim: str(j.claim, 64), client_name: str(j.client_name, 120), client_email: str(j.client_email, 160).toLowerCase(), client_phone: str(j.client_phone, 32), notes: String(j.notes ?? '').trim().slice(0, 450) };
   if (out.client_email && !emailOk(out.client_email)) fail(422, 'invalid', 'Check the client email, or leave it blank.');
   if (type === 'storm_report' && out.client_name) out.insured_name = out.client_name;
+  if (scope) out.scope = scope;
   Object.keys(out).forEach((k) => { if (!out[k]) delete out[k]; });
   return Object.keys(out).length ? out : null;
 }
@@ -278,9 +285,7 @@ export function registerRoutes(r) {
     ]);
     const counts = { all: statuses.length };
     statuses.forEach((s) => { counts[s.status] = (counts[s.status] || 0) + 1; });
-    const esxAddon = prods.esx_addon || { price_cents: 500, subscriber_price_cents: 500 };
-    const esxPrice = m.company.subscription_status === 'active' ? esxAddon.subscriber_price_cents : esxAddon.price_cents;
-    return { orders: rows.map((o) => orderOut(o, prods, people)), total, page, page_size: size, counts, scope: mine ? 'mine' : 'company', esx_price_cents: esxPrice, can_buy_esx: stripe.connected() || config.allowUnpaidTestOrders };
+    return { orders: rows.map((o) => orderOut(o, prods, people)), total, page, page_size: size, counts, scope: mine ? 'mine' : 'company' };
   });
 
   async function findOrder(m, id) {
@@ -382,6 +387,56 @@ export function registerRoutes(r) {
   }
   r.get('/api/orders/:id/pdf', async ({ req, params }) => fileLink(req, params.id, 'pdf'));
 
+  // ---------- Roof reports: the report page (live from RoofQuery) ----------
+  const EDGE_LABELS = { EAVE: 'Eaves', RAKE: 'Rakes', RIDGE: 'Ridges', HIP: 'Hips', VALLEY: 'Valleys', STEP_FLASHING: 'Step flashing', WALL_FLASHING: 'Wall flashing', PARAPET: 'Parapet walls', BEND: 'Bends (pitch changes)', OTHER: 'Other' };
+  const r1 = (n) => (typeof n === 'number' ? Math.round(n * 10) / 10 : null);
+  function edgesOut(e) {
+    return Object.keys(EDGE_LABELS).map((k) => ({ key: k.toLowerCase(), label: EDGE_LABELS[k], length_ft: r1(e && e[k] ? e[k].lengthFt : 0), count: e && e[k] ? e[k].count : 0 }));
+  }
+  function pitchesOut(p, total) {
+    return Object.entries(p || {}).map(([pitch, area]) => ({ pitch, area_sqft: r1(area), pct: total ? Math.round((area / total) * 1000) / 10 : null })).sort((a, b) => b.area_sqft - a.area_sqft);
+  }
+  function summaryOut(t) {
+    return {
+      squares: t.totalSquares, area_sqft: r1(t.totalAreaSqFt), pitch: t.predominantPitch, facets: t.facetCount, structures: t.structureCount,
+      complexity: t.complexity || null, attic_sqft: r1(t.estimatedAtticSqFt), edges_ft: r1(t.totalEdgeLengthFt), hips_ridges_ft: r1(t.hipsAndRidgesLengthFt),
+      edges: edgesOut(t.edgeTotals), pitches: pitchesOut(t.pitchAreas, t.totalAreaSqFt)
+    };
+  }
+  r.get('/api/orders/:id/report', async ({ req, params }) => {
+    const m = await member(req); const o = await findOrder(m, params.id);
+    if (o.report_type === 'storm_report') fail(404, 'not_found', 'Storm reports have their own page.');
+    const prods = await products();
+    const out = {
+      order: orderOut(o, prods, await peopleById(m.company.id)), can_download: m.can('orders.download'),
+      can_buy_esx: m.can('orders.create') && stripe.connected(), esx_price_cents: o.status === 'delivered' && !o.esx_purchased ? await fulfillment.esxPriceFor(o) : null,
+      report: null, live: false
+    };
+    if (o.status !== 'delivered' || !o.roofquery_order_id) return out;
+    let r;
+    try { r = await roofquery.getOrder(o.roofquery_order_id); } catch (e) { r = null; }
+    if (!r || !r.totals) {
+      // RoofQuery didn't answer: show what we saved when the report was delivered (no drawings).
+      const s = o.measurements || {};
+      out.report = { summary: { squares: s.total_squares, area_sqft: s.total_area_sqft, pitch: o.predominant_pitch, facets: s.facets, structures: s.structures, complexity: s.complexity, attic_sqft: s.estimated_attic_sqft, edges_ft: s.total_edge_ft, hips_ridges_ft: s.hips_and_ridges_ft,
+        edges: Object.entries(s.lengths_ft || {}).map(([k, v]) => ({ key: k, label: EDGE_LABELS[k.toUpperCase()] || k, length_ft: v, count: null })),
+        pitches: (s.pitch_breakdown || []).map((p) => ({ pitch: p.pitch, area_sqft: r1(p.area_sqft), pct: s.total_area_sqft ? Math.round((p.area_sqft / s.total_area_sqft) * 1000) / 10 : null })) },
+        buildings: [], drawings: null, scope_label: null, completed_at: o.completed_at };
+      return out;
+    }
+    const hour = 60 * 60 * 1000;
+    const targets = [{ id: 'all', label: 'Whole property' }, ...(r.structures || []).map((s) => ({ id: String(s.index), label: 'Building ' + s.index }))];
+    out.live = true;
+    out.report = {
+      summary: summaryOut(r.totals), completed_at: r.completedAt || o.completed_at, scope_label: (r.report && r.report.scopeLabel) || null, sandbox: !!r.sandbox,
+      revision_open: !!(r.statusDetail && r.statusDetail.openRevisionId),
+      buildings: (r.structures || []).map((s) => ({ index: s.index, squares: s.totalSquares, area_sqft: r1(s.totalAreaSqFt), pitch: s.predominantPitch, facets: s.facetCount, complexity: s.complexity || null, hips_ridges_ft: r1(s.hipsAndRidgesLengthFt), edges: edgesOut(s.edgeTotals) })),
+      // Drawings come through our server (signed, short-lived links) so RoofQuery's order id stays private.
+      drawings: { types: roofquery.DIAGRAM_TYPES, targets, urls: Object.fromEntries(targets.flatMap((t) => roofquery.DIAGRAM_TYPES.map((d) => [`${t.id}/${d}`, fulfillment.downloadUrl(o.id, `diagram-${t.id}-${d}`, hour)]))) }
+    };
+    return out;
+  });
+
   // ---------- Storm Reports: the report page, and each PDF with this download's details ----------
   async function stormOrder(req, id) {
     const m = await member(req); const o = await findOrder(m, id);
@@ -404,15 +459,11 @@ export function registerRoutes(r) {
     if (!roofquery.STORM_TEMPLATES[params.template]) fail(404, 'not_found', 'That PDF isn\u2019t part of a storm report.');
     const details = stormDetailsIn(await readJson(req));
     if (params.template === 'date_of_loss' && !details.date_of_loss) fail(422, 'needs_date_of_loss', 'Enter the date of loss for this PDF.');
-    // Homeowner summary takes no details; keep what was entered before.
-    if (params.template !== 'homeowner') {
-      const keep = Object.fromEntries(Object.entries(o.order_details || {}).filter(([k]) => /^client_/.test(k)));
-      await db.update('report_orders', { id: eq(o.id) }, { order_details: { ...keep, ...details } });
-    }
+    const keep = Object.fromEntries(Object.entries(o.order_details || {}).filter(([k]) => /^client_/.test(k)));
+    await db.update('report_orders', { id: eq(o.id) }, { order_details: { ...keep, ...details } });
     return { url: fulfillment.downloadUrl(o.id, 'storm-' + params.template, 10 * 60 * 1000) };
   });
   r.get('/api/orders/:id/esx', async ({ req, params }) => fileLink(req, params.id, 'esx'));
-  r.post('/api/orders/:id/details', async ({ req, params }) => { const m = await member(req); m.need('orders.create'); await findOrder(m, params.id); fail(501, 'not_available', 'Adding details to an order isn\u2019t available yet. Email us and we\u2019ll pass them on.'); });
 
   // Buy the ESX file for a finished report: saved card → charged now; otherwise Stripe's payment page.
   r.post('/api/orders/:id/buy-esx', async ({ req, params }) => {
@@ -436,7 +487,8 @@ export function registerRoutes(r) {
     const { id, kind } = params;
     const bad = () => fail(404, 'not_found', 'This download link isn\u2019t valid or has expired. Download the report again from your Home page.');
     const stormTemplate = /^storm-([a-z_]+)$/.test(kind) && kind !== 'storm-map' ? kind.slice(6) : null;
-    if (!(['pdf', 'esx', 'buy-esx', 'storm-map'].includes(kind) || (stormTemplate && roofquery.STORM_TEMPLATES[stormTemplate])) || !/^[0-9a-f-]{36}$/i.test(id) || !fulfillment.checkDownload(id, kind, query.get('exp'), query.get('sig'))) bad();
+    const diagram = kind.match(/^diagram-(all|\d{1,2})-(lengths|area|pitch)$/);
+    if (!(['pdf', 'esx', 'buy-esx', 'storm-map'].includes(kind) || diagram || (stormTemplate && roofquery.STORM_TEMPLATES[stormTemplate])) || !/^[0-9a-f-]{36}$/i.test(id) || !fulfillment.checkDownload(id, kind, query.get('exp'), query.get('sig'))) bad();
     let o = await db.one('report_orders', { id: eq(id) });
     if (!o || !o.roofquery_order_id || o.status !== 'delivered') bad();
     const year = 365 * 24 * 60 * 60 * 1000;
@@ -460,6 +512,16 @@ export function registerRoutes(r) {
     }
     if (kind === 'esx' && !o.esx_purchased) bad();
     if ((stormTemplate || kind === 'storm-map') && o.report_type !== 'storm_report') bad();
+    if (diagram) {
+      if (o.report_type === 'storm_report') bad();
+      let img;
+      try { img = await roofquery.fetchDiagram(o.roofquery_order_id, diagram[1], diagram[2]); } catch (e) { fail(502, 'download_failed', 'This drawing couldn\u2019t be loaded right now.'); }
+      // An outside SVG on our address: allow only its own drawing and styles, never scripts.
+      res.writeHead(200, { 'Content-Type': 'image/svg+xml; charset=utf-8', 'Cache-Control': 'private, max-age=3600', 'X-Content-Type-Options': 'nosniff',
+        'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; sandbox" });
+      for await (const chunk of img.body) res.write(chunk);
+      return res.end();
+    }
     if (kind === 'storm-map') {
       let img;
       try { img = await roofquery.fetchStormMap(o.roofquery_order_id); } catch (e) { fail(502, 'download_failed', 'The storm map couldn\u2019t be loaded right now.'); }
@@ -472,7 +534,7 @@ export function registerRoutes(r) {
     let up;
     // Date of Loss without a date can't be made (an old emailed link, say): show the report page instead.
     if (stormTemplate === 'date_of_loss' && !(o.order_details && o.order_details.date_of_loss)) { res.writeHead(303, { Location: `${config.appUrl}/storm-report.html?id=${o.id}` }); return res.end(); }
-    try { up = stormTemplate ? await roofquery.fetchStormPdf(o.roofquery_order_id, stormTemplate, { brand, details: stormTemplate === 'homeowner' ? {} : o.order_details || {} }) : await roofquery.fetchFile(o.roofquery_order_id, kind, { brand }); }
+    try { up = stormTemplate ? await roofquery.fetchStormPdf(o.roofquery_order_id, stormTemplate, { brand, details: o.order_details || {} }) : await roofquery.fetchFile(o.roofquery_order_id, kind, { brand }); }
     catch (e) {
       if (e.status === 409) fail(409, 'not_ready', 'This report is being updated. Try again in a few minutes.');
       fail(502, 'download_failed', 'The file couldn\u2019t be downloaded right now. Try again in a minute.');

@@ -1,6 +1,6 @@
 // Rapid Squares — page behavior.
 // Every page loads the signed-in user (GET /api/me) first, then its own data through RS.api.
-// In sample-data mode the answers come from mock-api.js; later from the real Node.js backend.
+// Through the Node.js server the answers come from server/src/routes.js; opened without it, from sample-api.js.
 (function () {
   var page = document.body.getAttribute('data-page');
   var api = window.RS && RS.api;
@@ -30,6 +30,93 @@
   function initials(name) { return (name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(function (w) { return w[0].toUpperCase(); }).join('') || '?'; }
   function can(p) { return !!ME && ME.permissions.indexOf(p) !== -1; }
   function busy(btn, on) { if (btn) { btn.setAttribute('aria-busy', on ? 'true' : 'false'); btn.disabled = !!on; } }
+
+  // ---------- Pop-ups: ease in and out; on phones they're bottom sheets you can swipe down to close ----------
+  var phone = function () { return window.matchMedia('(max-width: 720px)').matches; };
+  var still = function () { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; };
+  if (window.HTMLDialogElement && !HTMLDialogElement.prototype._rsClose) {
+    // Every way of closing (✕, Cancel, Escape, tapping outside, code) plays the closing animation first.
+    var nativeClose = HTMLDialogElement.prototype._rsClose = HTMLDialogElement.prototype.close;
+    // While a pop-up is open the page behind it stays put: it can't be scrolled or dragged, even on iPhones
+    // (where hiding overflow alone isn't enough). On close it goes back exactly where it was.
+    var openCount = 0, savedY = 0;
+    function lockPage() {
+      if (openCount++ > 0) return;
+      savedY = window.scrollY;
+      var b = document.body.style;
+      b.position = 'fixed'; b.top = -savedY + 'px'; b.left = '0'; b.right = '0'; b.width = '100%';
+      document.documentElement.classList.add('modal-open');
+    }
+    function unlockPage() {
+      if (openCount === 0 || --openCount > 0) return;
+      var b = document.body.style;
+      b.position = ''; b.top = ''; b.left = ''; b.right = ''; b.width = '';
+      document.documentElement.classList.remove('modal-open');
+      window.scrollTo(0, savedY);
+    }
+    HTMLDialogElement.prototype.close = function (value) {
+      var d = this;
+      if (!d.open || !d.classList.contains('modal')) return nativeClose.call(d, value);
+      if (still()) { nativeClose.call(d, value); unlockPage(); return; }
+      if (d.classList.contains('is-closing')) return;
+      d.classList.add('is-closing');
+      setTimeout(function () {
+        d.classList.remove('is-closing', 'dragging', 'snapping', 'settled'); d.style.transform = ''; d.style.removeProperty('--drag');
+        nativeClose.call(d, value);
+        unlockPage();
+      }, 220);
+    };
+    // Mark the opening animation as done even if the browser never reports it (a background tab, say).
+    var nativeShow = HTMLDialogElement.prototype.showModal;
+    HTMLDialogElement.prototype.showModal = function () {
+      var d = this; d.classList.remove('settled');
+      var wasOpen = d.open;
+      nativeShow.call(d);
+      if (!d.classList.contains('modal')) return;
+      if (!wasOpen) lockPage();
+      setTimeout(function () { if (d.open) d.classList.add('settled'); }, 360);
+    };
+    document.addEventListener('cancel', function (e) { // Escape
+      if (e.target.classList && e.target.classList.contains('modal')) { e.preventDefault(); e.target.close(); }
+    }, true);
+  }
+  function sheet(d) {
+    if (d._sheet) return;
+    d._sheet = true;
+    var handle = el('div', { class: 'sheet-handle', 'aria-hidden': 'true' });
+    d.insertBefore(handle, d.firstChild);
+    // The opening animation plays once; after that, dragging and springing back never replay it.
+    d.addEventListener('animationend', function (e) { if (e.target === d && /^rs-(pop|sheet)-in$/.test(e.animationName)) d.classList.add('settled'); });
+    var y0 = null, dy = 0, t0 = 0;
+    d.addEventListener('touchstart', function (e) {
+      if (!phone() || e.touches.length !== 1) return;
+      var onHandle = !!e.target.closest('.sheet-handle');
+      // Drag from the grab bar, or from anywhere once the sheet is scrolled to the top (not from fields).
+      if (!onHandle && (d.scrollTop > 0 || e.target.closest('input, textarea, select, .table-wrap'))) return;
+      y0 = e.touches[0].clientY; dy = 0; t0 = Date.now();
+    }, { passive: true });
+    d.addEventListener('touchmove', function (e) {
+      if (y0 == null) return;
+      dy = Math.max(0, e.touches[0].clientY - y0);
+      if (dy > 4) { d.classList.add('dragging'); d.style.transform = 'translateY(' + dy + 'px)'; if (e.cancelable) e.preventDefault(); }
+    }, { passive: false });
+    function end() {
+      if (y0 == null) return;
+      var flick = dy > 40 && dy / Math.max(1, Date.now() - t0) > 0.6;
+      y0 = null; d.classList.remove('dragging');
+      if (dy > Math.min(140, d.offsetHeight * 0.3) || flick) { d.style.setProperty('--drag', dy + 'px'); d.style.transform = ''; d.close(); }
+      else if (dy > 0) { d.classList.add('snapping'); d.style.transform = ''; setTimeout(function () { d.classList.remove('snapping'); }, 220); }
+    }
+    d.addEventListener('touchend', end);
+    d.addEventListener('touchcancel', end);
+  }
+  // Touching the dimmed area around a pop-up: never scroll the page behind it.
+  document.addEventListener('touchmove', function (e) {
+    if (!document.documentElement.classList.contains('modal-open')) return;
+    var d = e.target.closest && e.target.closest('dialog.modal');
+    if (!d && e.cancelable) e.preventDefault();
+  }, { passive: false });
+  document.querySelectorAll('dialog.modal').forEach(sheet);
 
   // Notifications. `link` is optional: { href, text }.
   var toastWrap = null;
@@ -70,8 +157,8 @@
   try { replaceCompanyName(localStorage.getItem(CO_KEY)); } catch (_) { /* storage blocked */ }
 
   // ---------- navigation by permission ----------
-  var NEEDS = { 'new-sketch.html': 'orders.create', 'orders.html?order=1': 'orders.create' };
-  var PAGE_NEEDS = { 'new-sketch': ['orders.create', 'Order reports'] };
+  var NEEDS = { 'order.html': 'orders.create', 'orders.html?order=1': 'orders.create' };
+  var PAGE_NEEDS = { order: ['orders.create', 'Order reports'] };
   function setupNav() {
     document.querySelectorAll('.topnav a, .tabbar a, .app-side a, a.btn-primary').forEach(function (a) {
       var perm = NEEDS[a.getAttribute('href')];
@@ -115,7 +202,7 @@
   var RQ_LABEL = { 'on-hold': 'On hold', revisions_requested: 'Revision requested' };
   function initReports() {
     var FILTERS = { all: '', processing: 'pending,awaiting_payment', in_progress: 'in_progress,needs_info', completed: 'delivered', cancelled: 'failed,cancelled' };
-    var state = { filter: 'all', q: '', page: 1, esxPrice: 500, canBuyEsx: false }, timer = null, refresh = null;
+    var state = { filter: 'all', q: '', page: 1 }, timer = null, refresh = null;
     var tbody = $('report-rows'), tabs = document.querySelectorAll('.tab');
 
     tabs.forEach(function (t) {
@@ -140,8 +227,6 @@
     }
 
     function render(data) {
-      if (data.esx_price_cents != null) state.esxPrice = data.esx_price_cents;
-      state.canBuyEsx = !!data.can_buy_esx;
       var c = data.counts || {};
       var n = { all: c.all || 0, processing: (c.pending || 0) + (c.awaiting_payment || 0), in_progress: (c.in_progress || 0) + (c.needs_info || 0), completed: c.delivered || 0, cancelled: (c.failed || 0) + (c.cancelled || 0) };
       tabs.forEach(function (t) { t.querySelector('.count').textContent = n[t.getAttribute('data-filter')]; });
@@ -149,7 +234,6 @@
 
       tbody.innerHTML = '';
       data.orders.forEach(function (o) { tbody.appendChild(orderRow(o)); });
-      labelTables(tbody.closest('table').parentNode);
 
       var empty = $('no-results');
       empty.classList.toggle('hidden', data.total !== 0);
@@ -158,7 +242,7 @@
         if (state.q || state.filter !== 'all') empty.textContent = 'No reports match.';
         else {
           empty.appendChild(document.createTextNode('No reports yet. '));
-          if (can('orders.create')) empty.appendChild(el('a', { href: 'new-sketch.html', text: 'Order your first report' }));
+          if (can('orders.create')) empty.appendChild(el('a', { href: 'order.html', text: 'Order your first report' }));
         }
       }
       var from = data.total ? (data.page - 1) * data.page_size + 1 : 0, to = Math.min(data.total, data.page * data.page_size);
@@ -171,21 +255,6 @@
       if (data.orders.some(function (o) { return o.status === 'pending' || o.status === 'in_progress'; })) refresh = setTimeout(load, 10000);
     }
 
-    // Buy the ESX file after the fact: charged to the saved card (or Stripe's page), then it downloads.
-    function buyEsx(o, btn) {
-      if (!window.confirm('Buy the Xactimate (ESX) file for ' + o.report_number + ' for ' + money(state.esxPrice) + '? It\u2019s charged to the card on file and downloads right away.')) return;
-      btn.disabled = true;
-      api.post('/api/orders/' + o.id + '/buy-esx', {}).then(function (r) {
-        if (r.checkout_url) { location.href = r.checkout_url; return; }
-        toast('ESX file added to ' + o.report_number + (r.url ? '. Downloading now.' : '.'));
-        if (r.url) location.href = r.url;
-        load();
-      }).catch(function (e) { btn.disabled = false; showError(e); });
-    }
-    // The server hands back a short-lived link; opening it starts the download.
-    function download(id, kind) {
-      api.get('/api/orders/' + id + '/' + kind).then(function (r) { if (r && r.url) location.href = r.url; }).catch(showError);
-    }
     function orderRow(o) {
       var addr = splitAddress(o.address), s = STATUS[o.status] || ['cancelled', o.status];
       if (RQ_LABEL[o.rq_status]) s = [s[0], RQ_LABEL[o.rq_status]];
@@ -193,32 +262,33 @@
     var detail = o.total_squares != null ? o.total_squares + ' squares · ' + o.predominant_pitch + ' pitch'
       : storm && storm.damage_chance ? storm.damage_chance.charAt(0).toUpperCase() + storm.damage_chance.slice(1) + ' damage chance' + (storm.hail_days != null ? ' · ' + storm.hail_days + ' hail days' : '') : '';
     var job = o.order_details || {};
-    var jobLine = [job.claim ? 'Claim ' + job.claim : null, job.client_name || job.insured_name].filter(Boolean).join(' · ');
+    var SCOPE_SHORT = { primary_only: 'Main building', primary_and_garage: 'Main building + garage', all_structures: 'Every building' };
+    var jobLine = [SCOPE_SHORT[job.scope], job.claim ? 'Claim ' + job.claim : null, job.client_name || job.insured_name].filter(Boolean).join(' · ');
     if (jobLine) detail = detail ? detail + ' · ' + jobLine : jobLine;
-      var actions = el('td', {});
-      if (o.status === 'delivered' && o.documents) {
-        // Storm Report: its own page, with the results and the five PDFs.
-        actions.appendChild(el('a', { class: 'linkbtn', href: 'storm-report.html?id=' + encodeURIComponent(o.id), text: 'View report' }));
-      } else if (o.status === 'delivered') {
-        if (can('orders.download')) {
-          actions.appendChild(el('button', { type: 'button', class: 'linkbtn', text: 'Download PDF', onclick: function () { download(o.id, 'pdf'); } }));
-          if (o.esx_purchased) actions.appendChild(el('button', { type: 'button', class: 'linkbtn', text: 'ESX file', onclick: function () { download(o.id, 'esx'); } }));
-        }
-        if (o.esx_available && state.canBuyEsx && can('orders.create')) actions.appendChild(el('button', { type: 'button', class: 'linkbtn', text: 'Buy ESX · ' + money(state.esxPrice), onclick: function (e) { buyEsx(o, e.currentTarget); } }));
-      } else if (o.eta) {
-        actions.appendChild(el('span', { class: 'hint', text: 'Ready by ' + fmtTime(o.eta) }));
-      } else if (o.status === 'failed') {
-        actions.appendChild(el('span', { class: 'hint', text: (o.status_detail || 'Couldn’t be measured') + (o.refunded ? ' · Refunded' : '') }));
-      } else if (o.status === 'cancelled' && o.status_detail) {
-        actions.appendChild(el('span', { class: 'hint', text: o.status_detail }));
-      }
-      return el('tr', { 'data-status': o.status, 'data-id': o.id }, [
-        el('td', { class: 'mono', style: 'font-size: 13px;', text: o.report_number }),
-        el('td', { class: 'lead' }, [el('b', { text: addr[0] }), el('br'), el('span', { class: 'hint', text: addr[1] })]),
-        el('td', {}, [el('span', {}, [o.product_label + (o.esx_purchased ? ' + ESX' : ''), detail ? el('br') : null, detail ? el('span', { class: 'hint', text: detail }) : null])]),
-        el('td', {}, [el('span', {}, [fmtDate(o.created_at), el('br'), el('span', { class: 'hint', text: 'by ' + o.ordered_by_name })])]),
-        el('td', {}, [el('span', { class: 'pill ' + s[0], text: s[1] })]),
-        actions
+      // One card per report: the whole card is a link to the report's own page.
+      var href = (o.report_type === 'storm_report' ? 'storm-report.html' : 'report.html') + '?id=' + encodeURIComponent(o.id);
+      var when = o.status === 'delivered' ? 'Ready' + (o.completed_at ? ' ' + fmtDate(o.completed_at) : '')
+        : o.eta ? 'Ready by ' + fmtTime(o.eta)
+        : o.status === 'failed' ? (o.status_detail || 'Couldn\u2019t be measured') + (o.refunded ? ' \u00b7 Refunded' : '')
+        : o.status === 'cancelled' ? (o.status_detail || '') : (o.status_detail || '');
+      var arrow = el('span', { class: 'oc-go', 'aria-hidden': 'true' });
+      arrow.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>';
+      return el('a', { class: 'order-card', href: href, 'data-status': o.status, 'data-id': o.id, 'aria-label': o.report_number + ', ' + o.address + ', ' + s[1] + '. Open report' }, [
+        el('div', { class: 'oc-place' }, [
+          el('span', { class: 'oc-num', text: o.report_number }),
+          el('b', { class: 'oc-addr', text: addr[0] }),
+          el('span', { class: 'hint', text: addr[1] })
+        ]),
+        el('div', { class: 'oc-type' }, [
+          el('b', { text: o.product_label + (o.esx_purchased ? ' + ESX' : '') }),
+          detail ? el('span', { class: 'hint', text: detail }) : null
+        ]),
+        el('div', { class: 'oc-state' }, [
+          el('span', { class: 'pill ' + s[0], text: s[1] }),
+          when ? el('span', { class: 'hint', text: when }) : null,
+          el('span', { class: 'hint', text: fmtDate(o.created_at) + ' \u00b7 ' + o.ordered_by_name })
+        ]),
+        el('span', { class: 'oc-open' }, [arrow])
       ]);
     }
     load();
@@ -236,12 +306,12 @@
   }
 
   // "Order new report" opens the order form in a pop-up on Home. Links to orders.html?order=1
-  // (and signed-in visits to new-sketch.html, which forward here) open it straight away.
+  // (and signed-in visits to order.html, which forward here) open it straight away.
   function setupQuickOrder(onOrdered) {
-    var btn = document.querySelector('.page-head a[href="new-sketch.html"]');
+    var btn = document.querySelector('.page-head a[href="order.html"]');
     if (!btn) return;
     var side = document.querySelector('.app-side a[href="orders.html?order=1"]');
-    var dlg = null, first = new URLSearchParams(location.search), src = 'new-sketch.html?embed=1';
+    var dlg = null, first = new URLSearchParams(location.search), src = 'order.html?embed=1';
     if (first.get('order') && can('orders.create')) {
       ['address', 'resume'].forEach(function (k) { if (first.get(k)) src += '&' + k + '=' + encodeURIComponent(first.get(k)); });
       history.replaceState(null, '', location.pathname);
@@ -254,6 +324,7 @@
       var frame = el('iframe', { src: src, title: 'Order a new report', class: 'qo-frame' });
       frame.addEventListener('load', function () { frame.classList.add('ready'); });
       dlg = el('dialog', { class: 'modal qo', 'aria-label': 'Order a new report' }, [frame]);
+      sheet(dlg); // grab bar above the order form, so phones can swipe it closed
       dlg.addEventListener('click', function (e) { if (e.target === dlg) close(); });
       dlg.addEventListener('cancel', function () { setTimeout(reset); }); // Escape
       dlg.addEventListener('close', reset); // not every browser sends this, so close() resets too
@@ -269,7 +340,7 @@
       var frame = dlg.querySelector('iframe');
       frame.classList.remove('ready');
       // Same address again doesn't reload a frame, so ask the frame to reload itself.
-      try { frame.contentWindow.location.replace('new-sketch.html?embed=1'); } catch (_) { frame.src = 'new-sketch.html?embed=1'; }
+      try { frame.contentWindow.location.replace('order.html?embed=1'); } catch (_) { frame.src = 'order.html?embed=1'; }
     }
     if (can('orders.create')) setTimeout(build, 300);
     [btn, side].forEach(function (a) {
@@ -285,6 +356,142 @@
       // The pop-up shows its own "order placed" step; the list behind it updates now.
       toast((e.data.ready ? 'Ready: ' : 'Ordered ') + e.data.report_number + ' · ' + e.data.label + '.');
       onOrdered();
+    });
+  }
+
+  // ---------- Roof report page ----------
+  var SCOPE_TEXT = { primary_only: 'Main building only', primary_and_garage: 'Main building + detached garage', all_structures: 'Every building on the property' };
+  var DRAWING_LABEL = { lengths: 'Lengths', area: 'Area', pitch: 'Pitch' };
+  var WASTE = [0, 5, 7, 10, 12, 15, 19, 24];
+  function initReport() {
+    var id = new URLSearchParams(location.search).get('id'), data = null;
+    var num = function (v, d) { return v == null ? '—' : Number(v).toLocaleString('en-US', { maximumFractionDigits: d == null ? 1 : d }); };
+    var cap = function (t) { return t ? t.charAt(0).toUpperCase() + t.slice(1) : '—'; };
+    if (!id) { $('rp-title').textContent = 'No report chosen'; return; }
+    function load() {
+      return api.get('/api/orders/' + encodeURIComponent(id) + '/report').then(function (r) { data = r; render(r); }).catch(function (e) {
+        $('rp-title').textContent = 'This report can’t be shown'; $('rp-sub').textContent = (e && e.message) || ''; $('rp-files').classList.add('hidden');
+      });
+    }
+    load();
+    function card(title, kids, extra) { return el('section', { class: 'card' }, [title ? el('div', { class: 'split', style: 'align-items: baseline;' }, [el('h2', { style: 'font-size: 18px;', text: title }), extra || null]) : null].concat(kids)); }
+    function stat(label, value, sub) { return el('div', { class: 'iq-stat' }, [el('span', { class: 'hint', text: label }), el('b', { text: value }), sub ? el('span', { class: 'hint', text: sub }) : null]); }
+    function table(heads, rows, cls) {
+      return el('div', { class: 'table-wrap' }, [el('table', { class: 'stack rp-table ' + (cls || '') }, [
+        el('thead', {}, [el('tr', {}, heads.map(function (h) { return el('th', { text: h }); }))]),
+        el('tbody', {}, rows.map(function (cells) { return el('tr', {}, cells.map(function (c, i) { return el('td', { class: i === 0 ? 'lead' : '' }, [c]); })); }))
+      ])]);
+    }
+    function render(r) {
+      var o = r.order, addr = splitAddress(o.address), main = $('rp-main'), rep = r.report, job = o.order_details || {};
+      document.title = o.product_label + ' ' + o.report_number + ' · Rapid Squares';
+      $('rp-eyebrow').textContent = o.product_label + ' · ' + o.report_number;
+      $('rp-title').textContent = addr[0];
+      $('rp-sub').textContent = [addr[1], 'Ordered ' + fmtDate(o.created_at) + ' by ' + o.ordered_by_name].filter(Boolean).join(' · ');
+      main.innerHTML = '';
+      renderFiles(r);
+      if (!rep) {
+        var st = STATUS[o.status] || ['cancelled', o.status];
+        main.appendChild(card('Status', [
+          el('div', { class: 'sr-head' }, [el('span', { class: 'pill ' + st[0], text: RQ_LABEL[o.rq_status] || st[1] })]),
+          el('p', { class: 'lede', style: 'margin: 0;', text: o.status === 'failed' || o.status === 'cancelled' ? (o.status_detail || 'This order was cancelled.') + (o.refunded ? ' You’ve been refunded.' : '')
+            : o.eta ? 'Being measured now. Usually ready by ' + fmtTime(o.eta) + '. This page fills in with every measurement when it’s done.' : (o.status_detail || 'Waiting to be measured.') })
+        ]));
+        renderJob(main, job);
+        if (o.status === 'pending' || o.status === 'in_progress') setTimeout(load, 30000);
+        return;
+      }
+      var s = rep.summary || {};
+      if (rep.revision_open) main.appendChild(el('p', { class: 'notice', style: 'margin: 0;', text: 'A correction is in progress. The files below stay available, and we’ll email the corrected report when it’s ready.' }));
+      // Summary
+      main.appendChild(card('Summary', [el('div', { class: 'iq-stats' }, [
+        stat('Total squares', num(s.squares, 2), s.area_sqft != null ? num(s.area_sqft) + ' sq ft' : null),
+        stat('Predominant pitch', s.pitch || '—'),
+        stat('Roof faces', num(s.facets, 0)),
+        stat('Buildings', num(s.structures, 0)),
+        stat('Total edges', s.edges_ft != null ? num(s.edges_ft) + ' ft' : '—'),
+        stat('Hips + ridges', s.hips_ridges_ft != null ? num(s.hips_ridges_ft) + ' ft' : '—'),
+        stat('Complexity', cap(s.complexity)),
+        stat('Est. attic area', s.attic_sqft != null ? num(s.attic_sqft, 0) + ' sq ft' : '—')
+      ])], rep.sandbox ? el('span', { class: 'opt-tag', text: 'Sandbox' }) : null));
+      // Drawings (from RoofQuery, as pictures)
+      if (rep.drawings) main.appendChild(drawings(rep.drawings));
+      // Edges
+      var edges = (s.edges || []).filter(function (e) { return e.length_ft || e.count; });
+      if (edges.length) main.appendChild(card('Edge measurements', [table(['Type', 'Length', 'Count'], edges.map(function (e) { return [e.label, num(e.length_ft) + ' ft', e.count == null ? '—' : String(e.count)]; }))]));
+      // Waste factor: squares to order, rounded up to the next third of a square
+      if (s.squares) main.appendChild(card('Waste factor', [table(['Waste'].concat(WASTE.map(function (w) { return w + '%'; })),
+        [['Squares'].concat(WASTE.map(function (w) { return (Math.ceil(s.squares * (1 + w / 100) * 3 - 1e-9) / 3).toFixed(2); }))], 'waste-table'),
+        el('p', { class: 'hint', style: 'margin: 0;', text: 'Squares to order at each waste allowance, rounded up to the next bundle (⅓ square).' })]));
+      // Pitch
+      if (s.pitches && s.pitches.length) main.appendChild(card('Pitch breakdown', [table(['Pitch', 'Area', 'Share'], s.pitches.map(function (p) { return [p.pitch, num(p.area_sqft) + ' sq ft', p.pct == null ? '—' : p.pct + '%']; }))]));
+      // Buildings
+      if (rep.buildings && rep.buildings.length > 1) main.appendChild(card('Buildings', [table(['Building', 'Squares', 'Pitch', 'Faces', 'Hips + ridges'], rep.buildings.map(function (b) {
+        return ['Building ' + b.index + (b.index === 1 ? ' (largest)' : ''), num(b.squares, 2), b.pitch || '—', num(b.facets, 0), b.hips_ridges_ft != null ? num(b.hips_ridges_ft) + ' ft' : '—'];
+      }))]));
+      renderJob(main, job, rep.scope_label);
+      labelTables(main);
+    }
+    function drawings(d) {
+      var state = { target: 'all', type: d.types[0] };
+      var img = el('img', { class: 'rp-drawing', alt: '' }), msg = el('p', { class: 'hint hidden', style: 'margin: 0;', text: 'This drawing couldn’t be loaded right now.' });
+      var tabs = el('div', { class: 'tabs', role: 'tablist', 'aria-label': 'Drawing' }, d.types.map(function (t) {
+        return el('button', { type: 'button', class: 'tab', role: 'tab', 'aria-selected': String(t === state.type), 'data-type': t, text: DRAWING_LABEL[t] || t, onclick: function () { state.type = t; show(); } });
+      }));
+      var pick = d.targets.length > 2 ? el('select', { 'aria-label': 'Building', onchange: function () { state.target = pick.value; show(); } }, d.targets.map(function (t) { return el('option', { value: t.id, text: t.label }); })) : null;
+      function show() {
+        tabs.querySelectorAll('.tab').forEach(function (b) { b.setAttribute('aria-selected', String(b.getAttribute('data-type') === state.type)); });
+        msg.classList.add('hidden'); img.classList.remove('hidden'); img.classList.add('loading');
+        img.alt = (DRAWING_LABEL[state.type] || state.type) + ' drawing';
+        img.src = d.urls[state.target + '/' + state.type];
+      }
+      img.addEventListener('load', function () { img.classList.remove('loading'); });
+      img.addEventListener('error', function () { img.classList.add('hidden'); msg.classList.remove('hidden'); });
+      show();
+      return card('Drawings', [el('div', { class: 'split' }, [tabs, pick ? el('div', { class: 'fld', style: 'min-width: 180px;' }, [pick]) : null]), el('div', { class: 'rp-drawing-box' }, [img, msg]),
+        el('p', { class: 'hint', style: 'margin: 0;', text: 'Lengths shows every edge, colored by type, with its true sloped length in feet.' })]);
+    }
+    function renderJob(main, job, scopeLabel) {
+      var rows = [['What was measured', SCOPE_TEXT[job.scope] || scopeLabel], ['Claim number', job.claim], ['Client', job.client_name], ['Client email', job.client_email], ['Client phone', job.client_phone], ['Notes for the measuring team', job.notes]]
+        .filter(function (r) { return r[1]; });
+      if (!rows.length) return;
+      main.appendChild(card('Job details', [el('dl', { class: 'rv' }, rows.map(function (r) { return el('div', {}, [el('dt', { text: r[0] }), el('dd', { text: r[1] }), el('dd', {})]); }))]));
+    }
+    function renderFiles(r) {
+      var o = r.order, box = $('rp-file-list'); box.innerHTML = '';
+      function fileBtn(title, sub, onclick) {
+        return el('button', { type: 'button', class: 'btn pdf-btn', onclick: onclick }, [el('span', { class: 'pdf-btn-top' }, [el('b', { text: title }), el('span', { class: 'hint', text: sub })])]);
+      }
+      if (o.status !== 'delivered') { box.appendChild(el('p', { class: 'hint', style: 'margin: 0;', text: 'Files appear here when the report is ready.' })); return; }
+      if (!r.can_download) { box.appendChild(el('p', { class: 'hint', style: 'margin: 0;', text: 'Ask your company admin for the “Download reports” permission to download the files.' })); return; }
+      box.appendChild(fileBtn('PDF report', 'PDF', function () { download(o.id, 'pdf'); }));
+      if (o.esx_purchased) box.appendChild(fileBtn('Xactimate (ESX) file', 'ESX', function () { download(o.id, 'esx'); }));
+      else if (o.esx_available && r.can_buy_esx && r.esx_price_cents != null) {
+        box.appendChild(el('button', { type: 'button', class: 'btn btn-primary', style: 'width: 100%;', text: 'Add ESX file · ' + money(r.esx_price_cents), onclick: openEsx }));
+      } else if (o.esx_available) box.appendChild(el('p', { class: 'hint', style: 'margin: 0;', text: 'The Xactimate (ESX) file can be added once payments are connected.' }));
+    }
+    function download(oid, kind) { api.get('/api/orders/' + oid + '/' + kind).then(function (r) { if (r && r.url) location.href = r.url; }).catch(showError); }
+    // Add the ESX file: a proper pop-up instead of the browser's OK / Cancel box
+    function openEsx() {
+      $('esx-dlg-sub').textContent = data.order.report_number + ' · ' + data.order.address;
+      $('esx-price').textContent = money(data.esx_price_cents);
+      $('esx-err').classList.add('hidden');
+      $('esx-dlg').showModal();
+    }
+    function closeEsx() { $('esx-dlg').close(); }
+    $('esx-cancel').addEventListener('click', closeEsx); $('esx-dlg-x').addEventListener('click', closeEsx);
+    $('esx-dlg').addEventListener('click', function (e) { if (e.target === $('esx-dlg')) closeEsx(); });
+    $('esx-form').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var btn = $('esx-go'); busy(btn, true);
+      api.post('/api/orders/' + data.order.id + '/buy-esx', {}).then(function (r) {
+        if (r.checkout_url) { location.href = r.checkout_url; return; }
+        closeEsx();
+        toast('ESX file added. It’s downloading now, and we’ve emailed it to you too.');
+        if (r.url) location.href = r.url;
+        load();
+      }).catch(function (x) { $('esx-err').textContent = (x && x.message) || 'The ESX file couldn’t be added. Try again.'; $('esx-err').classList.remove('hidden'); })
+        .then(function () { busy(btn, false); });
     });
   }
 
@@ -367,7 +574,7 @@
       });
     }
 
-    // Homeowner summary downloads straight away; the others ask for this download's details first.
+    // Each PDF asks for this download's details first (filled in from last time).
     function fetchPdf(template, body, btn) {
       busy(btn, true);
       return api.post('/api/orders/' + encodeURIComponent(id) + '/storm/' + template, body || {})
@@ -375,11 +582,15 @@
         .finally(function () { busy(btn, false); });
     }
     function pick(d, btn) {
-      if (d.template === 'homeowner') { fetchPdf(d.template, {}, btn).catch(showError); return; }
       tpl = d;
       var det = data.details || {}, needs = !!d.needs_date_of_loss;
       $('sr-dlg-h').textContent = d.title;
-      $('sr-dlg-sub').textContent = needs ? 'Enter the date of loss for this PDF.' : 'Anything you add is printed on the PDF.';
+      // What prints where (checked against RoofQuery's PDFs): the Homeowner summary has no claim number,
+      // and shows the name as "Prepared for".
+      var home = d.template === 'homeowner';
+      $('sr-dlg-sub').textContent = needs ? 'Enter the date of loss for this PDF.' : home ? 'A page for the homeowner. The name prints as \u201cPrepared for\u201d.' : 'Anything you add is printed on the PDF.';
+      $('sr-claim-fld').classList.toggle('hidden', home); // kept as it was: the claim number isn't on this PDF
+      $('sr-insured-l').textContent = home ? 'Homeowner name' : 'Insured name';
       $('sr-dol-opt').classList.toggle('hidden', needs);
       $('sr-dol').required = needs;
       $('sr-dol').max = new Date().toISOString().slice(0, 10);
@@ -711,7 +922,6 @@
       $('fn').value = parts.shift() || ''; $('ln').value = parts.join(' ');
       $('ti').value = u.job_title || ''; $('em').value = u.email || ''; $('em').disabled = true;
       if (u.timezone) $('tz').value = u.timezone;
-      if (u.avatar_url) { $('avatar-img').src = u.avatar_url; $('avatar-img').classList.remove('hidden'); $('avatar-empty').classList.add('hidden'); }
     }
     fill(me);
     $('org').value = ME.company.name;
@@ -725,15 +935,6 @@
       busy(btn, true);
       api.patch('/api/me', { full_name: name, job_title: $('ti').value.trim(), timezone: $('tz').value })
         .then(function (r) { me = r.user; ME.user = r.user; toast('Your profile is saved.'); }).catch(showError).then(function () { busy(btn, false); });
-    });
-    $('avatar-input').addEventListener('change', function (e) {
-      var f = e.target.files && e.target.files[0];
-      e.target.value = '';
-      if (!f) return;
-      api.upload('/api/me/avatar', f).then(function (r) {
-        me.avatar_url = r.avatar_url; $('avatar-img').src = r.avatar_url; $('avatar-img').classList.remove('hidden'); $('avatar-empty').classList.add('hidden');
-        toast('Profile photo updated.');
-      }).catch(showError);
     });
     $('sign-out').addEventListener('click', signOut);
 
@@ -802,16 +1003,16 @@
     }
   }
 
-  // ---------- visitors without an account (Place order page only) ----------
+  // ---------- visitors without an account (order page only) ----------
   function isGuest() {
-    if (page !== 'new-sketch' || !api) return false;
+    if (page !== 'order' || !api) return false;
     if (api.mode === 'live') return !(RS.auth && RS.auth.signedIn());
     return new URLSearchParams(location.search).has('guest'); // sample data: ?guest shows the visitor view
   }
   function setupGuest() {
     document.body.classList.add('guest');
     RS.guest = true;
-    var next = encodeURIComponent('new-sketch.html');
+    var next = encodeURIComponent('order.html');
     var nav = document.querySelector('.topnav');
     if (nav) {
       nav.innerHTML = '';
@@ -832,7 +1033,7 @@
   RS.ui = { toast: toast, showError: showError, el: el, money: money, can: can };
 
   // ---------- start ----------
-  if (page === 'new-sketch' && /[?&]embed=1/.test(location.search)) { document.body.classList.add('embed'); RS.embed = true; }
+  if (page === 'order' && /[?&]embed=1/.test(location.search)) { document.body.classList.add('embed'); RS.embed = true; }
   labelTables();
   // Show what we already know before the server answers, so pages don't pop in.
   if ($('side-signout')) $('side-signout').addEventListener('click', signOut);
@@ -841,7 +1042,7 @@
   if (!api) return;
   if (isGuest()) { setupGuest(); document.dispatchEvent(new CustomEvent('rs:ready', { detail: null })); return; }
   if (api.mode === 'live' && !(RS.auth && RS.auth.signedIn())) { RS.auth.toSignIn(); return; }
-  if (page === 'new-sketch' && !RS.embed) {
+  if (page === 'order' && !RS.embed) {
     // Signed-in people order from Home now; this page is only for visitors without an account.
     var fwd = new URLSearchParams(location.search), to = 'orders.html?order=1';
     ['address', 'resume'].forEach(function (k) { if (fwd.get(k)) to += '&' + k + '=' + encodeURIComponent(fwd.get(k)); });
@@ -857,6 +1058,7 @@
     if (!guardPage()) return;
     if (page === 'reports') initReports();
     else if (page === 'storm-report') initStorm();
+    else if (page === 'report') initReport();
     else if (page === 'account') {
       if (can('branding.edit')) initReportSettings();
       if (can('users.manage')) initTeam();
