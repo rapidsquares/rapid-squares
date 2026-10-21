@@ -247,18 +247,31 @@
       history.replaceState(null, '', location.pathname);
       setTimeout(open);
     }
-    function open() {
-      if (!dlg) {
-        // The order form draws its own header, steps and close button inside the frame.
-        var frame = el('iframe', { src: src, title: 'Order a new report', class: 'qo-frame' });
-        dlg = el('dialog', { class: 'modal qo', 'aria-label': 'Order a new report' }, [frame]);
-        dlg.addEventListener('click', function (e) { if (e.target === dlg) dlg.close(); });
-        document.body.appendChild(dlg);
-      } else {
-        dlg.querySelector('iframe').src = 'new-sketch.html?embed=1'; // fresh start each time
-      }
-      dlg.showModal();
+    // The order form loads in the background so the pop-up opens ready, and is reset after each close.
+    function build() {
+      if (dlg) return;
+      // The order form draws its own header, steps and close button inside the frame.
+      var frame = el('iframe', { src: src, title: 'Order a new report', class: 'qo-frame' });
+      frame.addEventListener('load', function () { frame.classList.add('ready'); });
+      dlg = el('dialog', { class: 'modal qo', 'aria-label': 'Order a new report' }, [frame]);
+      dlg.addEventListener('click', function (e) { if (e.target === dlg) close(); });
+      dlg.addEventListener('cancel', function () { setTimeout(reset); }); // Escape
+      dlg.addEventListener('close', reset); // not every browser sends this, so close() resets too
+      document.body.appendChild(dlg);
     }
+    var used = false;
+    function open() { build(); used = true; dlg.showModal(); }
+    function close() { if (dlg && dlg.open) dlg.close(); reset(); }
+    // Back to a fresh, ready form for next time.
+    function reset() {
+      if (!used) return;
+      used = false;
+      var frame = dlg.querySelector('iframe');
+      frame.classList.remove('ready');
+      // Same address again doesn't reload a frame, so ask the frame to reload itself.
+      try { frame.contentWindow.location.replace('new-sketch.html?embed=1'); } catch (_) { frame.src = 'new-sketch.html?embed=1'; }
+    }
+    if (can('orders.create')) setTimeout(build, 300);
     [btn, side].forEach(function (a) {
       if (a) a.addEventListener('click', function (e) {
         if (e.ctrlKey || e.metaKey || e.shiftKey || !window.HTMLDialogElement) return; // new tab / old browser: go to the page
@@ -267,7 +280,7 @@
     });
     window.addEventListener('message', function (e) {
       if (e.origin !== location.origin || !e.data) return;
-      if (e.data.type === 'rs:close') { if (dlg && dlg.open) dlg.close(); return; }
+      if (e.data.type === 'rs:close') { close(); return; }
       if (e.data.type !== 'rs:ordered') return;
       // The pop-up shows its own "order placed" step; the list behind it updates now.
       toast((e.data.ready ? 'Ready: ' : 'Ordered ') + e.data.report_number + ' · ' + e.data.label + '.');
@@ -675,6 +688,7 @@
     });
     document.querySelectorAll('[data-panel]').forEach(function (p) { p.classList.toggle('hidden', p.getAttribute('data-panel') !== tab); });
     $('acct-save-bar').classList.toggle('hidden', tab !== 'profile');
+    $('acct-signout').classList.toggle('hidden', tab !== 'profile');
     window.scrollTo(0, 0);
   }
   function setupAccountTabs() {

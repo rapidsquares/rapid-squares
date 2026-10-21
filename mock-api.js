@@ -359,32 +359,6 @@
     fail(501, 'not_connected', 'Your details are saved. The ' + STORM_DOCS[c.params.template] + ' PDF will download once RoofQuery is connected. This is sample data.');
   });
   route('GET', '/api/orders/:id/esx', notYet('The Xactimate (ESX) file'));
-  // Instant Squares (sample): two buildings drawn around the pin, plus a storm history.
-  route('POST', '/api/instant-query', function (c) {
-    need(c.me, 'orders.create');
-    var co = c.db.company;
-    if (!(co.subscription && co.subscription.status === 'active')) fail(403, 'subscribers_only', 'Instant Squares is for subscribers. Start a free trial on the Account page to use them.');
-    var lat = Number(c.body && c.body.lat), lon = Number(c.body && c.body.lon);
-    if (!isFinite(lat) || !isFinite(lon)) fail(422, 'invalid', 'Look up the property first.');
-    var dLat = 1 / 111320, dLon = 1 / (111320 * Math.cos(lat * Math.PI / 180));
-    function box(cx, cy, w, h) { // metres → corners
-      return [[-w, -h], [w, -h], [w, h], [-w, h]].map(function (p) { return { lat: Math.round((lat + (cy + p[1] / 2) * dLat) * 1e6) / 1e6, lng: Math.round((lon + (cx + p[0] / 2) * dLon) * 1e6) / 1e6 }; });
-    }
-    var seed = Math.abs(Math.round(lat * 1000 + lon * 1000)) % 7;
-    var main = 1900 + seed * 140, garage = 480 + seed * 20;
-    return {
-      address: null, parcel: null, sandbox: true,
-      buildings: [
-        { id: 'bld_main', primary: true, confidence: 'high', flat_sqft: main, pitched_sqft: Math.round(main * 1.083), squares: Math.round(main * 1.083) / 100, pitch: ['5/12', '6/12', '7/12'][seed % 3], polygon: box(0, 0, 22, 16) },
-        { id: 'bld_garage', primary: false, confidence: 'medium', flat_sqft: garage, pitched_sqft: Math.round(garage * 1.054), squares: Math.round(garage * 1.054) / 100, pitch: '4/12', polygon: box(18, -14, 8, 7) }
-      ],
-      total_squares: Math.round(main * 1.083 + garage * 1.054) / 100,
-      storm: { status: 'ok', period: { from: '2021-10-20', to: '2026-10-20', years: 5 }, damage_chance: 'medium',
-        hail: { days_near: 4, largest: { size_in: 1.75, size_name: 'golf ball', date: '2024-04-28', distance: 'within_3_mi', confidence: 'high' }, last: { size_in: 1, size_name: 'quarter', date: '2026-05-14', distance: 'within_1_mi', confidence: 'medium' } },
-        wind: { days_severe: 3, strongest: { mph: 74, date: '2023-06-02', distance_mi: 1.6, confidence: 'high' } },
-        tornado: null, top_storms: [] }
-    };
-  });
   route('POST', '/api/orders/:id/buy-esx', function (c) {
     need(c.me, 'orders.create'); var o = findOrder(c);
     if (o.status !== 'delivered') fail(409, 'not_ready', 'The ESX file can be bought once the report is ready.');

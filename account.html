@@ -38,7 +38,6 @@
         <a href="#report-settings" data-side="report-settings">Company &amp; branding</a>
         <a href="#team" data-side="team">Team</a>
         <a href="#billing" data-side="billing" id="nav-billing">Billing</a>
-        <a href="#security" data-side="security">Password &amp; security</a>
       </nav>
   </nav>
   <div class="side-foot" id="side-foot">
@@ -94,6 +93,10 @@
           <button type="button" class="btn btn-outline" id="acct-cancel">Cancel</button>
           <button type="button" class="btn btn-primary" id="acct-save">Save changes</button>
         </div>
+        <div class="split acct-signout hidden" id="acct-signout" style="padding: 4px 4px 0;">
+          <span class="hint">Want to leave <span class="co-name">your company</span>? Ask your admin to remove you.</span>
+          <button type="button" class="btn" id="sign-out" style="border: 0; background: transparent; color: var(--danger); text-decoration: underline; padding: 0 4px;">Sign out</button>
+        </div>
         <div class="acct-panel hidden" data-panel="billing">
             <section id="billing" class="card" aria-labelledby="sec-bl">
               <h2 id="sec-bl">Billing</h2>
@@ -134,23 +137,6 @@
                 </div>
               </div>
             </section>
-        </div>
-        <div class="acct-panel hidden" data-panel="security">
-            <section id="security" class="card" aria-labelledby="sec-sc" style="gap: 16px;">
-              <h2 id="sec-sc">Password &amp; security</h2>
-              <div class="split" style="padding-bottom: 16px; border-bottom: 1px solid var(--line-2);">
-                <div style="display: flex; flex-direction: column; gap: 2px;"><b style="font-size: 14px;">Password</b><span class="hint">Last changed [date]</span></div>
-                <button type="button" class="btn">Change password</button>
-              </div>
-              <div class="split">
-                <div style="display: flex; flex-direction: column; gap: 2px;"><b style="font-size: 14px;">Two-step verification</b><span class="hint">Add a code from your phone when signing in.</span></div>
-                <button type="button" class="btn">Turn on</button>
-              </div>
-            </section>
-            <div class="split" style="padding: 4px 4px 0;">
-              <span class="hint">Want to leave <span class="co-name">your company</span>? Ask your admin to remove you.</span>
-              <button type="button" class="btn" id="sign-out" style="border: 0; background: transparent; color: var(--danger); text-decoration: underline; padding: 0 4px;">Sign out</button>
-            </div>
         </div>
         <div class="acct-panel hidden" data-panel="report-settings">
         <div class="page-head panel-head">

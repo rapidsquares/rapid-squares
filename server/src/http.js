@@ -81,6 +81,12 @@ const MIME = {
 const PRIVATE_TOP = new Set(['server', 'supabase', 'node_modules', 'package.json', 'package-lock.json']);
 const PRIVATE_EXT = new Set(['.ps1', '.bat', '.md', '.sql', '.env', '.log']);
 
+// Changes on every deploy (Render sets RENDER_GIT_COMMIT; otherwise the server's start time).
+// Pages link files as "styles.css?v=<this>", so browsers fetch new copies right after a deploy.
+export const ASSET_VERSION = String(process.env.RENDER_GIT_COMMIT || Date.now().toString(36)).slice(0, 12);
+const LOCAL_FILE = /(\b(?:href|src)=")(?![a-z]+:|\/\/|#)([^"?#]+\.(?:css|js|jpe?g|png|svg|webp|gif|pdf|webmanifest))"/gi;
+const versionLinks = (html) => html.replace(LOCAL_FILE, (m, attr, file) => `${attr}${file}?v=${ASSET_VERSION}"`);
+
 export async function serveStatic(req, res, siteDir, pathname) {
   let rel;
   try { rel = decodeURIComponent(pathname).replace(/^\/+/, ''); } catch { return false; }
@@ -91,13 +97,19 @@ export async function serveStatic(req, res, siteDir, pathname) {
   if (!full.startsWith(siteDir + path.sep)) return false;
   const ext = path.extname(full).toLowerCase();
   if (PRIVATE_EXT.has(ext)) return false;
-  let data;
+  let data, st;
   try {
-    const st = await fs.stat(full);
+    st = await fs.stat(full);
     if (!st.isFile()) return false;
     data = await fs.readFile(full);
   } catch { return false; }
-  res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream', 'Content-Length': data.length, 'Cache-Control': 'no-cache' });
+  if (ext === '.html') data = Buffer.from(versionLinks(data.toString('utf8')));
+  // Pages are always re-checked; a file asked for with this deploy's ?v= can be kept for a year.
+  const versioned = new URLSearchParams(String(req.url || '').split('?')[1] || '').get('v') === ASSET_VERSION;
+  const etag = `W/"${ASSET_VERSION}-${st.size.toString(36)}-${Math.floor(st.mtimeMs).toString(36)}"`;
+  const headers = { 'Content-Type': MIME[ext] || 'application/octet-stream', ETag: etag, 'Cache-Control': versioned ? 'public, max-age=31536000, immutable' : 'no-cache' };
+  if (req.headers['if-none-match'] === etag) { res.writeHead(304, headers); res.end(); return true; }
+  res.writeHead(200, { ...headers, 'Content-Length': data.length });
   res.end(req.method === 'HEAD' ? undefined : data);
   return true;
 }
