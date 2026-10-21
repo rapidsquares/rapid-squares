@@ -68,10 +68,10 @@
   }
 
   // ---------- navigation by permission ----------
-  var NEEDS = { 'new-sketch.html': 'orders.create', 'orders.html?order=1': 'orders.create', '#report-settings': 'branding.edit', '#team': 'users.manage' };
+  var NEEDS = { 'new-sketch.html': 'orders.create', 'orders.html?order=1': 'orders.create' };
   var PAGE_NEEDS = { 'new-sketch': ['orders.create', 'Order reports'] };
   function setupNav() {
-    document.querySelectorAll('.topnav a, .tabbar a, .subnav a, a.btn-primary').forEach(function (a) {
+    document.querySelectorAll('.topnav a, .tabbar a, a.btn-primary').forEach(function (a) {
       var perm = NEEDS[a.getAttribute('href')];
       if (perm && !can(perm)) a.classList.add('hidden');
     });
@@ -544,16 +544,25 @@
   }
 
   // ---------- Account ----------
-  // Account page tabs: Settings, Report settings and Team, picked by #report-settings / #team.
-  // Any other hash (#billing, #profile, …) is a section of the Settings tab.
-  var ACCT_TABS = { 'report-settings': 'branding.edit', team: 'users.manage' };
+  // Account page: each item in the side list shows its own section (#profile, #billing, #team, …).
+  var ACCT_NEEDS = { billing: 'billing.manage', 'report-settings': 'branding.edit', team: 'users.manage' };
   function setupAccountTabs() {
-    var links = document.querySelectorAll('[data-acct-tab]');
+    var links = document.querySelectorAll('[data-side]'), ok = {};
+    links.forEach(function (a) {
+      var key = a.getAttribute('data-side'), need = ACCT_NEEDS[key];
+      ok[key] = !need || can(need);
+      if (!ok[key]) a.classList.add('hidden');
+    });
     function show() {
-      var want = location.hash.slice(1), tab = ACCT_TABS[want] && can(ACCT_TABS[want]) ? want : 'settings';
-      links.forEach(function (a) { if (a.getAttribute('data-acct-tab') === tab) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
-      document.querySelectorAll('.acct-panel').forEach(function (p) { p.classList.toggle('hidden', p.id !== 'tab-' + tab); });
-      if (ACCT_TABS[want] || want === 'settings') window.scrollTo(0, 0);
+      var want = location.hash.slice(1), tab = ok[want] ? want : 'profile';
+      links.forEach(function (a) {
+        var on = a.getAttribute('data-side') === tab;
+        a.classList.toggle('current', on);
+        if (on) a.parentNode.scrollLeft = a.offsetLeft - a.parentNode.offsetLeft - 16; // phones: the list scrolls sideways
+      });
+      document.querySelectorAll('[data-panel]').forEach(function (p) { p.classList.toggle('hidden', p.getAttribute('data-panel') !== tab); });
+      $('acct-save-bar').classList.toggle('hidden', tab !== 'profile' && tab !== 'contact');
+      window.scrollTo(0, 0);
     }
     window.addEventListener('hashchange', show);
     show();
@@ -595,9 +604,6 @@
       toast('Signing out\u2026');
       RS.auth.signOut().then(function () { location.href = 'signin.html'; });
     });
-
-    var links = document.querySelectorAll('.sidenav a');
-    links.forEach(function (a) { a.addEventListener('click', function () { links.forEach(function (x) { x.classList.toggle('current', x === a); }); }); });
 
     if (!can('billing.manage')) { $('billing').classList.add('hidden'); $('nav-billing').classList.add('hidden'); return; }
     function goTo(path, body) {
@@ -715,10 +721,10 @@
     if (!guardPage()) return;
     if (page === 'reports') initReports();
     else if (page === 'account') {
-      setupAccountTabs();
       if (can('branding.edit')) initReportSettings();
       if (can('users.manage')) initTeam();
       initAccount();
+      setupAccountTabs();
     }
     document.dispatchEvent(new CustomEvent('rs:ready', { detail: me }));
   }).catch(showError);

@@ -145,12 +145,6 @@ th:last-child, td:last-child { padding-right: 24px; text-align: right; white-spa
   border: 1px solid var(--field); background: var(--paper); color: var(--ink);
 }
 .tab[aria-selected="true"] { border-color: var(--navy); background: var(--navy); color: #FFFFFF; font-weight: 600; }
-.subnav { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 20px; }
-.subnav a {
-  display: inline-flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 6px; font-size: 14px; text-decoration: none;
-  border: 1px solid var(--field); background: var(--paper); color: var(--ink);
-}
-.subnav a[aria-current="page"] { border-color: var(--navy); background: var(--navy); color: #FFFFFF; font-weight: 600; }
 .tab .count { font-family: 'IBM Plex Mono', monospace; font-size: 12px; opacity: 0.85; margin-left: 4px; }
 
 .roles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
@@ -178,6 +172,10 @@ th:last-child, td:last-child { padding-right: 24px; text-align: right; white-spa
 .sidenav a { text-decoration: none; color: var(--ink-2); font-size: 14px; padding: 12px 14px; border-radius: 6px; }
 .sidenav a:hover, .sidenav a.current { background: var(--paper); color: var(--ink); }
 .sidenav a.current { font-weight: 600; border: 1px solid var(--line); }
+.acct-panel { display: flex; flex-direction: column; gap: 20px; }
+.panel-head { margin-bottom: 0; }
+.panel-head h2 { margin: 0; font-family: 'Archivo', sans-serif; font-size: 26px; font-weight: 800; }
+.acct-save-bar { justify-content: flex-end; gap: 10px; }
 
 /* Team member cell */
 .member { display: flex; align-items: center; gap: 12px; }
