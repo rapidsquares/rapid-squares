@@ -31,140 +31,118 @@
 </nav>
 </header>
 
-<main class="page" style="max-width: 1280px;">
-  <div class="page-head">
-    <div>
-      <p class="eyebrow">Order a report</p>
-      <h1>Look up a property</h1>
-      <p class="lede">Search an address to pull up an aerial view of the roof, then order a report for it.</p>
-    </div>
-  </div>
-
+<main class="page wiz-page">
   <div id="key-missing" class="notice hidden" role="status">
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
     <span><b>Address lookup isn't connected yet.</b> Add your Azure Maps key to <code>config.js</code> to search addresses and load aerial imagery.</span>
   </div>
 
-  <section class="card" aria-labelledby="find-h" style="margin-bottom: 20px;">
-    <h2 id="find-h" class="sr">Find an address</h2>
-    <form id="lookup-form" class="lookup" role="search" autocomplete="off">
-      <div class="fld lookup-field">
-        <label for="addr">Property address</label>
-        <div class="combo">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#56616B" stroke-width="2" stroke-linecap="round" aria-hidden="true" class="combo-icon"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
-          <input id="addr" type="text" inputmode="search" placeholder="Start typing a street address" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="suggestions" aria-describedby="lookup-status">
-          <ul id="suggestions" class="suggestions hidden" role="listbox" aria-label="Address suggestions"></ul>
-        </div>
+  <section class="wiz" id="wiz" aria-labelledby="wiz-title">
+    <header class="wiz-head">
+      <div>
+        <p class="eyebrow">Order a report</p>
+        <h1 id="wiz-title">Find the property</h1>
       </div>
-      <button type="submit" class="btn btn-primary lookup-btn">Look up</button>
-    </form>
-    <p id="lookup-status" class="hint" aria-live="polite" style="margin: 0;">Type at least 3 characters to see suggestions.</p>
-  </section>
+      <button type="button" class="modal-x hidden" id="wiz-close" aria-label="Close"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </header>
+    <ol class="wiz-steps" aria-label="Order steps">
+      <li data-step="address"><span class="wiz-n">1</span><span>Address</span></li>
+      <li data-step="report"><span class="wiz-n">2</span><span>Report</span></li>
+      <li data-step="location"><span class="wiz-n">3</span><span>Confirm roof</span></li>
+      <li data-step="review"><span class="wiz-n">4</span><span>Review</span></li>
+    </ol>
 
-  <!-- Shows once a property is found: order right here, before the map -->
-  <section id="order-bar" class="card order-bar hidden" aria-label="Order a report for this property">
-    <div class="order-bar-in">
-      <div class="order-bar-addr">
-        <span class="hint">Selected property</span>
-        <b id="ob-line1"></b>
-        <span id="ob-line2" class="hint"></span>
-        <span id="ob-pin" class="ob-pin hidden">Using your pin location</span>
-      </div>
-      <div class="order-bar-actions">
-        <button type="button" id="iq-btn" class="btn order-bar-btn hidden" aria-controls="iq-panel">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>
-          <span id="iq-btn-text">Instant Squares</span>
-        </button>
-        <button type="button" id="order-btn" class="btn btn-primary order-bar-btn">Order report for this roof</button>
-      </div>
-    </div>
-    <p id="order-msg" class="hint hidden" role="status" style="margin: 0;"></p>
-  </section>
-
-  <!-- Instant Squares (RoofQuery Instant Query): subscribers only -->
-  <section id="iq-panel" class="card iq-panel hidden" aria-labelledby="iq-h" aria-live="polite"></section>
-
-  <div class="row" style="gap: 20px;">
-    <section class="card map-card col-main" aria-labelledby="map-h" style="padding: 0; gap: 0; overflow: hidden;">
-      <h2 id="map-h" class="sr">Aerial view</h2>
-      <div class="map-wrap">
-        <div id="map" aria-label="Aerial view of the selected property"></div>
-        <p id="pin-tip" class="pin-tip hidden">Pin not on the right roof? Drag it, or click the roof.</p>
-        <div id="map-empty" class="map-empty">
-          <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#56616B" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11.5 L12 4 L21 11.5"/><path d="M6 9.5 V20 H18 V9.5"/><path d="M12 4 V20"/></svg>
-          <b>No property selected</b>
-          <span class="hint">The aerial view of the roof will appear here.</span>
-        </div>
-      </div>
-      <p class="map-credit hint">Imagery © Microsoft Azure Maps and its data providers</p>
-    </section>
-
-    <aside class="col-side" aria-labelledby="sel-h">
-      <div class="card" style="gap: 14px;">
-        <h2 id="sel-h" style="font-size: 18px;">Property details</h2>
-        <div id="sel-empty" class="hint">Search for an address to select a property.</div>
-        <div id="sel-details" class="hidden" style="display: flex; flex-direction: column; gap: 12px;">
-          <div>
-            <b id="sel-line1" style="font-size: 16px;"></b>
-            <div id="sel-line2" class="hint" style="font-size: 13px;"></div>
+    <div class="wiz-body">
+      <!-- 1. Address -->
+      <section class="wiz-panel" data-panel="address" aria-label="Property address">
+        <p class="lede">Type the property address and pick it from the list.</p>
+        <form id="lookup-form" class="lookup" role="search" autocomplete="off">
+          <div class="fld lookup-field">
+            <label for="addr">Property address</label>
+            <div class="combo">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#56616B" stroke-width="2" stroke-linecap="round" aria-hidden="true" class="combo-icon"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+              <input id="addr" type="text" inputmode="search" placeholder="Start typing a street address" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="suggestions" aria-describedby="lookup-status">
+              <ul id="suggestions" class="suggestions hidden" role="listbox" aria-label="Address suggestions"></ul>
+            </div>
           </div>
-          <dl class="facts">
-            <div><dt>Latitude</dt><dd id="sel-lat" class="mono"></dd></div>
-            <div><dt>Longitude</dt><dd id="sel-lon" class="mono"></dd></div>
-            <div><dt>Match</dt><dd id="sel-conf"></dd></div>
-          </dl>
-          <p id="pin-moved" class="hint hidden" style="margin: 0;">You moved the pin. The report will be ordered for the roof under it.</p>
+          <button type="submit" class="btn btn-primary lookup-btn">Look up</button>
+        </form>
+        <p id="lookup-status" class="hint" aria-live="polite" style="margin: 0;">Type at least 3 characters to see suggestions.</p>
+        <div id="addr-picked" class="wiz-picked hidden">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>
+          <div><b id="ap-line1"></b><span id="ap-line2" class="hint"></span></div>
+        </div>
+      </section>
+
+      <!-- 2. Report type -->
+      <section class="wiz-panel hidden" data-panel="report" aria-label="Report type">
+        <p class="lede">What would you like for <b class="wiz-addr"></b>?</p>
+        <fieldset class="report-opts">
+          <legend class="sr">Report type</legend>
+          <div id="od-options"><p class="hint">Loading report types…</p></div>
+        </fieldset>
+        <label class="perm" id="od-esx-row">
+          <input type="checkbox" id="od-esx">
+          <span class="esx-line"><b>Add Xactimate (ESX) file</b><span class="opt-price" id="od-esx-price">$5.00</span></span>
+        </label>
+        <p class="od-trial hidden" id="od-trial">Get subscriber prices free for <span id="od-trial-days">30</span> days. <a href="account.html#billing" target="_top">Start your free trial</a></p>
+      </section>
+
+      <!-- 3. Confirm the roof on the map -->
+      <section class="wiz-panel hidden" data-panel="location" aria-labelledby="map-h">
+        <p class="lede" id="map-h">Check the pin is on the right <span id="loc-what">roof</span>. Not quite? Drag the pin, or click the roof.</p>
+        <div class="map-card">
+          <div class="map-wrap">
+            <div id="map" aria-label="Aerial view of the selected property"></div>
+            <div id="map-empty" class="map-empty"><b>Loading the aerial view…</b></div>
+          </div>
+          <p class="map-credit hint">Imagery © Microsoft Azure Maps and its data providers</p>
+        </div>
+        <div class="wiz-pinrow">
           <p id="pin-warn" class="pin-warn hidden" role="status"></p>
-          <div class="actions" style="flex-direction: column;">
-            <button type="button" id="recenter-btn" class="btn">Re-center on roof</button>
+          <p id="pin-moved" class="hint hidden" style="margin: 0;">You moved the pin. We’ll use the spot under it.</p>
+          <div class="actions">
+            <button type="button" id="recenter-btn" class="btn">Re-center</button>
             <button type="button" id="pin-reset" class="btn hidden">Put pin back on the address</button>
           </div>
-          <p class="hint" style="margin: 0;">Not on the right roof? Drag the pin on the map, or click the roof to move it there.</p>
         </div>
-      </div>
-    </aside>
-  </div>
-</main>
+      </section>
 
-<!-- Choose a report type: opens from "Order report for this roof" -->
-<dialog id="order-dialog" class="modal" aria-labelledby="od-title">
-  <form id="order-form" class="modal-body" novalidate>
-    <div class="modal-head">
-      <div>
-        <h2 id="od-title">Choose a report</h2>
-        <p class="hint" id="od-address" style="margin: 2px 0 0;"></p>
-      </div>
-      <button type="button" class="modal-x" id="od-close" aria-label="Close">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
-      </button>
+      <!-- 4. Review and place -->
+      <section class="wiz-panel hidden" data-panel="review" aria-label="Review your order">
+        <dl class="rv">
+          <div><dt>Property</dt><dd><b id="rv-line1"></b><span id="rv-line2" class="hint"></span><span id="rv-pin" class="hint hidden">Using your pin location</span></dd><dd><button type="button" class="linkbtn" data-goto="address">Change</button></dd></div>
+          <div><dt>Report</dt><dd><b id="rv-report"></b><span id="rv-report-hint" class="hint"></span></dd><dd><button type="button" class="linkbtn" data-goto="report">Change</button></dd></div>
+        </dl>
+        <div class="od-guest hidden" id="od-guest">
+          <p class="od-account"><b>Have an account?</b> <a href="#" id="od-signin">Sign in</a> to order. <b>New here?</b> <a href="#" id="od-signup">Create a free account</a><span id="od-trial-clause"> and try a subscription free for <span id="od-trial-n">30</span> days: subscriber prices on every report</span>. Or order as a guest below.</p>
+          <h3>Order as a guest</h3>
+          <div class="grid-fields">
+            <div class="fld"><label for="og-name">Your name</label><input id="og-name" type="text" autocomplete="name"></div>
+            <div class="fld"><label for="og-email">Email for the report</label><input id="og-email" type="email" autocomplete="email" inputmode="email"></div>
+          </div>
+          <div class="fld"><label for="og-phone">Phone <span class="hint">(optional)</span></label><input id="og-phone" type="tel" autocomplete="tel"></div>
+        </div>
+        <div class="od-total"><span>Total</span><b id="od-total">—</b></div>
+        <p class="hint" id="od-note" style="margin: 0;"></p>
+        <p class="form-error hidden" id="od-error" role="alert"></p>
+      </section>
+
+      <!-- Done -->
+      <section class="wiz-panel wiz-done hidden" data-panel="done" aria-live="polite">
+        <span class="wiz-check" aria-hidden="true"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
+        <h2 id="done-title">Order placed</h2>
+        <p id="done-text" class="lede"></p>
+        <div class="actions" id="done-actions"></div>
+      </section>
     </div>
-    <fieldset class="report-opts">
-      <legend class="sr">Report type</legend>
-      <div id="od-options"><p class="hint">Loading report types…</p></div>
-    </fieldset>
-    <p class="od-trial hidden" id="od-trial">Get subscriber prices free for <span id="od-trial-days">30</span> days. <a href="account.html#billing" target="_top">Start your free trial</a></p>
-    <label class="perm" id="od-esx-row">
-      <input type="checkbox" id="od-esx">
-      <span class="esx-line"><b>Add Xactimate (ESX) file</b><span class="opt-price" id="od-esx-price">$5.00</span></span>
-    </label>
-    <div class="od-guest hidden" id="od-guest">
-      <p class="od-account"><b>Have an account?</b> <a href="#" id="od-signin">Sign in</a> to order. <b>New here?</b> <a href="#" id="od-signup">Create a free account</a><span id="od-trial-clause"> and try a subscription free for <span id="od-trial-n">30</span> days: subscriber prices on every report</span>. Or order as a guest below.</p>
-      <h3>Order as a guest</h3>
-      <div class="grid-fields">
-        <div class="fld"><label for="og-name">Your name</label><input id="og-name" type="text" autocomplete="name"></div>
-        <div class="fld"><label for="og-email">Email for the report</label><input id="og-email" type="email" autocomplete="email" inputmode="email"></div>
-      </div>
-      <div class="fld"><label for="og-phone">Phone <span class="hint">(optional)</span></label><input id="og-phone" type="tel" autocomplete="tel"></div>
-    </div>
-    <div class="od-total"><span>Total</span><b id="od-total">—</b></div>
-    <p class="hint" id="od-note" style="margin: 0;"></p>
-    <p class="form-error hidden" id="od-error" role="alert"></p>
-    <div class="actions modal-actions">
-      <button type="button" class="btn" id="od-cancel">Cancel</button>
-      <button type="submit" class="btn btn-primary" id="od-submit">Place order</button>
-    </div>
-  </form>
-</dialog>
+
+    <footer class="wiz-foot">
+      <button type="button" class="btn" id="wiz-back">Back</button>
+      <button type="button" class="btn btn-primary" id="wiz-next" disabled>Continue</button>
+    </footer>
+  </section>
+</main>
 
 <nav class="tabbar" aria-label="Primary (mobile)">
   <a href="orders.html"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-5h4v5"/></svg>Home</a>

@@ -125,9 +125,10 @@ create table if not exists public.products (
   sort                    integer not null default 0
 );
 insert into public.products (id, label, price_cents, subscriber_price_cents, esx_addon_allowed, available, delivery_minutes, sort) values
-  ('certified_residential', 'Certified Residential Rapid Squares',  800,  500, false, true,   30, 1),
+  ('certified_residential', 'Certified Residential Rapid Squares',  800,  500, false, false,  30, 1),
   ('premium_residential',   'Premium Residential Report',          1200,  800, true,  true,  120, 2),
   ('commercial',            'Commercial Report',                   3000, 2500, true,  true,  null, 3),
+  ('storm_report',          'Storm Report',                         500,  300, false, true,  0,    4),
   ('esx_addon',             'ESX file (Xactimate)',                 500,  500, false, true,  null, 9)
 on conflict (id) do update set
   label = excluded.label, price_cents = excluded.price_cents, subscriber_price_cents = excluded.subscriber_price_cents,
@@ -242,6 +243,8 @@ alter table public.report_orders add column if not exists esx_purchased_at      
 alter table public.report_orders add column if not exists esx_payment_id          text;
 alter table public.report_orders add column if not exists esx_receipt_url         text;
 alter table public.report_orders add column if not exists esx_checkout_session_id text;
+-- Storm Reports: date of loss, claim number, insured name and notes the customer entered.
+alter table public.report_orders add column if not exists order_details jsonb;
 create index if not exists report_orders_rq_retry_idx on public.report_orders (rq_next_try_at) where roofquery_order_id is null and rq_attempts > 0;
 do $$ begin
   alter table public.report_orders add constraint report_orders_owner_check check (company_id is not null or guest_email is not null);

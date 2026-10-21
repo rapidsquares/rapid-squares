@@ -16,10 +16,52 @@
 
   var ALL_PERMS = ['orders.create', 'orders.view_all', 'orders.download', 'branding.edit', 'billing.manage', 'users.manage'];
   var PRODUCTS = {
-    certified_residential: { label: 'Certified Residential Rapid Squares', price: 800, subscriber_price: 500, available: true, esx: false, delivery_minutes: 30 },
+    certified_residential: { label: 'Certified Residential Rapid Squares', price: 800, subscriber_price: 500, available: false, esx: false, delivery_minutes: 30 },
     premium_residential: { label: 'Premium Residential Report', price: 1200, subscriber_price: 800, available: true, esx: true, delivery_minutes: 120 },
-    commercial: { label: 'Commercial Report', price: 3000, subscriber_price: 2500, available: true, esx: true, delivery_minutes: null }
+    commercial: { label: 'Commercial Report', price: 3000, subscriber_price: 2500, available: true, esx: true, delivery_minutes: null },
+    storm_report: { label: 'Storm Report', price: 500, subscriber_price: 300, available: true, esx: false, delivery_minutes: 0 }
   };
+  // What a Storm Report looks like (sample data; a live one comes from RoofQuery).
+  var SAMPLE_STORM = {
+    headline: 'Sample data: hail was estimated at or within 1 mile of this property on 3 days since 2021, the largest 1.75\u2033 on Jun 11, 2023.',
+    damage_chance: 'medium', damage_reason: '1\u2033+ hail fell within 1 mile of the property.', period: { from: '2021-10-20', to: '2026-10-20', years: 5 }, county: 'Sample County', country: 'US',
+    storm_days: 21, hail_days: 6, wind_days: 11, tornado_days: 1, hail_days_near: 3,
+    largest_hail: { sizeIn: 1.75, sizeName: 'golf ball', date: '2023-06-11', where: 'within_1_mi', confidence: 'high' },
+    strongest_wind: { mph: 68, distanceMi: 2.4, source: 'measured_gust', date: '2024-04-02', confidence: 'medium' },
+    closest_tornado: { distanceMi: 4.1, date: '2024-04-02', efScale: 'EF1', confidence: 'medium' },
+    hail: [
+      { date: '2025-05-25', atPropertyIn: 0.75, within1MiIn: 1, within3MiIn: 1.25, within5MiIn: 1.5, confidence: 'high', damageChance: 'medium' },
+      { date: '2023-06-11', atPropertyIn: 1.25, within1MiIn: 1.75, within3MiIn: 2, within5MiIn: 2, confidence: 'high', damageChance: 'medium' },
+      { date: '2022-04-12', atPropertyIn: null, within1MiIn: 0.75, within3MiIn: 1, within5MiIn: 1.25, confidence: 'medium', damageChance: 'low' }
+    ],
+    wind: [
+      { date: '2024-04-02', within1MiMph: 55, within3MiMph: 68, within5MiMph: 72, tornado: { distanceMi: 4.1, efScale: 'EF1' }, confidence: 'medium', damageChance: 'low' },
+      { date: '2023-07-29', within1MiMph: 50, within3MiMph: 61, within5MiMph: 61, confidence: 'medium', damageChance: 'low' }
+    ],
+    days: [
+      { date: '2025-05-25', hazards: ['hail'], confidence: 'high', maxHailIn: 1.5, maxGustMph: 40, evidence: 'Radar estimated 0.75\u2033 hail over the parcel; 1\u2033 within 1 mile.' },
+      { date: '2024-04-02', hazards: ['wind', 'tornado'], confidence: 'medium', maxHailIn: null, maxGustMph: 72, evidence: '68 mph gust measured 2.4 mi away; EF1 tornado 4.1 mi away.' },
+      { date: '2023-06-11', hazards: ['hail'], confidence: 'high', maxHailIn: 2, maxGustMph: 45, evidence: 'Radar estimated 1.25\u2033 hail over the parcel; 1.75\u2033 ground report within 1 mile.' }
+    ],
+    has_map: false, nothing_found: false
+  };
+  var STORM_DOCS = { weather_history: 'Weather History', hail_verification: 'Hail Verification', wind_verification: 'Wind Verification', date_of_loss: 'Date of Loss', homeowner: 'Homeowner Storm Summary' };
+  function stormDocs() {
+    return Object.keys(STORM_DOCS).map(function (t) { return { template: t, title: STORM_DOCS[t], needs_date_of_loss: t === 'date_of_loss' }; });
+  }
+  // A PDF's details, asked at download. Same checks as the server: optional, date of loss not in the future.
+  function stormDetails(b) {
+    var s = b || {}, out = {};
+    if (str(s.date_of_loss)) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(str(s.date_of_loss))) fail(422, 'invalid', 'Enter the date of loss as a date, like 2025-05-25.');
+      if (new Date(str(s.date_of_loss) + 'T12:00:00Z').getTime() > Date.now() + DAY) fail(422, 'invalid', 'The date of loss can\u2019t be in the future.');
+      out.date_of_loss = str(s.date_of_loss);
+    }
+    if (str(s.claim)) out.claim = str(s.claim, 64);
+    if (str(s.insured_name)) out.insured_name = str(s.insured_name, 120);
+    if (str(s.notes)) out.notes = str(s.notes, 450);
+    return out;
+  }
   var ESX_PRICE = 500;
 
   // ---------- storage (falls back to memory if the browser blocks localStorage) ----------
@@ -136,8 +178,9 @@
     out.product_label = p.label;
     out.ordered_by_name = by ? by.full_name : 'Former team member';
     out.esx_available = o.status === 'delivered' && !o.esx_purchased && !!p.esx;
+    if (o.report_type === 'storm_report' && o.status === 'delivered') out.documents = stormDocs();
     if (o.status === 'pending' || o.status === 'in_progress') {
-      var mins = p.delivery_minutes || 120;
+      var mins = p.delivery_minutes != null ? p.delivery_minutes : 120;
       out.eta = iso(new Date(o.created_at).getTime() + mins * MIN);
     }
     return out;
@@ -260,6 +303,7 @@
     var subscribed = c.db.company.subscription && c.db.company.subscription.status === 'active';
     var free = c.db.company.free_reports_remaining > 0 && type === 'premium_residential';
     if (b.esx && !p.esx) fail(422, 'invalid', 'The ESX file isn’t available for ' + p.label + '.');
+    var storm = type === 'storm_report';
     // A free report covers the Premium report, including the ESX add-on.
     var price = free ? 0 : (subscribed ? p.subscriber_price : p.price) + (b.esx ? ESX_PRICE : 0);
     if (free) c.db.company.free_reports_remaining -= 1;
@@ -268,8 +312,14 @@
       id: 'ord_' + n, report_number: 'RS-' + n, company_id: c.db.company.id, ordered_by: c.me.id, report_type: type,
       address: str(b.address, 300), lat: b.lat, lon: b.lon, status: 'pending', price_cents: price, esx_purchased: !!b.esx,
       stripe_payment_id: price ? 'pi_sample_' + n : null, roofquery_order_id: 'rq_sample_' + n,
-      total_squares: null, predominant_pitch: null, measurements: null, created_at: iso(Date.now()), completed_at: null, simulate: true
+      total_squares: null, predominant_pitch: null, measurements: null, created_at: iso(Date.now()), completed_at: null, simulate: true,
+      order_details: null
     };
+    // Storm Reports come back finished straight away.
+    if (storm) {
+      o.status = 'delivered'; o.simulate = false; o.completed_at = o.created_at;
+      o.measurements = { storm: SAMPLE_STORM };
+    }
     c.db.orders.push(o); save(c.db);
     // Real backend: charges the saved card (or returns a checkout link) and places the RoofQuery order.
     return { order: orderOut(c.db, o), checkout_url: null, charged_cents: price, used_free_report: free };
@@ -278,6 +328,20 @@
     return function (c) { findOrder(c); need(c.me, 'orders.download'); fail(501, 'not_connected', what + ' will download once RoofQuery is connected. This is sample data.'); };
   }
   route('GET', '/api/orders/:id/pdf', notYet('The PDF report'));
+  route('GET', '/api/orders/:id/storm', function (c) {
+    advance(c.db);
+    var o = findOrder(c);
+    if (o.report_type !== 'storm_report') fail(404, 'not_found', 'That isn\u2019t a storm report.');
+    return { order: orderOut(c.db, o), storm: (o.measurements && o.measurements.storm) || SAMPLE_STORM, details: o.order_details || {}, can_download: permsOf(c.me).indexOf('orders.download') !== -1, map_url: null };
+  });
+  route('POST', '/api/orders/:id/storm/:template', function (c) {
+    var o = findOrder(c); need(c.me, 'orders.download');
+    if (!STORM_DOCS[c.params.template]) fail(404, 'not_found', 'That PDF isn\u2019t part of a storm report.');
+    var d = stormDetails(c.body);
+    if (c.params.template === 'date_of_loss' && !d.date_of_loss) fail(422, 'needs_date_of_loss', 'Enter the date of loss for this PDF.');
+    if (c.params.template !== 'homeowner') { o.order_details = d; save(c.db); }
+    fail(501, 'not_connected', 'Your details are saved. The ' + STORM_DOCS[c.params.template] + ' PDF will download once RoofQuery is connected. This is sample data.');
+  });
   route('GET', '/api/orders/:id/esx', notYet('The Xactimate (ESX) file'));
   // Instant Squares (sample): two buildings drawn around the pin, plus a storm history.
   route('POST', '/api/instant-query', function (c) {

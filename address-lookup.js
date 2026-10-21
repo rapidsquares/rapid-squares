@@ -1,8 +1,8 @@
-// Rapid Squares — address lookup + aerial view (Azure Maps)
+// Rapid Squares — order a report, step by step: address → report type → confirm the roof → review and place.
 //
-// Flow: type an address → suggestions from Azure Maps Autocomplete →
-// pick one (or press Look up) → Azure Maps Geocoding gives the coordinates →
-// the Azure Maps Web SDK shows satellite imagery centred on the roof.
+// Address: type an address → suggestions from Azure Maps Autocomplete → pick one (or press Look up)
+// → Azure Maps Geocoding gives the coordinates. The roof step shows satellite imagery (Azure Maps Web SDK)
+// with a pin that can be dragged onto the right roof.
 //
 // APIs used (Search 2026-01-01, Web SDK v3):
 //   GET https://atlas.microsoft.com/geocode:autocomplete
@@ -27,6 +27,7 @@
   var $ = function (id) { return document.getElementById(id); };
   var form = $('lookup-form'), input = $('addr'), list = $('suggestions'), status = $('lookup-status');
   var mapEl = $('map'), mapEmpty = $('map-empty');
+  var step = 'address';
   var selected = null, suggestions = [], active = -1, debounce = null, reqId = 0;
   var map = null, marker = null, sdkPromise = null;
 
@@ -227,21 +228,15 @@
   function show(p) {
     selected = p;
     p.found = { lat: p.lat, lon: p.lon }; // where the address lookup put it; the pin can be moved from here
-    $('sel-empty').classList.add('hidden');
-    $('sel-details').classList.remove('hidden');
-    $('order-bar').classList.remove('hidden');
-    $('ob-line1').textContent = p.line1 || p.label;
-    $('ob-line2').textContent = p.line2 || '';
-    $('sel-line1').textContent = p.line1 || p.label;
-    $('sel-line2').textContent = p.line2 || '';
-    $('sel-lat').textContent = p.lat.toFixed(6);
-    $('sel-lon').textContent = p.lon.toFixed(6);
-    $('sel-conf').textContent = p.confidence ? p.confidence + ' confidence' : '—';
+    $('addr-picked').classList.remove('hidden');
+    $('ap-line1').textContent = p.line1 || p.label;
+    $('ap-line2').textContent = p.line2 || '';
+    say('Selected ' + p.label + '.');
+    if (marker) marker.setOptions({ position: [p.lon, p.lat] });
+    if (map) map.setCamera({ center: [p.lon, p.lat], zoom: ZOOM });
     showPin();
-    iqReset();
-    $('order-msg').classList.add('hidden');
-    say('Showing aerial view of ' + p.label + '.');
-    showOnMap(p).catch(function () { say('Found the address, but the aerial view couldn’t load.', true); });
+    refresh();
+    if (step === 'address') goTo('report'); // picking an address moves straight on
   }
 
   // ---------- Azure Maps Web SDK ----------
@@ -258,10 +253,11 @@
     return sdkPromise;
   }
 
+  // The map is made the first time the roof step opens (it needs to be visible to size itself).
   function showOnMap(p) {
+    if (!KEY) { mapEmpty.querySelector('b').textContent = 'The aerial view needs an Azure Maps key in config.js.'; return Promise.resolve(); }
     return loadSdk().then(function (atlas) {
       mapEmpty.classList.add('hidden');
-      $('pin-tip').classList.remove('hidden');
       var pos = [p.lon, p.lat];
       if (!map) {
         map = new atlas.Map(mapEl, {
@@ -281,10 +277,11 @@
           map.events.add('click', function (e) { if (e.position) { marker.setOptions({ position: e.position }); movePin(e.position[1], e.position[0]); } });
         });
       } else {
-        map.setCamera({ center: pos, zoom: ZOOM, type: 'fly', duration: 900 });
+        map.resize();
+        map.setCamera({ center: pos, zoom: ZOOM });
         if (marker) marker.setOptions({ position: pos });
       }
-    });
+    }).catch(function () { mapEmpty.classList.remove('hidden'); mapEmpty.querySelector('b').textContent = 'The aerial view couldn’t load. You can still continue.'; });
   }
 
   $('recenter-btn').addEventListener('click', function () {
@@ -301,18 +298,13 @@
     if (!selected) return;
     selected.lat = Math.round(lat * 1e7) / 1e7; selected.lon = Math.round(lon * 1e7) / 1e7;
     showPin();
-    iqStale();
-    say('Pin moved. The report will be ordered for the roof under the pin.');
   }
+  function moved() { var p = selected; return !!(p && p.found && (p.lat !== p.found.lat || p.lon !== p.found.lon)); }
   function showPin() {
     var p = selected; if (!p) return;
-    $('sel-lat').textContent = p.lat.toFixed(6);
-    $('sel-lon').textContent = p.lon.toFixed(6);
-    var moved = p.found && (p.lat !== p.found.lat || p.lon !== p.found.lon);
-    var far = moved ? metersBetween(p.found, p) : 0;
-    $('pin-moved').classList.toggle('hidden', !moved);
-    $('pin-reset').classList.toggle('hidden', !moved);
-    $('ob-pin').classList.toggle('hidden', !moved);
+    var far = moved() ? metersBetween(p.found, p) : 0;
+    $('pin-moved').classList.toggle('hidden', !moved());
+    $('pin-reset').classList.toggle('hidden', !moved());
     var warn = $('pin-warn');
     warn.classList.toggle('hidden', far <= 150);
     if (far > 150) warn.textContent = 'The pin is ' + (far >= 1000 ? (far / 1609.34).toFixed(1) + ' mi' : Math.round(far * 3.281) + ' ft') + ' from the address. Make sure it’s on the right roof.';
@@ -323,11 +315,63 @@
     if (marker) marker.setOptions({ position: [selected.lon, selected.lat] });
     if (map) map.setCamera({ center: [selected.lon, selected.lat], type: 'ease', duration: 400 });
     showPin();
-    iqStale();
-    say('Pin back on the address.');
   });
-  // ---------- Ordering: pick a report type in a pop-up, then place the order ----------
-  var dlg = $('order-dialog'), catalog = null, preselect = null;
+
+  // ---------- Steps ----------
+  var STEPS = ['address', 'report', 'location', 'review'];
+  var TITLES = { address: 'Find the property', report: 'Choose a report', location: 'Confirm the roof', review: 'Review and place order', done: 'Order placed' };
+  var wiz = $('wiz'), nextBtn = $('wiz-next'), backBtn = $('wiz-back');
+  function goTo(to) {
+    if (to !== 'address' && !selected) to = 'address';
+    if ((to === 'location' || to === 'review') && !current()) to = 'report';
+    step = to;
+    wiz.querySelectorAll('[data-panel]').forEach(function (p) { p.classList.toggle('hidden', p.getAttribute('data-panel') !== to); });
+    var at = STEPS.indexOf(to);
+    wiz.querySelectorAll('.wiz-steps li').forEach(function (li, i) {
+      li.classList.toggle('done', to === 'done' || i < at);
+      if (i === at) li.setAttribute('aria-current', 'step'); else li.removeAttribute('aria-current');
+    });
+    var storm = isStorm();
+    $('wiz-title').textContent = to === 'location' && storm ? 'Confirm the property' : TITLES[to];
+    wiz.querySelector('.wiz-foot').classList.toggle('hidden', to === 'done');
+    if (to === 'report') { wiz.querySelector('.wiz-addr').textContent = selected.label; loadCatalog().then(renderOptions).catch(catalogFailed); }
+    if (to === 'location') { $('loc-what').textContent = storm ? 'property' : 'roof'; showOnMap(selected); }
+    if (to === 'review') fillReview();
+    wiz.querySelector('.wiz-body').scrollTop = 0;
+    refresh();
+    if (to === 'address') input.focus();
+  }
+  // Footer buttons follow the step: what "Continue" says, and whether it can be pressed yet.
+  function refresh() {
+    backBtn.classList.toggle('invisible', step === 'address');
+    var p = current();
+    if (step === 'address') { nextBtn.textContent = 'Continue'; nextBtn.disabled = !selected; }
+    else if (step === 'report') { nextBtn.textContent = 'Continue'; nextBtn.disabled = !p; }
+    else if (step === 'location') { nextBtn.textContent = isStorm() ? 'This is the property' : 'This is the roof'; nextBtn.disabled = false; }
+    else if (step === 'review') {
+      var t = total();
+      nextBtn.textContent = RS.guest ? (t ? 'Pay ' + money(t) : 'Place guest order') : (t ? 'Place order · ' + money(t) : 'Place order');
+      nextBtn.disabled = !p || busyNow;
+    }
+  }
+  nextBtn.addEventListener('click', function () {
+    if (step === 'address') goTo('report');
+    else if (step === 'report') goTo('location');
+    else if (step === 'location') goTo('review');
+    else if (step === 'review') placeOrder();
+  });
+  backBtn.addEventListener('click', function () { var i = STEPS.indexOf(step); if (i > 0) goTo(STEPS[i - 1]); });
+  wiz.querySelectorAll('[data-goto]').forEach(function (b) { b.addEventListener('click', function () { goTo(b.getAttribute('data-goto')); }); });
+  // Inside the pop-up on Home, the close button and Escape close the pop-up.
+  function closePopup() { if (window.parent !== window) window.parent.postMessage({ type: 'rs:close' }, location.origin); }
+  if (RS.embed) {
+    $('wiz-close').classList.remove('hidden');
+    $('wiz-close').addEventListener('click', closePopup);
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && list.classList.contains('hidden')) closePopup(); });
+  }
+
+  // ---------- Report types ----------
+  var catalog = null, preselect = null, busyNow = false;
   function money(c) { return '$' + (c / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
   // What this company pays for a product right now (server re-checks everything).
   function priceFor(p) {
@@ -339,180 +383,154 @@
     if (catalog) return Promise.resolve(catalog);
     return RS.api.get(RS.guest ? '/api/public/products' : '/api/products').then(function (r) { catalog = r; return r; });
   }
+  function catalogFailed(err) {
+    $('od-options').innerHTML = '';
+    var e = el('p', 'form-error', (err && err.message) || 'Couldn’t load the report types. Try again.');
+    $('od-options').appendChild(e);
+  }
   function el(tag, cls, text) { var n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; }
 
-  // Extra details shown in each report's drop-down (Certified has none until it's available).
-  var DETAILS = {
-    premium_residential: ['Full report with PDF and full sketch', 'Delivery in under 2 hours'],
-    commercial: []
+  // One line under each report's name.
+  var BLURB = {
+    storm_report: 'Hail, wind and tornado history for the last 5 years. 5 PDFs, ready in seconds.',
+    certified_residential: 'Certified roof squares and pitch. About 30 minutes.',
+    premium_residential: 'Full measurement report with the roof sketch. Under 2 hours.',
+    commercial: 'Every building on the property measured.'
   };
+  var ORDER = ['storm_report', 'certified_residential', 'premium_residential', 'commercial'];
   function renderOptions() {
-    var box = $('od-options'); box.innerHTML = '';
-    var firstOpen = null;
-    catalog.products.forEach(function (p) {
-      var card = el('div', 'opt-card' + (p.available ? '' : ' off'));
-      var row = el('label', 'opt');
-      var input = document.createElement('input');
-      input.type = 'radio'; input.name = 'report_type'; input.value = p.id; input.disabled = !p.available;
-      if (p.available && !firstOpen) firstOpen = input;
+    var box = $('od-options'), had = current(); box.innerHTML = '';
+    // Ones that can be ordered first; "Coming soon" ones last.
+    var list = catalog.products.slice().sort(function (a, b) { return (b.available - a.available) || (ORDER.indexOf(a.id) - ORDER.indexOf(b.id)); });
+    list.forEach(function (p) {
+      var card = el('label', 'opt-card opt' + (p.available ? '' : ' off'));
+      var radio = document.createElement('input');
+      radio.type = 'radio'; radio.name = 'report_type'; radio.value = p.id; radio.disabled = !p.available;
       var main = el('span', 'opt-main'), top = el('span', 'opt-top'), name = el('b', null, p.label);
       var free = p.id === 'premium_residential' && catalog.free_reports_remaining > 0 && p.available;
       if (!p.available) name.appendChild(el('span', 'opt-tag', 'Coming soon'));
       else if (free) name.appendChild(el('span', 'opt-tag free', catalog.free_reports_remaining + ' free left'));
-      var price = el('span', 'opt-price');
-      var now = el('span', 'opt-now');
+      var price = el('span', 'opt-price'), now = el('span', 'opt-now');
       if (free) { now.appendChild(el('s', null, money(catalog.subscribed ? p.subscriber_price_cents : p.price_cents))); now.appendChild(document.createTextNode('Free')); }
       else now.textContent = money(priceFor(p));
       price.appendChild(now);
       // Subscribers see only their price; everyone else also sees what a subscription would cost.
-      if (!catalog.subscribed) price.appendChild(el('span', 'opt-sub', money(p.subscriber_price_cents) + ' with subscription'));
+      if (!catalog.subscribed && !free) price.appendChild(el('span', 'opt-sub', money(p.subscriber_price_cents) + ' with subscription'));
       top.appendChild(name); top.appendChild(price);
       main.appendChild(top);
-      if (!p.available) main.appendChild(el('span', 'hint', 'Not available to order yet'));
-      else if (p.id === 'premium_residential') main.appendChild(el('span', 'hint', 'Delivered in under 2 hours'));
-      row.appendChild(input); row.appendChild(main);
-      card.appendChild(row);
-
-      if (p.available && DETAILS[p.id]) {
-        var id = 'opt-more-' + p.id;
-        var btn = el('button', 'opt-more');
-        btn.type = 'button'; btn.setAttribute('aria-expanded', 'false'); btn.setAttribute('aria-controls', id);
-        btn.innerHTML = '<span>More info</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
-        var panel = el('div', 'opt-details'); panel.id = id; panel.hidden = true;
-        var ul = el('ul');
-        DETAILS[p.id].forEach(function (t) { ul.appendChild(el('li', null, t)); });
-        if (ul.children.length) panel.appendChild(ul);
-        else panel.appendChild(el('p', 'hint', 'More details coming soon.'));
-        btn.addEventListener('click', function () {
-          var open = btn.getAttribute('aria-expanded') !== 'true';
-          btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-          btn.firstChild.textContent = open ? 'Less info' : 'More info';
-          panel.hidden = !open;
-        });
-        card.appendChild(btn); card.appendChild(panel);
-      }
+      main.appendChild(el('span', 'hint', p.available ? (BLURB[p.id] || '') : 'Not available to order yet'));
+      card.appendChild(radio); card.appendChild(main);
       box.appendChild(card);
     });
-    if (firstOpen) {
-      var want = preselect && preselect.report_type;
-      var pref = (want && box.querySelector('input[value="' + want + '"]:not([disabled])')) || box.querySelector('input[value="premium_residential"]:not([disabled])');
-      (pref || firstOpen).checked = true;
-    }
+    var want = (preselect && preselect.report_type) || (had && had.id);
+    var pick = want && box.querySelector('input[value="' + want + '"]:not([disabled])');
+    if (pick) pick.checked = true;
     // Free trial: shown to visitors (as a reason to sign up) and to companies that haven't used theirs.
     var days = catalog.trial_days || 0;
     $('od-trial-n').textContent = days; $('od-trial-days').textContent = days;
     $('od-trial-clause').classList.toggle('hidden', !days);
     $('od-trial').classList.toggle('hidden', !(days && catalog.trial_eligible && !catalog.subscribed && !RS.guest));
     $('od-esx-price').textContent = money(catalog.esx_price_cents);
-    updateTotal();
-    if (preselect && preselect.esx && !$('od-esx').disabled) { $('od-esx').checked = true; updateTotal(); }
+    if (preselect && preselect.esx) $('od-esx').checked = true;
     preselect = null;
+    updateEsx();
   }
   function current() {
-    var r = dlg.querySelector('input[name="report_type"]:checked');
+    var r = wiz.querySelector('input[name="report_type"]:checked');
     return r && catalog ? catalog.products.filter(function (p) { return p.id === r.value; })[0] : null;
   }
-  function updateTotal() {
-    var p = current(), esx = $('od-esx'), row = $('od-esx-row');
-    var allowed = !!(p && p.esx_addon_allowed);
+  function isStorm() { var p = current(); return !!(p && p.id === 'storm_report'); }
+  function updateEsx() {
+    var p = current(), esx = $('od-esx'), allowed = !!(p && p.esx_addon_allowed);
     esx.disabled = !allowed; if (!allowed) esx.checked = false;
-    row.classList.toggle('off', !allowed);
-    var usesFree = !!(p && p.id === 'premium_residential' && catalog.free_reports_remaining > 0);
-    var total = !p || usesFree ? 0 : priceFor(p) + (esx.checked ? catalog.esx_price_cents : 0);
-    $('od-total').textContent = p ? money(total) : '—';
-    $('od-submit').disabled = !p;
-    var note = '';
-    if (usesFree) note = 'Uses 1 of your free reports' + (esx.checked ? ', ESX file included.' : '.');
-    else if (p && total > 0) note = RS.guest ? 'You’ll pay on Stripe’s secure page when you place the order.' : (catalog.has_card === false ? 'You’ll add your card on Stripe’s secure page; it’s saved for next time.' : 'Charged to the card on file when you place the order.');
-    $('od-note').textContent = note;
+    $('od-esx-row').classList.toggle('hidden', !allowed);
+    refresh();
   }
-  function closeDialog() { if (dlg.open) dlg.close(); }
+  function usesFree() { var p = current(); return !!(p && p.id === 'premium_residential' && catalog.free_reports_remaining > 0); }
+  function total() {
+    var p = current();
+    return !p || usesFree() ? 0 : priceFor(p) + ($('od-esx').checked ? catalog.esx_price_cents : 0);
+  }
+  $('od-options').addEventListener('change', updateEsx);
+  $('od-esx').addEventListener('change', refresh);
 
-  $('order-btn').addEventListener('click', function () {
-    if (!selected) return;
-    if (!window.RS || !RS.api) { var m0 = $('order-msg'); m0.textContent = 'Ordering isn’t available on this page.'; m0.classList.remove('hidden'); return; }
-    $('od-address').textContent = selected.label;
-    $('od-error').classList.add('hidden');
-    if (!preselect) $('od-esx').checked = false;
+  // ---------- Review ----------
+  function fillReview() {
+    var p = current(), t = total();
+    $('rv-line1').textContent = selected.line1 || selected.label;
+    $('rv-line2').textContent = selected.line2 || '';
+    $('rv-pin').classList.toggle('hidden', !moved());
+    $('rv-report').textContent = p.label + ($('od-esx').checked ? ' + ESX file' : '');
+    $('rv-report-hint').textContent = BLURB[p.id] || '';
     $('od-guest').classList.toggle('hidden', !RS.guest);
-    $('od-submit').textContent = RS.guest ? 'Place guest order' : 'Place order';
-    dlg.showModal();
-    loadCatalog().then(renderOptions).catch(function (err) {
-      $('od-options').innerHTML = '';
-      $('od-error').textContent = (err && err.message) || 'Couldn’t load the report types. Try again.';
-      $('od-error').classList.remove('hidden');
-    });
-  });
-  $('od-options').addEventListener('change', updateTotal);
-  $('od-esx').addEventListener('change', updateTotal);
-  $('od-close').addEventListener('click', closeDialog);
-  $('od-cancel').addEventListener('click', closeDialog);
-  dlg.addEventListener('click', function (e) { if (e.target === dlg) closeDialog(); }); // click on the dimmed backdrop
+    $('od-total').textContent = money(t);
+    var note = '';
+    if (usesFree()) note = 'Uses 1 of your free reports' + ($('od-esx').checked ? ', ESX file included.' : '.');
+    else if (t > 0) note = RS.guest ? 'You’ll pay on Stripe’s secure page next.' : (catalog.has_card === false ? 'You’ll add your card on Stripe’s secure page; it’s saved for next time.' : 'Charged to the card on file when you place the order.');
+    $('od-note').textContent = note;
+    $('od-error').classList.add('hidden');
+  }
+  function showError(msg, field) {
+    var err = $('od-error'); err.textContent = msg; err.classList.remove('hidden');
+    if (field) $(field).focus(); else err.scrollIntoView({ block: 'nearest' });
+  }
 
-  $('order-form').addEventListener('submit', function (e) {
-    e.preventDefault();
-    var p = current(); if (!p || !selected) return;
-    var btn = $('od-submit'), err = $('od-error'), place = selected, esx = $('od-esx').checked;
-    if (RS.guest) { placeGuestOrder(p, esx); return; }
-    btn.disabled = true; btn.setAttribute('aria-busy', 'true'); err.classList.add('hidden');
-    RS.api.post('/api/orders', { address: place.label, parts: place.parts, lat: place.lat, lon: place.lon, report_type: p.id, esx: esx })
+  // ---------- Placing the order ----------
+  function placeOrder() {
+    var p = current(); if (!p || !selected || busyNow) return;
+    if (!window.RS || !RS.api) { showError('Ordering isn’t available on this page.'); return; }
+    var place = selected, esx = $('od-esx').checked;
+    var body = { address: place.label, parts: place.parts, lat: place.lat, lon: place.lon, report_type: p.id, esx: esx };
+    if (RS.guest) {
+      body.name = $('og-name').value.trim(); body.email = $('og-email').value.trim(); body.phone = $('og-phone').value.trim();
+      if (!body.name) { showError('Enter your name.', 'og-name'); return; }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email)) { showError('Enter the email address where we should send the report.', 'og-email'); return; }
+    }
+    busyNow = true; nextBtn.setAttribute('aria-busy', 'true'); $('od-error').classList.add('hidden'); refresh();
+    nextBtn.textContent = isStorm() ? 'Getting the storm history…' : 'Placing order…';
+    RS.api.post(RS.guest ? '/api/guest-orders' : '/api/orders', body)
       .then(function (r) {
         if (r.checkout_url) { goToPayment(r.checkout_url); return; }
         catalog = null; // free-report count may have changed
-        closeDialog();
-        var o = r.order, m = $('order-msg');
-        if (RS.embed && window.parent !== window) { window.parent.postMessage({ type: 'rs:ordered', report_number: o.report_number, label: o.product_label + (o.esx_purchased ? ' + ESX' : '') + ' for ' + place.label }, location.origin); return; }
-        var paid = r.used_free_report ? 'Used 1 free report.' : (r.charged_cents ? money(r.charged_cents) + ' charged to the card on file.' : '');
-        m.classList.remove('hidden', 'error');
-        m.innerHTML = '';
-        m.appendChild(document.createTextNode('Ordered ' + o.report_number + ' · ' + o.product_label + (o.esx_purchased ? ' + ESX' : '') + ' for ' + place.label + '. ' + paid + ' '));
-        var a = document.createElement('a'); a.href = 'orders.html'; a.textContent = 'Track it on Home';
-        m.appendChild(a);
+        var o = r.order, label = o.product_label + (o.esx_purchased ? ' + ESX' : '');
+        if (RS.embed && window.parent !== window) { window.parent.postMessage({ type: 'rs:ordered', report_number: o.report_number, label: label + ' for ' + place.label, ready: o.status === 'delivered' }, location.origin); }
+        done(o, r, label, place);
       })
-      .catch(function (x) {
-        err.textContent = (x && x.message) || 'The order didn’t go through. Try again.';
-        err.classList.remove('hidden');
-      })
-      .then(function () { btn.disabled = false; btn.setAttribute('aria-busy', 'false'); });
-  });
+      .catch(function (x) { showError((x && x.message) || 'The order didn’t go through. Try again.'); })
+      .then(function () { busyNow = false; nextBtn.setAttribute('aria-busy', 'false'); refresh(); });
+  }
+  function done(o, r, label, place) {
+    var ready = o.status === 'delivered';
+    $('done-title').textContent = ready ? 'Your storm report is ready' : RS.guest ? 'Order received' : 'Order placed';
+    var paid = r.used_free_report ? ' Used 1 free report.' : (r.charged_cents ? ' ' + money(r.charged_cents) + ' charged to the card on file.' : '');
+    $('done-text').textContent = o.report_number + ' · ' + label + ' for ' + place.label + '.' + (RS.guest ? ' We’ll email the report to ' + r.email + '.' : paid);
+    var acts = $('done-actions'); acts.innerHTML = '';
+    function link(text, href, cls) { var a = el('a', 'btn' + (cls ? ' ' + cls : ''), text); a.href = href; a.target = '_top'; acts.appendChild(a); }
+    if (RS.guest) link('Create a free account to track orders', 'signin.html?step=signup&next=orders.html', 'btn-primary');
+    else if (ready) link('View storm report', 'storm-report.html?id=' + encodeURIComponent(o.id), 'btn-primary');
+    else if (RS.embed) { var close = el('button', 'btn btn-primary', 'Done'); close.type = 'button'; close.addEventListener('click', closePopup); acts.appendChild(close); }
+    else link('Track it on Home', 'orders.html', 'btn-primary');
+    var again = el('button', 'btn', 'Order another'); again.type = 'button';
+    again.addEventListener('click', function () { location.replace(location.pathname + (RS.embed ? '?embed=1' : '')); });
+    acts.appendChild(again);
+    goTo('done');
+  }
 
   // Stripe's payment page can't open inside the Home order pop-up, so leave the whole page.
   function goToPayment(url) {
-    var btn = $('od-submit'); btn.textContent = 'Opening secure payment\u2026';
+    nextBtn.textContent = 'Opening secure payment…';
     try { (RS.embed && window.top !== window ? window.top : window).location.href = url; } catch (_) { location.href = url; }
   }
   // Back from Stripe after a guest payment.
   (function () {
     var q = new URLSearchParams(location.search);
     if (!q.get('paid') && !q.get('unpaid')) return;
-    var text = q.get('paid') ? 'Payment received for ' + q.get('paid') + '. We\u2019ll email your report when it\u2019s ready.' : 'Payment wasn\u2019t finished, so ' + q.get('unpaid') + ' wasn\u2019t placed.';
+    var text = q.get('paid') ? 'Payment received for ' + q.get('paid') + '. We’ll email your report when it’s ready.' : 'Payment wasn’t finished, so ' + q.get('unpaid') + ' wasn’t placed.';
     if (RS.ui) RS.ui.toast(text, { error: !!q.get('unpaid') }); else say(text, !!q.get('unpaid'));
     history.replaceState(null, '', location.pathname);
   })();
 
-  // ---------- visitors without an account ----------
-  function placeGuestOrder(p, esx) {
-    var btn = $('od-submit'), err = $('od-error'), place = selected;
-    var name = $('og-name').value.trim(), email = $('og-email').value.trim();
-    if (!name) { err.textContent = 'Enter your name.'; err.classList.remove('hidden'); $('og-name').focus(); return; }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { err.textContent = 'Enter the email address where we should send the report.'; err.classList.remove('hidden'); $('og-email').focus(); return; }
-    btn.disabled = true; btn.setAttribute('aria-busy', 'true'); err.classList.add('hidden');
-    RS.api.post('/api/guest-orders', { address: place.label, parts: place.parts, lat: place.lat, lon: place.lon, report_type: p.id, esx: esx, name: name, email: email, phone: $('og-phone').value.trim() })
-      .then(function (r) {
-        if (r.checkout_url) { goToPayment(r.checkout_url); return; }
-        closeDialog();
-        var o = r.order, m = $('order-msg');
-        m.classList.remove('hidden', 'error');
-        m.innerHTML = '';
-        m.appendChild(document.createTextNode('Order ' + o.report_number + ' received · ' + o.product_label + (o.esx_purchased ? ' + ESX' : '') + ' for ' + place.label + ' · ' + money(o.price_cents) + '. We’ll email the report to ' + r.email + '. '));
-        var a = document.createElement('a'); a.href = 'signin.html?step=signup&next=new-sketch.html'; a.textContent = 'Create a free account to track orders';
-        m.appendChild(a);
-      })
-      .catch(function (x) { err.textContent = (x && x.message) || 'The order didn’t go through. Try again.'; err.classList.remove('hidden'); })
-      .then(function () { btn.disabled = false; btn.setAttribute('aria-busy', 'false'); });
-  }
-
-  // "Sign in" / "Create a free account" from the pop-up: remember the order, then come back to it.
+  // "Sign in" / "Create a free account" from the review step: remember the order, then come back to it.
   var PENDING = 'rs.pendingOrder';
   function savePending() {
     var p = current();
@@ -526,139 +544,15 @@
     try { saved = JSON.parse(localStorage.getItem(PENDING)); localStorage.removeItem(PENDING); } catch (_) { /* nothing saved */ }
     if (!saved || !saved.place || Date.now() - saved.at > 2 * 3600 * 1000) return;
     input.value = saved.place.label;
-    show(saved.place);
     preselect = saved;
-    $('od-esx').checked = false;
-    $('order-btn').click();
+    step = 'resume'; // don't auto-advance from show()
+    show(saved.place);
+    loadCatalog().then(function () { renderOptions(); goTo(current() ? 'review' : 'report'); }).catch(function () { goTo('report'); });
   }
   if (/[?&]resume=1/.test(location.search) && !RS.guest) document.addEventListener('rs:ready', resumePending, { once: true });
 
-  // ---------- Instant Squares (RoofQuery Instant Query): subscribers only ----------
-  var iq = { mode: 'off', result: null, at: null, source: null }; // mode: off (guest) · locked · on
-  var iqBtn = $('iq-btn'), iqPanel = $('iq-panel');
-  function iqInit() {
-    if (RS.guest || !RS.api) return;
-    loadCatalog().then(function (c) {
-      iq.mode = c.subscribed ? 'on' : 'locked';
-      iqBtn.classList.remove('hidden');
-      iqBtn.classList.toggle('iq-locked', iq.mode === 'locked');
-      $('iq-btn-text').textContent = iq.mode === 'on' ? 'Instant Squares' : 'Instant Squares \u00b7 Subscribers';
-    }).catch(function () { /* the button simply stays hidden */ });
-  }
-  if (window.RS && RS.me) iqInit(); else document.addEventListener('rs:ready', iqInit, { once: true });
-
-  function iqEl(tag, cls, text) { var n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; }
-  function iqReset() { iq.result = null; iqPanel.classList.add('hidden'); iqPanel.innerHTML = ''; iqDraw(null); }
-  function iqStale() {
-    if (!iq.result || iqPanel.classList.contains('hidden')) return;
-    var note = iqPanel.querySelector('.iq-stale');
-    if (!note) {
-      note = iqEl('p', 'iq-stale'); note.appendChild(document.createTextNode('You moved the pin. '));
-      var again = iqEl('button', 'linkbtn', 'Update the estimate'); again.type = 'button'; again.addEventListener('click', iqRun);
-      note.appendChild(again); iqPanel.insertBefore(note, iqPanel.children[1] || null);
-    }
-  }
-  function iqUpsell() {
-    iqPanel.innerHTML = '';
-    var head = iqEl('div', 'iq-head'); var h = iqEl('h2', null, 'Instant Squares'); h.id = 'iq-h'; head.appendChild(h); head.appendChild(iqEl('span', 'iq-tag', 'Subscribers'));
-    iqPanel.appendChild(head);
-    iqPanel.appendChild(iqEl('p', 'hint', 'See roof area, pitch and 5 years of storm history in seconds, before you order. Included with a subscription.'));
-    var foot = iqEl('div', 'iq-foot');
-    var days = catalog && catalog.trial_eligible && catalog.trial_days;
-    var a = iqEl('a', 'btn btn-primary', days ? 'Start your ' + days + '-day free trial' : 'See subscription plans');
-    a.href = 'account.html#billing'; a.target = '_top';
-    foot.appendChild(a); iqPanel.appendChild(foot);
-    iqPanel.classList.remove('hidden');
-  }
-  function iqRun() {
-    if (!selected) return;
-    if (iq.mode === 'locked') { iqUpsell(); return; }
-    var at = { lat: selected.lat, lon: selected.lon };
-    iqBtn.disabled = true; iqBtn.setAttribute('aria-busy', 'true');
-    iqPanel.innerHTML = ''; iqPanel.appendChild(iqEl('p', 'hint', 'Measuring the roofs from above\u2026 this takes a few seconds.'));
-    iqPanel.classList.remove('hidden');
-    RS.api.post('/api/instant-query', at).then(function (r) {
-      if (!selected || selected.lat !== at.lat || selected.lon !== at.lon) return; // the pin moved meanwhile
-      iq.result = r; iqRender(r); iqDraw(r);
-    }).catch(function (e) {
-      if (e && e.code === 'subscribers_only') { iq.mode = 'locked'; iqInit(); iqUpsell(); return; }
-      iqPanel.innerHTML = ''; var p = iqEl('p', 'form-error', (e && e.message) || 'Instant Squares didn\u2019t work. Try again.'); iqPanel.appendChild(p);
-    }).then(function () { iqBtn.disabled = false; iqBtn.setAttribute('aria-busy', 'false'); });
-  }
-  iqBtn.addEventListener('click', iqRun);
-
-  function fmtDay(d) { try { return new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); } catch (_) { return d; } }
-  var DIST = { at_property: 'at the property', within_1_mi: 'within 1 mile', within_3_mi: 'within 3 miles', within_5_mi: 'within 5 miles' };
-  function stat(label, value) { var d = iqEl('div', 'iq-stat'); d.appendChild(iqEl('span', 'hint', label)); d.appendChild(iqEl('b', null, value)); return d; }
-  function iqRender(r) {
-    iqPanel.innerHTML = '';
-    var bs = r.buildings || [], main = bs.filter(function (b) { return b.primary; })[0] || bs[0];
-    var head = iqEl('div', 'iq-head'); var h = iqEl('h2', null, 'Instant Squares'); h.id = 'iq-h'; head.appendChild(h);
-    if (main && main.confidence) head.appendChild(iqEl('span', 'iq-tag ' + main.confidence, main.confidence.charAt(0).toUpperCase() + main.confidence.slice(1) + ' confidence'));
-    if (r.sandbox) head.appendChild(iqEl('span', 'iq-tag', 'Sample data'));
-    iqPanel.appendChild(head);
-    if (!main) { iqPanel.appendChild(iqEl('p', 'hint', 'No buildings were found at the pin. Move the pin onto the roof and try again.')); return; }
-    var stats = iqEl('div', 'iq-stats');
-    stats.appendChild(stat('Main roof', main.squares != null ? main.squares.toFixed(1) + ' squares' : '\u2014'));
-    stats.appendChild(stat('Pitch', main.pitch || 'Unknown'));
-    stats.appendChild(stat('Footprint', main.flat_sqft != null ? Math.round(main.flat_sqft).toLocaleString('en-US') + ' sq ft' : '\u2014'));
-    if (bs.length > 1) stats.appendChild(stat('All ' + bs.length + ' buildings', r.total_squares.toFixed(1) + ' squares'));
-    iqPanel.appendChild(stats);
-    if (main.confidence === 'low') iqPanel.appendChild(iqEl('p', 'hint', 'Low confidence: treat these numbers as a rough guide.'));
-    if (bs.length > 1) {
-      var ul = iqEl('ul', 'iq-list');
-      bs.forEach(function (b, i) {
-        var li = iqEl('li');
-        li.appendChild(iqEl('span', null, 'Building ' + (i + 1) + (b.primary ? ' (main)' : '')));
-        li.appendChild(iqEl('span', 'hint', [b.squares != null ? b.squares.toFixed(1) + ' squares' : null, b.pitch, b.confidence ? b.confidence + ' confidence' : null].filter(Boolean).join(' \u00b7 ')));
-        ul.appendChild(li);
-      });
-      iqPanel.appendChild(ul);
-    }
-    // Storm history
-    var s = r.storm || {}, box = iqEl('div', 'iq-storm'), h3 = iqEl('h3', null, 'Storm history \u00b7 last ' + ((s.period && s.period.years) || 5) + ' years');
-    if (s.damage_chance) h3.appendChild(iqEl('span', 'iq-tag ' + (s.damage_chance === 'high' ? 'low' : s.damage_chance === 'medium' ? 'medium' : 'high'), s.damage_chance.charAt(0).toUpperCase() + s.damage_chance.slice(1) + ' damage chance'));
-    box.appendChild(h3);
-    if (s.status === 'none') box.appendChild(iqEl('p', 'hint', 'No storms recorded within 5 miles in the last 5 years.'));
-    else if (s.status !== 'ok') box.appendChild(iqEl('p', 'hint', 'Storm history isn\u2019t available right now.'));
-    else {
-      var lines = iqEl('ul');
-      var hl = s.hail && s.hail.largest;
-      if (hl) lines.appendChild(iqEl('li', null, 'Largest hail: ' + hl.size_in + '\u2033' + (hl.size_name ? ' (' + hl.size_name + ')' : '') + ' on ' + fmtDay(hl.date) + ', ' + (DIST[hl.distance] || hl.distance)));
-      if (s.hail && s.hail.days_near) lines.appendChild(iqEl('li', null, 'Hail days at or within 1 mile: ' + s.hail.days_near));
-      var w = s.wind && s.wind.strongest;
-      if (w) lines.appendChild(iqEl('li', null, 'Strongest wind: ' + w.mph + ' mph on ' + fmtDay(w.date) + ', ' + w.distance_mi + ' mi away'));
-      if (s.tornado) lines.appendChild(iqEl('li', null, 'Closest tornado: ' + (s.tornado.ef_scale ? s.tornado.ef_scale + ', ' : '') + s.tornado.closest_mi + ' mi away on ' + fmtDay(s.tornado.date)));
-      if (!lines.children.length) lines.appendChild(iqEl('li', null, 'Nothing significant recorded nearby.'));
-      box.appendChild(lines);
-    }
-    iqPanel.appendChild(box);
-    var foot = iqEl('div', 'iq-foot');
-    foot.appendChild(iqEl('p', 'hint', 'An estimate from aerial outlines, not a measured report. Order a report for exact measurements, the full sketch and the ESX file.'));
-    var go = iqEl('button', 'btn btn-primary', 'Order full report'); go.type = 'button';
-    go.addEventListener('click', function () { $('order-btn').click(); });
-    foot.appendChild(go); iqPanel.appendChild(foot);
-  }
-  // Building outlines on the map (main roof in orange). Skipped quietly if the map isn't up.
-  function iqDraw(r) {
-    try {
-      if (!map || !window.atlas || !atlas.source) return;
-      if (!iq.source) {
-        iq.source = new atlas.source.DataSource(); map.sources.add(iq.source);
-        var col = ['case', ['get', 'primary'], '#F08A4B', '#FFFFFF'];
-        map.layers.add([new atlas.layer.PolygonLayer(iq.source, null, { fillColor: col, fillOpacity: 0.22 }), new atlas.layer.LineLayer(iq.source, null, { strokeColor: col, strokeWidth: 2 })]);
-      }
-      iq.source.clear();
-      if (!r) return;
-      (r.buildings || []).forEach(function (b) {
-        if (!b.polygon || b.polygon.length < 3) return;
-        var ring = b.polygon.map(function (p) { return [p.lng, p.lat]; }); ring.push(ring[0]);
-        iq.source.add(new atlas.data.Feature(new atlas.data.Polygon([ring]), { primary: !!b.primary }));
-      });
-    } catch (e) { console.warn('[Rapid Squares] Couldn\u2019t draw the building outlines.', e); }
-  }
-
-  // Prefill from ?address=… (e.g. links from other pages)
+  goTo('address');
+  // Prefill from ?address=… (e.g. the landing page search)
   var pre = new URLSearchParams(location.search).get('address');
   if (pre) { input.value = pre; if (KEY) form.requestSubmit(); }
 })();

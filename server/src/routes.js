@@ -35,9 +35,11 @@ function orderOut(o, prods, people) {
     status_detail: o.status_detail, price_cents: o.price_cents, esx_purchased: o.esx_purchased, used_free_report: o.used_free_report,
     total_squares: o.total_squares === null ? null : Number(o.total_squares), predominant_pitch: o.predominant_pitch,
     measurements: o.measurements, created_at: o.created_at, completed_at: o.completed_at, refunded: !!o.refunded_at,
-    esx_available: o.status === 'delivered' && !o.esx_purchased && !!p.esx_addon_allowed
+    esx_available: o.status === 'delivered' && !o.esx_purchased && !!p.esx_addon_allowed,
+    order_details: o.order_details || null
   };
-  if (o.status === 'pending' || o.status === 'in_progress') out.eta = new Date(new Date(o.created_at).getTime() + (p.delivery_minutes || 120) * 60000).toISOString();
+  if (o.report_type === 'storm_report' && o.status === 'delivered') out.documents = fulfillment.stormDocuments();
+  if (o.status === 'pending' || o.status === 'in_progress') out.eta = new Date(new Date(o.created_at).getTime() + (p.delivery_minutes ?? 120) * 60000).toISOString();
   return out;
 }
 async function peopleById(companyId) {
@@ -85,6 +87,18 @@ function addressPartsIn(b) {
   const p = b && typeof b.parts === 'object' && b.parts ? b.parts : {};
   const out = { street: str(p.street, 200), city: str(p.city, 100), state: str(p.state, 40), postalCode: str(p.postalCode, 12), country: str(p.country, 3).toUpperCase() };
   return Object.values(out).some(Boolean) ? out : null;
+}
+// A Storm Report PDF's details, asked when it's downloaded: date of loss, claim number, insured name, notes.
+function stormDetailsIn(b) {
+  const s = b && typeof b === 'object' ? b : {};
+  const out = { date_of_loss: str(s.date_of_loss, 10), claim: str(s.claim, 64), insured_name: str(s.insured_name, 120), notes: String(s.notes ?? '').trim().slice(0, 450) };
+  if (out.date_of_loss) {
+    const d = new Date(out.date_of_loss + 'T12:00:00Z');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(out.date_of_loss) || isNaN(d)) fail(422, 'invalid', 'Enter the date of loss as a date, like 2025-05-25.');
+    if (d.getTime() > Date.now() + DAY) fail(422, 'invalid', 'The date of loss can\u2019t be in the future.');
+  }
+  Object.keys(out).forEach((k) => { if (!out[k]) delete out[k]; });
+  return out;
 }
 // Called from the Stripe webhook when a payment page is paid.
 async function orderPaid(orderId, paymentIntentId, receiptUrl) {
@@ -350,9 +364,37 @@ export function registerRoutes(r) {
     const m = await member(req); m.need('orders.download'); const o = await findOrder(m, id);
     if (kind === 'esx' && !o.esx_purchased) fail(403, 'not_purchased', 'The ESX file wasn\u2019t added to this order.');
     if (o.status !== 'delivered' || !o.roofquery_order_id) fail(409, 'not_ready', 'This report isn\u2019t ready yet.');
+    if (o.report_type === 'storm_report') fail(404, 'not_found', 'Choose which storm report PDF to download.');
     return { url: fulfillment.downloadUrl(o.id, kind, 10 * 60 * 1000) };
   }
   r.get('/api/orders/:id/pdf', async ({ req, params }) => fileLink(req, params.id, 'pdf'));
+
+  // ---------- Storm Reports: the report page, and each PDF with this download's details ----------
+  async function stormOrder(req, id) {
+    const m = await member(req); const o = await findOrder(m, id);
+    if (o.report_type !== 'storm_report') fail(404, 'not_found', 'That isn\u2019t a storm report.');
+    if (o.status !== 'delivered' || !o.roofquery_order_id) fail(409, 'not_ready', 'This storm report isn\u2019t ready yet.');
+    return { m, o };
+  }
+  r.get('/api/orders/:id/storm', async ({ req, params }) => {
+    const { m, o } = await stormOrder(req, params.id);
+    const storm = (o.measurements && o.measurements.storm) || {};
+    return {
+      order: orderOut(o, await products(), await peopleById(m.company.id)), storm,
+      details: o.order_details || {}, can_download: m.can('orders.download'),
+      map_url: storm.has_map ? fulfillment.downloadUrl(o.id, 'storm-map', 60 * 60 * 1000) : null
+    };
+  });
+  // Saves the details (they're filled in next time) and returns a short-lived link to the PDF.
+  r.post('/api/orders/:id/storm/:template', async ({ req, params }) => {
+    const { m, o } = await stormOrder(req, params.id); m.need('orders.download');
+    if (!roofquery.STORM_TEMPLATES[params.template]) fail(404, 'not_found', 'That PDF isn\u2019t part of a storm report.');
+    const details = stormDetailsIn(await readJson(req));
+    if (params.template === 'date_of_loss' && !details.date_of_loss) fail(422, 'needs_date_of_loss', 'Enter the date of loss for this PDF.');
+    // Homeowner summary takes no details; keep what was entered before.
+    if (params.template !== 'homeowner') await db.update('report_orders', { id: eq(o.id) }, { order_details: details });
+    return { url: fulfillment.downloadUrl(o.id, 'storm-' + params.template, 10 * 60 * 1000) };
+  });
   r.get('/api/orders/:id/esx', async ({ req, params }) => fileLink(req, params.id, 'esx'));
   r.post('/api/orders/:id/details', async ({ req, params }) => { const m = await member(req); m.need('orders.create'); await findOrder(m, params.id); fail(501, 'not_available', 'Adding details to an order isn\u2019t available yet. Email us and we\u2019ll pass them on.'); });
 
@@ -377,7 +419,8 @@ export function registerRoutes(r) {
   r.get('/files/:id/:kind', async ({ res, params, query }) => {
     const { id, kind } = params;
     const bad = () => fail(404, 'not_found', 'This download link isn\u2019t valid or has expired. Download the report again from your Home page.');
-    if (!['pdf', 'esx', 'buy-esx'].includes(kind) || !/^[0-9a-f-]{36}$/i.test(id) || !fulfillment.checkDownload(id, kind, query.get('exp'), query.get('sig'))) bad();
+    const stormTemplate = /^storm-([a-z_]+)$/.test(kind) && kind !== 'storm-map' ? kind.slice(6) : null;
+    if (!(['pdf', 'esx', 'buy-esx', 'storm-map'].includes(kind) || (stormTemplate && roofquery.STORM_TEMPLATES[stormTemplate])) || !/^[0-9a-f-]{36}$/i.test(id) || !fulfillment.checkDownload(id, kind, query.get('exp'), query.get('sig'))) bad();
     let o = await db.one('report_orders', { id: eq(id) });
     if (!o || !o.roofquery_order_id || o.status !== 'delivered') bad();
     const year = 365 * 24 * 60 * 60 * 1000;
@@ -400,18 +443,28 @@ export function registerRoutes(r) {
       if (paid) o = (await fulfillment.esxPaid(o.id, paid.payment_id, paid.receipt_url)) || o;
     }
     if (kind === 'esx' && !o.esx_purchased) bad();
+    if ((stormTemplate || kind === 'storm-map') && o.report_type !== 'storm_report') bad();
+    if (kind === 'storm-map') {
+      let img;
+      try { img = await roofquery.fetchStormMap(o.roofquery_order_id); } catch (e) { fail(502, 'download_failed', 'The storm map couldn\u2019t be loaded right now.'); }
+      res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'private, max-age=3600' });
+      for await (const chunk of img.body) res.write(chunk);
+      return res.end();
+    }
     const company = o.company_id ? await db.one('companies', { id: eq(o.company_id) }) : null;
-    const brand = kind === 'pdf' && company ? await roofquery.ensureBrand(company) : null;
+    const brand = (kind === 'pdf' || stormTemplate) && company ? await roofquery.ensureBrand(company) : null;
     let up;
-    try { up = await roofquery.fetchFile(o.roofquery_order_id, kind, { brand }); }
+    // Date of Loss without a date can't be made (an old emailed link, say): show the report page instead.
+    if (stormTemplate === 'date_of_loss' && !(o.order_details && o.order_details.date_of_loss)) { res.writeHead(303, { Location: `${config.appUrl}/storm-report.html?id=${o.id}` }); return res.end(); }
+    try { up = stormTemplate ? await roofquery.fetchStormPdf(o.roofquery_order_id, stormTemplate, { brand, details: stormTemplate === 'homeowner' ? {} : o.order_details || {} }) : await roofquery.fetchFile(o.roofquery_order_id, kind, { brand }); }
     catch (e) {
       if (e.status === 409) fail(409, 'not_ready', 'This report is being updated. Try again in a few minutes.');
       fail(502, 'download_failed', 'The file couldn\u2019t be downloaded right now. Try again in a minute.');
     }
     const street = String(o.address || '').split(',')[0].replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40);
-    const name = `RS-${o.report_number}${street ? '_' + street : ''}.${kind}`;
+    const name = stormTemplate ? `RS-${o.report_number}_${stormTemplate}.pdf` : `RS-${o.report_number}${street ? '_' + street : ''}.${kind}`;
     res.writeHead(200, {
-      'Content-Type': kind === 'pdf' ? 'application/pdf' : 'application/octet-stream',
+      'Content-Type': kind === 'pdf' || stormTemplate ? 'application/pdf' : 'application/octet-stream',
       'Content-Disposition': `attachment; filename="${name}"`, 'Cache-Control': 'no-store',
       ...(up.headers.get('content-length') ? { 'Content-Length': up.headers.get('content-length') } : {})
     });

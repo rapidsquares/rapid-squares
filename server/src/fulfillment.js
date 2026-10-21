@@ -35,6 +35,7 @@ export async function place(orderId) {
   const order = await db.one('report_orders', { id: eq(orderId) });
   if (!order || order.status !== 'pending' || order.roofquery_order_id) return order;
   try {
+    if (order.report_type === 'storm_report') return await placeStorm(order);
     const r = await rq.placeOrder(order);
     const [saved] = await db.update('report_orders', { id: eq(order.id) }, { roofquery_order_id: r.orderId, rq_status: r.status, rq_error: null, rq_next_try_at: null, rq_checked_at: now(), status_detail: null });
     return apply(saved, r);
@@ -61,6 +62,38 @@ export async function place(orderId) {
     }
     return saved;
   }
+}
+
+// A Storm Report comes back finished in the same response (about 2 seconds), so it's delivered at once.
+async function placeStorm(order) {
+  const r = await rq.placeStorm(order);
+  const [saved] = await db.update('report_orders', { id: eq(order.id) }, {
+    roofquery_order_id: r.orderId, rq_status: r.status || 'completed', rq_error: null, rq_next_try_at: null, rq_checked_at: now(),
+    status: 'delivered', status_detail: null, completed_at: r.createdAt || now(), measurements: { storm: stormData(r) }
+  });
+  if (saved) await tellReady(saved);
+  return saved || order;
+}
+// What we keep of a Storm Report for the report page. The weather data never changes, so it's stored once.
+function stormData(r) {
+  const s = r.summary || {}, num = (v) => (typeof v === 'number' ? v : null);
+  const pick = (o, keys) => (o ? Object.fromEntries(keys.filter((k) => o[k] !== undefined).map((k) => [k, o[k]])) : null);
+  return {
+    headline: r.headline || null, damage_chance: (r.damageChance && r.damageChance.level) || null, damage_reason: (r.damageChance && r.damageChance.reason) || null,
+    period: pick(r.period, ['from', 'to', 'years', 'radarHailFrom']), county: (r.property && r.property.county) || null, country: (r.property && r.property.country) || null,
+    storm_days: num(s.stormDays), hail_days: num(s.hailDays), wind_days: num(s.windDays), tornado_days: num(s.tornadoDays), hail_days_near: num(s.hailDaysNearProperty),
+    largest_hail: pick(s.largestHail, ['sizeIn', 'sizeName', 'date', 'where', 'confidence']),
+    strongest_wind: pick(s.strongestWind, ['mph', 'distanceMi', 'source', 'date', 'confidence']),
+    closest_tornado: pick(s.closestTornado, ['distanceMi', 'date', 'efScale', 'confidence']),
+    hail: ((r.hail && r.hail.events) || []).slice(0, 40).map((e) => pick(e, ['date', 'atPropertyIn', 'within1MiIn', 'within3MiIn', 'within5MiIn', 'largestReport', 'confidence', 'damageChance'])),
+    wind: ((r.wind && r.wind.events) || []).slice(0, 40).map((e) => pick(e, ['date', 'within1MiMph', 'within3MiMph', 'within5MiMph', 'damageReports', 'station', 'tornado', 'confidence', 'damageChance'])),
+    days: (r.stormDays || []).slice(0, 80).map((e) => pick(e, ['date', 'hazards', 'confidence', 'maxHailIn', 'maxGustMph', 'evidence'])),
+    has_map: !!(r.map && r.map.imageUrl), nothing_found: !!(r.billing && r.billing.charged === false)
+  };
+}
+// The five Storm Report PDFs. Date of Loss needs a date, asked when it's downloaded.
+export function stormDocuments() {
+  return Object.entries(rq.STORM_TEMPLATES).map(([template, title]) => ({ template, title, needs_date_of_loss: template === 'date_of_loss' }));
 }
 
 // ---------- following progress ----------
@@ -161,11 +194,20 @@ async function tellReady(order) {
   if (!claimed.length) return;
   if (config.orderAlerts && config.adminEmail) {
     await email.send({ to: config.adminEmail, subject: `[Rapid Squares] Order RS-${order.report_number} completed`,
-      text: `RS-${order.report_number} is ready.\n\nProperty: ${order.address}${order.total_squares != null ? `\n${order.total_squares} squares, ${order.predominant_pitch} predominant pitch` : ''}\nOrdered by: ${await orderedBy(order)}\n\nPDF (link works for 30 days): ${downloadUrl(order.id, 'pdf', 30 * 24 * 60 * MIN)}` });
+      text: `RS-${order.report_number} is ready.\n\nProperty: ${order.address}${order.total_squares != null ? `\n${order.total_squares} squares, ${order.predominant_pitch} predominant pitch` : ''}\nOrdered by: ${await orderedBy(order)}\n\nPDF (link works for 30 days): ${downloadUrl(order.id, order.report_type === 'storm_report' ? 'storm-weather_history' : 'pdf', 30 * 24 * 60 * MIN)}` });
   }
   const who = await recipient(order);
   if (!who) return;
   const first = String(who.name || '').split(' ')[0];
+  if (order.report_type === 'storm_report') {
+    const ttl = (who.guest ? 365 : 30) * 24 * 60 * MIN;
+    // Links for the PDFs that need nothing more; Date of Loss is downloaded from the report page with a date.
+    const docs = stormDocuments().filter((d) => !d.needs_date_of_loss).map((d) => `${d.title}: ${downloadUrl(order.id, 'storm-' + d.template, ttl)}`).join('\n');
+    const head = order.measurements && order.measurements.storm && order.measurements.storm.headline;
+    await email.send({ to: who.to, subject: `Your storm report RS-${order.report_number} is ready`,
+      text: `Hi${first ? ' ' + first : ''},\n\nYour storm report for ${order.address} is ready.${head ? '\n\n' + head : ''}\n\nDownload the PDFs:\n${docs}\n\n${who.guest ? 'These links work for a year. Keep this email.' : `See the full report, add a date of loss or claim number, and download every PDF: ${config.appUrl}/storm-report.html?id=${order.id}`}` });
+    return;
+  }
   const size = order.total_squares != null ? `\n${order.total_squares} squares, ${order.predominant_pitch} predominant pitch.` : '';
   // Direct download links (no attachment: links stay small, avoid spam filters and always give the latest version).
   const ttl = (who.guest ? 365 : 30) * 24 * 60 * MIN;

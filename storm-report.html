@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Storm Report · Rapid Squares</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#16222C">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Rapid Squares">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body data-page="storm-report">
+
+<header class="topbar">
+  <a class="brand" href="index.html" aria-label="Rapid Squares home">
+    <svg width="30" height="30" viewBox="0 0 30 30" fill="none" stroke="#F08A4B" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M3 16 L15 5 L27 16"/><path d="M7 13 V25 H23 V13"/><path d="M15 5 V25"/></svg>
+    <span class="brand-name">Rapid Squares</span>
+    <span class="brand-sub">Aerial Roof Reports</span>
+  </a>
+  <nav class="topnav" aria-label="Primary">
+    <a href="orders.html" aria-current="page">Home</a>
+    <a href="account.html">Account</a>
+</nav>
+</header>
+
+<main class="page" style="max-width: 1180px;">
+  <a href="orders.html" class="back-link">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+    Home
+  </a>
+  <div class="page-head">
+    <div>
+      <p class="eyebrow" id="sr-eyebrow">Storm report</p>
+      <h1 id="sr-title">Loading the storm report…</h1>
+      <p class="lede" id="sr-sub"></p>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-main" id="sr-main"></div>
+    <aside class="col-side" aria-labelledby="sr-pdf-h">
+      <section class="card sr-pdfs" id="sr-pdf-card">
+        <h2 id="sr-pdf-h" style="font-size: 18px;">Download PDFs</h2>
+        <p class="hint" style="margin: 0;">Branded with your company. Add a date of loss, claim number or notes when you download; the weather data stays the same.</p>
+        <div class="pdf-list" id="sr-pdfs"></div>
+      </section>
+    </aside>
+  </div>
+</main>
+
+<!-- Details for one PDF: asked when it's downloaded -->
+<dialog id="sr-dlg" class="modal" aria-labelledby="sr-dlg-h">
+  <form id="sr-form" class="modal-body" novalidate>
+    <div class="modal-head">
+      <div>
+        <h2 id="sr-dlg-h">Download PDF</h2>
+        <p class="hint" id="sr-dlg-sub" style="margin: 2px 0 0;"></p>
+      </div>
+      <button type="button" class="modal-x" id="sr-dlg-x" aria-label="Close"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <div class="grid-fields">
+      <div class="fld"><label for="sr-dol">Date of loss <span class="hint" id="sr-dol-opt">(optional)</span></label><input id="sr-dol" type="date"></div>
+      <div class="fld"><label for="sr-claim">Claim number <span class="hint">(optional)</span></label><input id="sr-claim" type="text" maxlength="64" autocomplete="off"></div>
+      <div class="fld" style="grid-column: 1 / -1;"><label for="sr-insured">Insured name <span class="hint">(optional)</span></label><input id="sr-insured" type="text" maxlength="120" autocomplete="off"></div>
+    </div>
+    <div class="fld" id="sr-notes-fld"><label for="sr-notes">Notes <span class="hint">(optional, printed in the Notes box)</span></label><textarea id="sr-notes" rows="3" maxlength="450"></textarea></div>
+    <p class="form-error hidden" id="sr-err" role="alert"></p>
+    <div class="actions modal-actions">
+      <button type="button" class="btn" id="sr-cancel">Cancel</button>
+      <button type="submit" class="btn btn-primary" id="sr-go">Download PDF</button>
+    </div>
+  </form>
+</dialog>
+
+<nav class="tabbar" aria-label="Primary (mobile)">
+  <a href="orders.html"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-5h4v5"/></svg>Home</a>
+  <a href="orders.html?order=1"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>Order</a>
+  <a href="account.html"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>Account</a>
+</nav>
+
+<script src="runtime-config.js"></script>
+<script src="config.js"></script>
+<script src="api.js"></script>
+<script src="auth.js"></script>
+<script src="mock-api.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

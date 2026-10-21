@@ -191,9 +191,14 @@
     }
     function orderRow(o) {
       var addr = splitAddress(o.address), s = STATUS[o.status] || ['cancelled', o.status];
-      var detail = o.total_squares != null ? o.total_squares + ' squares · ' + o.predominant_pitch + ' pitch' : '';
+      var storm = o.measurements && o.measurements.storm;
+    var detail = o.total_squares != null ? o.total_squares + ' squares · ' + o.predominant_pitch + ' pitch'
+      : storm && storm.damage_chance ? storm.damage_chance.charAt(0).toUpperCase() + storm.damage_chance.slice(1) + ' damage chance' + (storm.hail_days != null ? ' · ' + storm.hail_days + ' hail days' : '') : '';
       var actions = el('td', {});
-      if (o.status === 'delivered') {
+      if (o.status === 'delivered' && o.documents) {
+        // Storm Report: its own page, with the results and the five PDFs.
+        actions.appendChild(el('a', { class: 'linkbtn', href: 'storm-report.html?id=' + encodeURIComponent(o.id), text: 'View report' }));
+      } else if (o.status === 'delivered') {
         if (can('orders.download')) {
           actions.appendChild(el('button', { type: 'button', class: 'linkbtn', text: 'Download PDF', onclick: function () { download(o.id, 'pdf'); } }));
           if (o.esx_purchased) actions.appendChild(el('button', { type: 'button', class: 'linkbtn', text: 'ESX file', onclick: function () { download(o.id, 'esx'); } }));
@@ -242,15 +247,9 @@
     }
     function open() {
       if (!dlg) {
+        // The order form draws its own header, steps and close button inside the frame.
         var frame = el('iframe', { src: src, title: 'Order a new report', class: 'qo-frame' });
-        dlg = el('dialog', { class: 'modal qo', 'aria-label': 'Order a new report' }, [
-          el('div', { class: 'qo-head' }, [
-            el('h2', { text: 'Order a new report' }),
-            el('button', { type: 'button', class: 'modal-x', 'aria-label': 'Close', onclick: function () { dlg.close(); } }, [])
-          ]),
-          frame
-        ]);
-        dlg.querySelector('.modal-x').innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+        dlg = el('dialog', { class: 'modal qo', 'aria-label': 'Order a new report' }, [frame]);
         dlg.addEventListener('click', function (e) { if (e.target === dlg) dlg.close(); });
         document.body.appendChild(dlg);
       } else {
@@ -263,11 +262,127 @@
       e.preventDefault(); open();
     });
     window.addEventListener('message', function (e) {
-      if (e.origin !== location.origin || !e.data || e.data.type !== 'rs:ordered') return;
-      if (dlg && dlg.open) dlg.close();
-      toast('Ordered ' + e.data.report_number + ' · ' + e.data.label + '.');
+      if (e.origin !== location.origin || !e.data) return;
+      if (e.data.type === 'rs:close') { if (dlg && dlg.open) dlg.close(); return; }
+      if (e.data.type !== 'rs:ordered') return;
+      // The pop-up shows its own "order placed" step; the list behind it updates now.
+      toast((e.data.ready ? 'Ready: ' : 'Ordered ') + e.data.report_number + ' · ' + e.data.label + '.');
       onOrdered();
     });
+  }
+
+  // ---------- Storm report page ----------
+  var PDF_INFO = {
+    weather_history: 'Everything: map, summary, hail and wind tables and every storm day.',
+    hail_verification: 'For adjusters: hail at the property and within 1, 3 and 5 miles, by date.',
+    wind_verification: 'Wind within 1, 3 and 5 miles, weather stations, warnings and tornadoes.',
+    date_of_loss: 'One date by distance, with the map. Needs a date of loss.',
+    homeowner: 'A plain-English page for the homeowner, with the damage chance and map.'
+  };
+  var WHERE = { at_property: 'at the property', within_1_mi: 'within 1 mile', within_3_mi: 'within 3 miles', within_5_mi: 'within 5 miles' };
+  function initStorm() {
+    var id = new URLSearchParams(location.search).get('id');
+    var cap = function (t) { return t ? t.charAt(0).toUpperCase() + t.slice(1) : ''; };
+    var day = function (d) { return d ? new Date(d + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—'; };
+    var inch = function (v) { return v == null ? '—' : v + '″'; };
+    var mph = function (v) { return v == null ? '—' : v + ' mph'; };
+    var data = null, tpl = null;
+    if (!id) { $('sr-title').textContent = 'No storm report chosen'; return; }
+    api.get('/api/orders/' + encodeURIComponent(id) + '/storm').then(function (r) { data = r; render(r); }).catch(function (e) {
+      $('sr-title').textContent = 'This storm report can’t be shown';
+      $('sr-sub').textContent = (e && e.message) || '';
+      $('sr-pdf-card').classList.add('hidden');
+    });
+
+    function card(title, kids, cls) { return el('section', { class: 'card ' + (cls || '') }, [title ? el('h2', { style: 'font-size: 18px;', text: title }) : null].concat(kids)); }
+    function stat(label, value, sub) { return el('div', { class: 'iq-stat' }, [el('span', { class: 'hint', text: label }), el('b', { text: value }), sub ? el('span', { class: 'hint', text: sub }) : null]); }
+    function table(heads, rows) {
+      return el('div', { class: 'table-wrap' }, [el('table', { class: 'stack sr-table' }, [
+        el('thead', {}, [el('tr', {}, heads.map(function (h) { return el('th', { text: h }); }))]),
+        el('tbody', {}, rows.map(function (cells) { return el('tr', {}, cells.map(function (c, i) { return el('td', { class: i === 0 ? 'lead' : '' }, [c]); })); }))
+      ])]);
+    }
+    function chance(level) { return level ? el('span', { class: 'dmg dmg-' + level, text: cap(level) }) : document.createTextNode('—'); }
+
+    function render(r) {
+      var o = r.order, s = r.storm || {}, addr = splitAddress(o.address), main = $('sr-main');
+      document.title = 'Storm Report ' + o.report_number + ' · Rapid Squares';
+      $('sr-eyebrow').textContent = 'Storm report · ' + o.report_number;
+      $('sr-title').textContent = addr[0];
+      $('sr-sub').textContent = [addr[1], 'Ordered ' + fmtDate(o.created_at) + ' by ' + o.ordered_by_name].filter(Boolean).join(' · ');
+      main.innerHTML = '';
+      var years = (s.period && s.period.years) || 5;
+      // Headline and damage chance
+      main.appendChild(card(null, [
+        el('div', { class: 'sr-head' }, [el('span', { class: 'hint', text: 'Damage chance' }), chance(s.damage_chance)]),
+        el('p', { class: 'sr-headline', text: s.headline || (s.nothing_found ? 'No storms were recorded within 5 miles in the last ' + years + ' years.' : 'Storm history for the last ' + years + ' years.') }),
+        s.damage_reason ? el('p', { class: 'hint', style: 'margin: 0;', text: s.damage_reason }) : null,
+        el('p', { class: 'hint', style: 'margin: 0;', text: 'Based on weather data near the property. An inspection confirms damage.' })
+      ], 'sr-summary'));
+      // Numbers
+      var lh = s.largest_hail, sw = s.strongest_wind, ct = s.closest_tornado;
+      main.appendChild(card('Last ' + years + ' years within 5 miles', [el('div', { class: 'iq-stats' }, [
+        stat('Storm days', s.storm_days != null ? String(s.storm_days) : '—'),
+        stat('Hail days', s.hail_days != null ? String(s.hail_days) : '—', s.hail_days_near != null ? s.hail_days_near + ' within 1 mile' : null),
+        stat('Wind days', s.wind_days != null ? String(s.wind_days) : '—'),
+        stat('Tornado days', s.tornado_days != null ? String(s.tornado_days) : '—'),
+        stat('Largest hail', lh ? inch(lh.sizeIn) : '—', lh ? [lh.sizeName, day(lh.date), WHERE[lh.where] || lh.where].filter(Boolean).join(' · ') : null),
+        stat('Strongest wind', sw ? mph(sw.mph) : '—', sw ? [day(sw.date), sw.distanceMi != null ? sw.distanceMi + ' mi away' : null].filter(Boolean).join(' · ') : null),
+        stat('Closest tornado', ct ? ct.distanceMi + ' mi' : '—', ct ? [ct.efScale, day(ct.date)].filter(Boolean).join(' · ') : null)
+      ])]));
+      if (r.map_url) main.appendChild(card('Storm map', [el('img', { class: 'sr-map', src: r.map_url, alt: 'Map of storms around the property' })]));
+      if (s.hail && s.hail.length) main.appendChild(card('Hail', [table(['Date', 'At property', 'Within 1 mi', 'Within 3 mi', 'Within 5 mi', 'Damage chance'],
+        s.hail.map(function (e) { return [day(e.date), inch(e.atPropertyIn), inch(e.within1MiIn), inch(e.within3MiIn), inch(e.within5MiIn), chance(e.damageChance)]; }))]));
+      if (s.wind && s.wind.length) main.appendChild(card('Wind', [table(['Date', 'Within 1 mi', 'Within 3 mi', 'Within 5 mi', 'Tornado', 'Damage chance'],
+        s.wind.map(function (e) { return [day(e.date), mph(e.within1MiMph), mph(e.within3MiMph), mph(e.within5MiMph), e.tornado ? [e.tornado.efScale, e.tornado.distanceMi + ' mi'].filter(Boolean).join(', ') : '—', chance(e.damageChance)]; }))]));
+      if (s.days && s.days.length) main.appendChild(card('Every storm day', [el('ul', { class: 'sr-days' }, s.days.map(function (e) {
+        return el('li', {}, [el('div', {}, [el('b', { text: day(e.date) }), el('span', { class: 'sr-haz' }, (e.hazards || []).map(function (h) { return el('span', { class: 'opt-tag', text: cap(h) }); }))]), el('span', { class: 'hint', text: e.evidence || '' })]);
+      }))]));
+      labelTables(main);
+      // PDFs
+      var box = $('sr-pdfs'); box.innerHTML = '';
+      if (!r.can_download) { box.appendChild(el('p', { class: 'hint', text: 'Ask your company admin for the “Download reports” permission to download the PDFs.' })); return; }
+      (o.documents || []).forEach(function (d) {
+        box.appendChild(el('button', { type: 'button', class: 'btn pdf-btn', onclick: function (e) { pick(d, e.currentTarget); } }, [
+          el('span', { class: 'pdf-btn-top' }, [el('b', { text: d.title }), el('span', { class: 'hint', text: 'PDF' })]),
+          el('span', { class: 'hint', text: PDF_INFO[d.template] || '' })
+        ]));
+      });
+    }
+
+    // Homeowner summary downloads straight away; the others ask for this download's details first.
+    function fetchPdf(template, body, btn) {
+      busy(btn, true);
+      return api.post('/api/orders/' + encodeURIComponent(id) + '/storm/' + template, body || {})
+        .then(function (r) { if (r && r.url) location.href = r.url; return true; })
+        .finally(function () { busy(btn, false); });
+    }
+    function pick(d, btn) {
+      if (d.template === 'homeowner') { fetchPdf(d.template, {}, btn).catch(showError); return; }
+      tpl = d;
+      var det = data.details || {}, needs = !!d.needs_date_of_loss;
+      $('sr-dlg-h').textContent = d.title;
+      $('sr-dlg-sub').textContent = needs ? 'Enter the date of loss for this PDF.' : 'Anything you add is printed on the PDF.';
+      $('sr-dol-opt').classList.toggle('hidden', needs);
+      $('sr-dol').required = needs;
+      $('sr-dol').max = new Date().toISOString().slice(0, 10);
+      $('sr-dol').value = det.date_of_loss || ''; $('sr-claim').value = det.claim || ''; $('sr-insured').value = det.insured_name || ''; $('sr-notes').value = det.notes || '';
+      $('sr-err').classList.add('hidden');
+      $('sr-dlg').showModal();
+      (needs && !$('sr-dol').value ? $('sr-dol') : $('sr-go')).focus();
+    }
+    $('sr-form').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var body = { date_of_loss: $('sr-dol').value, claim: $('sr-claim').value.trim(), insured_name: $('sr-insured').value.trim(), notes: $('sr-notes').value.trim() };
+      if (tpl.needs_date_of_loss && !body.date_of_loss) { $('sr-err').textContent = 'Enter the date of loss.'; $('sr-err').classList.remove('hidden'); $('sr-dol').focus(); return; }
+      data.details = body; // filled in next time
+      fetchPdf(tpl.template, body, $('sr-go')).then(function () { $('sr-dlg').close(); }).catch(function (x) {
+        $('sr-err').textContent = (x && x.message) || 'The PDF couldn’t be downloaded. Try again.'; $('sr-err').classList.remove('hidden');
+      });
+    });
+    function closeDlg() { $('sr-dlg').close(); }
+    $('sr-cancel').addEventListener('click', closeDlg); $('sr-dlg-x').addEventListener('click', closeDlg);
+    $('sr-dlg').addEventListener('click', function (e) { if (e.target === $('sr-dlg')) closeDlg(); });
   }
 
   // ---------- Report settings ----------
@@ -720,6 +835,7 @@
     setupNav();
     if (!guardPage()) return;
     if (page === 'reports') initReports();
+    else if (page === 'storm-report') initStorm();
     else if (page === 'account') {
       if (can('branding.edit')) initReportSettings();
       if (can('users.manage')) initTeam();

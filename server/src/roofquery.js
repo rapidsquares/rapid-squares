@@ -75,6 +75,29 @@ export async function placeOrder(order) {
   };
   return json('POST', '/api/v1/reports/orders', { body, idempotencyKey: 'rs-order-' + order.id });
 }
+// Storm Report (open beta): hail, wind and tornado history. The response is the finished report.
+export const STORM_TEMPLATES = { weather_history: 'Weather History', hail_verification: 'Hail Verification', wind_verification: 'Wind Verification', date_of_loss: 'Date of Loss', homeowner: 'Homeowner Storm Summary' };
+export async function placeStorm(order) {
+  const { parts, missing } = addressParts(order);
+  if (missing.length) throw new RqError(400, 'ADDRESS_INCOMPLETE', `The address is missing its ${missing.join(', ')}.`);
+  // Date of loss, claim, insured name and notes are asked per PDF download instead (see fetchStormPdf).
+  const body = {
+    country: parts.country, street: parts.street, city: parts.city, state: parts.state, postalCode: parts.postalCode,
+    latitude: order.lat, longitude: order.lon, reportName: 'RS-' + order.report_number
+  };
+  return json('POST', '/api/v1/storm/orders', { body, idempotencyKey: 'rs-storm-' + order.id });
+}
+// One PDF, with this download's details (date of loss, claim number, insured name, notes).
+export async function fetchStormPdf(rqId, template, { brand, details = {} } = {}) {
+  const body = { template, download: '1', ...(brand ? { brand } : {}) };
+  if (details.date_of_loss) body.dateOfLoss = details.date_of_loss;
+  if (details.claim) body.claimNumber = details.claim;
+  if (details.insured_name) body.insuredName = details.insured_name;
+  if (details.notes) body.notes = details.notes;
+  // POST takes the same parameters as a JSON body, so long notes never hit a URL length limit.
+  return api('POST', `/api/v1/storm/orders/${encodeURIComponent(rqId)}/pdf`, { body, auth: false });
+}
+export const fetchStormMap = (rqId) => api('GET', `/api/v1/storm/orders/${encodeURIComponent(rqId)}/map.png`, { auth: false });
 export const getOrder = (rqId) => json('GET', `/api/v1/reports/orders/${encodeURIComponent(rqId)}/status`);
 export const identity = () => json('GET', '/api/v1/identity');
 // Instant Query (beta): roof outlines, pitch and area for every building at a point, plus storm history.
