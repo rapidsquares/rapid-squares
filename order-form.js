@@ -401,7 +401,15 @@
     var p = current();
     return !p || usesFree() || catalog.free_account ? 0 : priceFor(p) + ($('od-esx').checked ? catalog.esx_price_cents : 0);
   }
-  $('od-options').addEventListener('change', updateEsx);
+  $('od-options').addEventListener('change', function () {
+    var wasHidden = $('scope-opts').classList.contains('hidden');
+    updateEsx();
+    // On phones the choices that just appeared are below the fold: bring them into view so they get noticed.
+    if (wasHidden && !$('scope-opts').classList.contains('hidden') && window.matchMedia('(max-width: 640px)').matches) {
+      var calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      setTimeout(function () { $('scope-opts').scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'nearest' }); }, 50);
+    }
+  });
   $('od-esx').addEventListener('change', refresh);
 
   // ---------- Review ----------

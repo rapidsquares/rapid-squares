@@ -116,6 +116,10 @@ function measurements(t, structures) {
     buildings: (structures || []).map((s) => ({ index: s.index, total_squares: s.totalSquares, total_area_sqft: s.totalAreaSqFt, predominant_pitch: s.predominantPitch, facets: s.facetCount }))
   };
 }
+// The database hands JSON back with its keys reordered, so compare with the keys sorted.
+const stableJson = (v) => Array.isArray(v) ? '[' + v.map(stableJson).join(',') + ']'
+  : v && typeof v === 'object' ? '{' + Object.keys(v).sort().map((k) => JSON.stringify(k) + ':' + stableJson(v[k])).join(',') + '}' : JSON.stringify(v);
+const sameJson = (a, b) => stableJson(a) === stableJson(b);
 export async function apply(order, r) {
   const st = r.status;
   const patch = { rq_status: st, rq_checked_at: now() };
@@ -138,13 +142,17 @@ export async function apply(order, r) {
     patch.status_detail = 'Couldn’t be measured' + (r.reason ? ': ' + r.reason : '');
   } else if (r.statusDetail && r.statusDetail.label) patch.status_detail = r.statusDetail.label;
   if (next && RANK[next] >= RANK[order.status]) patch.status = next;
+  // First word that measuring has started: claimed with a guarded update so it's emailed once.
+  let started = false;
+  if (next === 'in_progress' && order.status === 'pending') started = (await db.update('report_orders', { id: eq(order.id), status: eq('pending') }, { status: 'in_progress' })).length === 1;
   const [saved] = await db.update('report_orders', { id: eq(order.id) }, patch);
   if (!saved) return order;
+  if (started && saved.status === 'in_progress') await tellStarted(saved);
   if (saved.status === 'delivered' && order.status !== 'delivered') await tellReady(saved);
   // A delivered report came back corrected (a finished revision, or new measurements): send the new files.
   else if (saved.status === 'delivered' && order.status === 'delivered' && order.roofquery_order_id) {
     const revised = st === 'revision_completed' && order.rq_status !== 'revision_completed';
-    const changed = !!patch.measurements && JSON.stringify(patch.measurements) !== JSON.stringify(order.measurements);
+    const changed = !!patch.measurements && !sameJson(patch.measurements, order.measurements);
     if (revised || changed) await tellCorrected(saved);
   }
   if (saved.status === 'failed' && order.status !== 'failed') await refundAndTell(saved, r.reason || 'The roof couldn’t be measured from the available imagery.');
@@ -173,14 +181,27 @@ async function recipient(order) {
   const c = order.company_id ? await db.one('companies', { id: eq(order.company_id), select: 'email,name' }) : null;
   return c && c.email ? { to: c.email, name: c.name, guest: false } : null;
 }
+// "We're measuring it now": sent when RoofQuery starts on a roof report.
+async function tellStarted(order) {
+  try {
+    const who = await recipient(order);
+    if (!who) return;
+    const p = (await db.one('products', { id: eq(order.report_type) })) || { label: order.report_type };
+    const first = String(who.name || '').split(' ')[0];
+    const m = p.delivery_minutes;
+    const when = m ? ` It\u2019s usually ready within ${m >= 60 ? (Math.round(m / 60) === 1 ? 'an hour' : Math.round(m / 60) + ' hours') : m + ' minutes'}.` : '';
+    await email.send({ to: who.to, subject: `We\u2019re measuring RS-${order.report_number} now`,
+      text: `Hi${first ? ' ' + first : ''},\n\nOur team has started measuring the roof at ${order.address} for your ${p.label}.${when}\n\nWe\u2019ll email you the report as soon as it\u2019s done. You can also follow it here: ${config.appUrl}/report.html?id=${order.id}` });
+  } catch (e) { console.error('[email] measuring started for RS-' + order.report_number, e.message); }
+}
 // Order confirmation, sent once the order is paid (or covered by a free report).
-export async function tellPlaced(order) {
+export async function tellPlaced(order, { customer = true } = {}) {
   try {
     const p = (await db.one('products', { id: eq(order.report_type) })) || { label: order.report_type };
     const label = p.label + (order.esx_purchased ? ' + ESX file' : '');
     const total = order.used_free_report ? 'Free (one of your free reports)' : money(order.price_cents);
     const eta = p.delivery_minutes ? `\nUsually ready within ${p.delivery_minutes >= 60 ? Math.round(p.delivery_minutes / 60) + ' hour' + (p.delivery_minutes >= 120 ? 's' : '') : p.delivery_minutes + ' minutes'}.` : '';
-    const who = await recipient(order);
+    const who = customer ? await recipient(order) : null;
     if (who) {
       const first = String(who.name || '').split(' ')[0];
       const track = who.guest ? '\n\nWe\u2019ll email you here with download links when it\u2019s ready.' : `\n\nTrack it on your Rapid Squares home page: ${config.appUrl}/orders.html\nWe\u2019ll email you when it\u2019s ready.`;
@@ -253,8 +274,10 @@ async function tellReady(order) {
     const { attachments, links } = await attachOrLink(order, files, ttl);
     const head = order.measurements && order.measurements.storm && order.measurements.storm.headline;
     const got = attachments.length ? `\n\nThe PDFs are attached${links.length ? '. These couldn\u2019t be attached; download them here:' : '.'}` : '\n\nDownload the PDFs:';
+    // The only email for a storm report, so it carries the order details too.
+    const paid = `\n\nOrder: RS-${order.report_number}\nTotal: ${order.used_free_report ? 'Free' : money(order.price_cents || 0)}${order.receipt_url ? '\nReceipt: ' + order.receipt_url : ''}`;
     await email.send({ to: who.to, subject: `Your storm report RS-${order.report_number} is ready`, attachments,
-      text: `Hi${first ? ' ' + first : ''},\n\nYour storm report for ${order.address} is ready.${head ? '\n\n' + head : ''}${got}${links.length ? '\n' + links.join('\n') : ''}\n\n${who.guest ? (links.length ? 'These links work for a year. Keep this email.' : 'Keep this email for your records.') : `See the full report, add a date of loss or claim number, and download every PDF: ${config.appUrl}/storm-report.html?id=${order.id}`}` });
+      text: `Hi${first ? ' ' + first : ''},\n\nYour storm report for ${order.address} is ready.${head ? '\n\n' + head : ''}${paid}${got}${links.length ? '\n' + links.join('\n') : ''}\n\n${who.guest ? (links.length ? 'These links work for a year. Keep this email.' : 'Keep this email for your records.') : `See the full report, add a date of loss or claim number, and download every PDF: ${config.appUrl}/storm-report.html?id=${order.id}`}` });
     return;
   }
   const size = order.total_squares != null ? `\n${order.total_squares} squares, ${order.predominant_pitch} predominant pitch.` : '';

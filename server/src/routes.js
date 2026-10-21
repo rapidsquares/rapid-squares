@@ -79,10 +79,16 @@ async function markPaidAndPlace(order, company, payment) {
   if (payment && payment.payment_id) patch.stripe_payment_id = payment.payment_id;
   if (payment && payment.receipt_url) patch.receipt_url = payment.receipt_url;
   const [saved] = await db.update('report_orders', { id: eq(order.id) }, patch);
-  await fulfillment.tellPlaced(saved); // confirmation to the customer (+ copy to ADMIN_EMAIL)
-  if (!roofquery.connected()) return saved;
-  try { return (await fulfillment.place(saved.id)) || saved; }
-  catch (e) { console.error('[roofquery] placing RS-' + saved.report_number, e.message); return saved; }
+  // Storm reports are ready in seconds, so the "ready" email is the only one, unless the report is held up.
+  const storm = saved.report_type === 'storm_report';
+  if (!storm) await fulfillment.tellPlaced(saved); // confirmation to the customer (+ copy to ADMIN_EMAIL)
+  let out = saved;
+  if (roofquery.connected()) {
+    try { out = (await fulfillment.place(saved.id)) || saved; }
+    catch (e) { console.error('[roofquery] placing RS-' + saved.report_number, e.message); }
+  }
+  if (storm) await fulfillment.tellPlaced(out, { customer: out.status !== 'delivered' });
+  return out;
 }
 // Street / city / state / postal code / country from the address lookup (Azure Maps).
 function addressPartsIn(b) {

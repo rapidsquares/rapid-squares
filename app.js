@@ -397,7 +397,7 @@
         main.appendChild(card('Status', [
           el('div', { class: 'sr-head' }, [el('span', { class: 'pill ' + st[0], text: RQ_LABEL[o.rq_status] || st[1] })]),
           el('p', { class: 'lede', style: 'margin: 0;', text: o.status === 'failed' || o.status === 'cancelled' ? (o.status_detail || 'This order was cancelled.') + (o.refunded ? ' You’ve been refunded.' : '')
-            : o.eta ? 'Being measured now. Usually ready by ' + fmtTime(o.eta) + '. This page fills in with every measurement when it’s done.' : (o.status_detail || 'Waiting to be measured.') })
+            : o.eta ? 'We’re measuring this roof now. It’s usually ready by ' + fmtTime(o.eta) + ', and we’ll email you when it is.' : (o.status_detail || 'Waiting to be measured.') })
         ]));
         renderJob(main, job);
         if (o.status === 'pending' || o.status === 'in_progress') setTimeout(load, 30000);
