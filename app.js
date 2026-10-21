@@ -112,12 +112,14 @@
   }
 
   // ---------- Home (reports list + ordering) ----------
+  // Labels follow RoofQuery's order lifecycle: Processing → In progress (or On hold) → Completed, or Cancelled.
   var STATUS = {
-    pending: ['ordered', 'Ordered'], awaiting_payment: ['ordered', 'Awaiting payment'], in_progress: ['processing', 'Processing'],
-    needs_info: ['needs', 'Needs info'], delivered: ['ready', 'Ready'], failed: ['failed', 'Failed'], cancelled: ['cancelled', 'Cancelled']
+    awaiting_payment: ['ordered', 'Awaiting payment'], pending: ['ordered', 'Processing'], in_progress: ['processing', 'In progress'],
+    needs_info: ['processing', 'In progress'], delivered: ['ready', 'Completed'], failed: ['cancelled', 'Cancelled'], cancelled: ['cancelled', 'Cancelled']
   };
+  var RQ_LABEL = { 'on-hold': 'On hold', revisions_requested: 'Revision requested' };
   function initReports() {
-    var FILTERS = { all: '', ready: 'delivered', processing: 'in_progress', ordered: 'pending,awaiting_payment', needs: 'needs_info' };
+    var FILTERS = { all: '', processing: 'pending,awaiting_payment', in_progress: 'in_progress,needs_info', completed: 'delivered', cancelled: 'failed,cancelled' };
     var state = { filter: 'all', q: '', page: 1, esxPrice: 500, canBuyEsx: false }, timer = null, refresh = null;
     var tbody = $('report-rows'), tabs = document.querySelectorAll('.tab');
 
@@ -146,7 +148,7 @@
       if (data.esx_price_cents != null) state.esxPrice = data.esx_price_cents;
       state.canBuyEsx = !!data.can_buy_esx;
       var c = data.counts || {};
-      var n = { all: c.all || 0, ready: c.delivered || 0, processing: c.in_progress || 0, ordered: (c.pending || 0) + (c.awaiting_payment || 0), needs: c.needs_info || 0 };
+      var n = { all: c.all || 0, processing: (c.pending || 0) + (c.awaiting_payment || 0), in_progress: (c.in_progress || 0) + (c.needs_info || 0), completed: c.delivered || 0, cancelled: (c.failed || 0) + (c.cancelled || 0) };
       tabs.forEach(function (t) { t.querySelector('.count').textContent = n[t.getAttribute('data-filter')]; });
       $('scope-note').classList.toggle('hidden', data.scope !== 'mine');
 
@@ -191,9 +193,13 @@
     }
     function orderRow(o) {
       var addr = splitAddress(o.address), s = STATUS[o.status] || ['cancelled', o.status];
+      if (RQ_LABEL[o.rq_status]) s = [s[0], RQ_LABEL[o.rq_status]];
       var storm = o.measurements && o.measurements.storm;
     var detail = o.total_squares != null ? o.total_squares + ' squares · ' + o.predominant_pitch + ' pitch'
       : storm && storm.damage_chance ? storm.damage_chance.charAt(0).toUpperCase() + storm.damage_chance.slice(1) + ' damage chance' + (storm.hail_days != null ? ' · ' + storm.hail_days + ' hail days' : '') : '';
+    var job = o.order_details || {};
+    var jobLine = [job.claim ? 'Claim ' + job.claim : null, job.client_name || job.insured_name].filter(Boolean).join(' · ');
+    if (jobLine) detail = detail ? detail + ' · ' + jobLine : jobLine;
       var actions = el('td', {});
       if (o.status === 'delivered' && o.documents) {
         // Storm Report: its own page, with the results and the five PDFs.
@@ -204,12 +210,12 @@
           if (o.esx_purchased) actions.appendChild(el('button', { type: 'button', class: 'linkbtn', text: 'ESX file', onclick: function () { download(o.id, 'esx'); } }));
         }
         if (o.esx_available && state.canBuyEsx && can('orders.create')) actions.appendChild(el('button', { type: 'button', class: 'linkbtn', text: 'Buy ESX · ' + money(state.esxPrice), onclick: function (e) { buyEsx(o, e.currentTarget); } }));
-      } else if (o.status === 'needs_info') {
-        if (can('orders.create')) actions.appendChild(el('button', { type: 'button', class: 'linkbtn', text: 'Add details', onclick: function () { api.post('/api/orders/' + o.id + '/details', {}).catch(showError); } }));
       } else if (o.eta) {
         actions.appendChild(el('span', { class: 'hint', text: 'Ready by ' + fmtTime(o.eta) }));
       } else if (o.status === 'failed') {
         actions.appendChild(el('span', { class: 'hint', text: (o.status_detail || 'Couldn’t be measured') + (o.refunded ? ' · Refunded' : '') }));
+      } else if (o.status === 'cancelled' && o.status_detail) {
+        actions.appendChild(el('span', { class: 'hint', text: o.status_detail }));
       }
       return el('tr', { 'data-status': o.status, 'data-id': o.id }, [
         el('td', { class: 'mono', style: 'font-size: 13px;', text: o.report_number }),

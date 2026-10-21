@@ -1,4 +1,4 @@
-// Rapid Squares — order a report, step by step: address → report type → confirm the roof → review and place.
+// Rapid Squares — order a report, step by step: report type → address → confirm the roof → review and place.
 //
 // Address: type an address → suggestions from Azure Maps Autocomplete → pick one (or press Look up)
 // → Azure Maps Geocoding gives the coordinates. The roof step shows satellite imagery (Azure Maps Web SDK)
@@ -27,7 +27,7 @@
   var $ = function (id) { return document.getElementById(id); };
   var form = $('lookup-form'), input = $('addr'), list = $('suggestions'), status = $('lookup-status');
   var mapEl = $('map'), mapEmpty = $('map-empty');
-  var step = 'address';
+  var step = 'report';
   var selected = null, suggestions = [], active = -1, debounce = null, reqId = 0;
   var map = null, marker = null, sdkPromise = null;
 
@@ -236,7 +236,7 @@
     if (map) map.setCamera({ center: [p.lon, p.lat], zoom: ZOOM });
     showPin();
     refresh();
-    if (step === 'address') goTo('report'); // picking an address moves straight on
+    if (step === 'address') goTo('location'); // picking an address moves straight on
   }
 
   // ---------- Azure Maps Web SDK ----------
@@ -318,12 +318,12 @@
   });
 
   // ---------- Steps ----------
-  var STEPS = ['address', 'report', 'location', 'review'];
+  var STEPS = ['report', 'address', 'location', 'review'];
   var TITLES = { address: 'Find the property', report: 'Choose a report', location: 'Confirm the roof', review: 'Review and place order', done: 'Order placed' };
   var wiz = $('wiz'), nextBtn = $('wiz-next'), backBtn = $('wiz-back');
   function goTo(to) {
-    if (to !== 'address' && !selected) to = 'address';
-    if ((to === 'location' || to === 'review') && !current()) to = 'report';
+    if (to !== 'report' && to !== 'done' && !current()) to = 'report';
+    if ((to === 'location' || to === 'review') && !selected) to = 'address';
     step = to;
     wiz.querySelectorAll('[data-panel]').forEach(function (p) { p.classList.toggle('hidden', p.getAttribute('data-panel') !== to); });
     var at = STEPS.indexOf(to);
@@ -334,7 +334,7 @@
     var storm = isStorm();
     $('wiz-title').textContent = to === 'location' && storm ? 'Confirm the property' : TITLES[to];
     wiz.querySelector('.wiz-foot').classList.toggle('hidden', to === 'done');
-    if (to === 'report') { wiz.querySelector('.wiz-addr').textContent = selected.label; loadCatalog().then(renderOptions).catch(catalogFailed); }
+    if (to === 'report' && !catalog) loadCatalog().then(renderOptions).catch(catalogFailed);
     if (to === 'location') { $('loc-what').textContent = storm ? 'property' : 'roof'; showOnMap(selected); }
     if (to === 'review') fillReview();
     wiz.querySelector('.wiz-body').scrollTop = 0;
@@ -343,7 +343,7 @@
   }
   // Footer buttons follow the step: what "Continue" says, and whether it can be pressed yet.
   function refresh() {
-    backBtn.classList.toggle('invisible', step === 'address');
+    backBtn.classList.toggle('invisible', step === 'report');
     var p = current();
     if (step === 'address') { nextBtn.textContent = 'Continue'; nextBtn.disabled = !selected; }
     else if (step === 'report') { nextBtn.textContent = 'Continue'; nextBtn.disabled = !p; }
@@ -355,8 +355,8 @@
     }
   }
   nextBtn.addEventListener('click', function () {
-    if (step === 'address') goTo('report');
-    else if (step === 'report') goTo('location');
+    if (step === 'report') goTo('address');
+    else if (step === 'address') goTo('location');
     else if (step === 'location') goTo('review');
     else if (step === 'review') placeOrder();
   });
@@ -463,6 +463,9 @@
     $('rv-report').textContent = p.label + ($('od-esx').checked ? ' + ESX file' : '');
     $('rv-report-hint').textContent = BLURB[p.id] || '';
     $('od-guest').classList.toggle('hidden', !RS.guest);
+    // Job details: printed on roof reports; for a Storm Report they fill in the PDF details.
+    $('job-hint').textContent = isStorm() ? 'Printed on the storm PDFs (you can change them when you download). Kept with the order.' : 'The claim number names the ESX file. Client details and notes go to the measuring team.';
+    $('jb-notes-l').textContent = isStorm() ? 'Notes for the PDFs' : 'Notes for the measuring team';
     $('od-total').textContent = money(t);
     var note = '';
     if (usesFree()) note = 'Uses 1 of your free reports' + ($('od-esx').checked ? ', ESX file included.' : '.');
@@ -480,7 +483,9 @@
     var p = current(); if (!p || !selected || busyNow) return;
     if (!window.RS || !RS.api) { showError('Ordering isn’t available on this page.'); return; }
     var place = selected, esx = $('od-esx').checked;
-    var body = { address: place.label, parts: place.parts, lat: place.lat, lon: place.lon, report_type: p.id, esx: esx };
+    var body = { address: place.label, parts: place.parts, lat: place.lat, lon: place.lon, report_type: p.id, esx: esx,
+      job: { claim: $('jb-claim').value.trim(), client_name: $('jb-name').value.trim(), client_email: $('jb-email').value.trim(), client_phone: $('jb-phone').value.trim(), notes: $('jb-notes').value.trim() } };
+    if (body.job.client_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.job.client_email)) { showError('Check the client email, or leave it blank.', 'jb-email'); return; }
     if (RS.guest) {
       body.name = $('og-name').value.trim(); body.email = $('og-email').value.trim(); body.phone = $('og-phone').value.trim();
       if (!body.name) { showError('Enter your name.', 'og-name'); return; }
@@ -551,7 +556,7 @@
   }
   if (/[?&]resume=1/.test(location.search) && !RS.guest) document.addEventListener('rs:ready', resumePending, { once: true });
 
-  goTo('address');
+  goTo('report');
   // Prefill from ?address=… (e.g. the landing page search)
   var pre = new URLSearchParams(location.search).get('address');
   if (pre) { input.value = pre; if (KEY) form.requestSubmit(); }

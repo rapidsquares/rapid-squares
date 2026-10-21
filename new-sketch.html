@@ -41,20 +41,34 @@
     <header class="wiz-head">
       <div>
         <p class="eyebrow">Order a report</p>
-        <h1 id="wiz-title">Find the property</h1>
+        <h1 id="wiz-title">Choose a report</h1>
       </div>
       <button type="button" class="modal-x hidden" id="wiz-close" aria-label="Close"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     </header>
     <ol class="wiz-steps" aria-label="Order steps">
-      <li data-step="address"><span class="wiz-n">1</span><span>Address</span></li>
-      <li data-step="report"><span class="wiz-n">2</span><span>Report</span></li>
+      <li data-step="report"><span class="wiz-n">1</span><span>Report</span></li>
+      <li data-step="address"><span class="wiz-n">2</span><span>Address</span></li>
       <li data-step="location"><span class="wiz-n">3</span><span>Confirm roof</span></li>
       <li data-step="review"><span class="wiz-n">4</span><span>Review</span></li>
     </ol>
 
     <div class="wiz-body">
-      <!-- 1. Address -->
-      <section class="wiz-panel" data-panel="address" aria-label="Property address">
+      <!-- 1. Report type -->
+      <section class="wiz-panel" data-panel="report" aria-label="Report type">
+        <p class="lede">What do you need for this property?</p>
+        <fieldset class="report-opts">
+          <legend class="sr">Report type</legend>
+          <div id="od-options"><p class="hint">Loading report types…</p></div>
+        </fieldset>
+        <label class="perm hidden" id="od-esx-row">
+          <input type="checkbox" id="od-esx">
+          <span class="esx-line"><b>Add Xactimate (ESX) file</b><span class="opt-price" id="od-esx-price">$5.00</span></span>
+        </label>
+        <p class="od-trial hidden" id="od-trial">Get subscriber prices free for <span id="od-trial-days">30</span> days. <a href="account.html#billing" target="_top">Start your free trial</a></p>
+      </section>
+
+      <!-- 2. Address -->
+      <section class="wiz-panel hidden" data-panel="address" aria-label="Property address">
         <p class="lede">Type the property address and pick it from the list.</p>
         <form id="lookup-form" class="lookup" role="search" autocomplete="off">
           <div class="fld lookup-field">
@@ -72,20 +86,6 @@
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>
           <div><b id="ap-line1"></b><span id="ap-line2" class="hint"></span></div>
         </div>
-      </section>
-
-      <!-- 2. Report type -->
-      <section class="wiz-panel hidden" data-panel="report" aria-label="Report type">
-        <p class="lede">What would you like for <b class="wiz-addr"></b>?</p>
-        <fieldset class="report-opts">
-          <legend class="sr">Report type</legend>
-          <div id="od-options"><p class="hint">Loading report types…</p></div>
-        </fieldset>
-        <label class="perm" id="od-esx-row">
-          <input type="checkbox" id="od-esx">
-          <span class="esx-line"><b>Add Xactimate (ESX) file</b><span class="opt-price" id="od-esx-price">$5.00</span></span>
-        </label>
-        <p class="od-trial hidden" id="od-trial">Get subscriber prices free for <span id="od-trial-days">30</span> days. <a href="account.html#billing" target="_top">Start your free trial</a></p>
       </section>
 
       <!-- 3. Confirm the roof on the map -->
@@ -114,6 +114,17 @@
           <div><dt>Property</dt><dd><b id="rv-line1"></b><span id="rv-line2" class="hint"></span><span id="rv-pin" class="hint hidden">Using your pin location</span></dd><dd><button type="button" class="linkbtn" data-goto="address">Change</button></dd></div>
           <div><dt>Report</dt><dd><b id="rv-report"></b><span id="rv-report-hint" class="hint"></span></dd><dd><button type="button" class="linkbtn" data-goto="report">Change</button></dd></div>
         </dl>
+        <div class="wiz-group" id="job-fields">
+          <h3>Job details <span class="hint">(optional)</span></h3>
+          <p class="hint" id="job-hint" style="margin: -6px 0 0;">Printed on the report and kept with the order.</p>
+          <div class="grid-fields" style="grid-template-columns: repeat(2, minmax(0, 1fr));">
+            <div class="fld"><label for="jb-claim">Claim number</label><input id="jb-claim" type="text" maxlength="64" autocomplete="off"></div>
+            <div class="fld"><label for="jb-name">Client name</label><input id="jb-name" type="text" maxlength="120" autocomplete="off"></div>
+            <div class="fld"><label for="jb-email">Client email</label><input id="jb-email" type="email" maxlength="160" autocomplete="off" inputmode="email"></div>
+            <div class="fld"><label for="jb-phone">Client phone</label><input id="jb-phone" type="tel" maxlength="32" autocomplete="off"></div>
+          </div>
+          <div class="fld"><label for="jb-notes" id="jb-notes-l">Notes for the measuring team</label><textarea id="jb-notes" rows="2" maxlength="450"></textarea></div>
+        </div>
         <div class="od-guest hidden" id="od-guest">
           <p class="od-account"><b>Have an account?</b> <a href="#" id="od-signin">Sign in</a> to order. <b>New here?</b> <a href="#" id="od-signup">Create a free account</a><span id="od-trial-clause"> and try a subscription free for <span id="od-trial-n">30</span> days: subscriber prices on every report</span>. Or order as a guest below.</p>
           <h3>Order as a guest</h3>

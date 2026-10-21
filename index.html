@@ -52,10 +52,10 @@
         <p class="lp-small">No account needed to look up a roof or order. Create a free account and try a subscription <b>free for 30 days</b>: lower prices on every report.</p>
       </div>
       <figure class="lp-hero-art">
-        <a href="https://api.roofquery.com/sample-report.pdf" target="_blank" rel="noopener">
-          <img src="sample-report.jpg" width="1105" height="1315" alt="First page of a sample measurement report: roof diagram, table of contents and roof measurements">
+        <a href="sample-report.pdf" target="_blank" rel="noopener">
+          <img src="sample-report.jpg" width="1105" height="1158" alt="Page of a sample measurement report: roof diagram, edge measurements, total area, waste factor and pitch breakdown">
         </a>
-        <figcaption><a href="https://api.roofquery.com/sample-report.pdf" target="_blank" rel="noopener">See the full sample report (PDF)</a></figcaption>
+        <figcaption><a href="sample-report.pdf" target="_blank" rel="noopener">See the full sample report (PDF)</a></figcaption>
       </figure>
     </div>
   </section>
@@ -89,10 +89,33 @@
             <td class="lp-pt-reg" data-label="Without"><span data-price="commercial">$30</span></td>
             <td class="lp-pt-go"><a href="new-sketch.html" class="btn btn-outline">Order</a></td>
           </tr>
+          <tr class="lp-pt-soonrow">
+            <th scope="row"><b>Instant Squares <span class="lp-pt-tag">Coming soon</span></b><span>Roof size and pitch in seconds, before you order.</span></th>
+            <td class="lp-pt-sub" data-label="With a subscription"><b class="lp-pt-incl">Included</b></td>
+            <td class="lp-pt-reg" data-label="Without"><span>Subscribers only</span></td>
+            <td class="lp-pt-go"><button type="button" class="btn btn-outline" disabled>Soon</button></td>
+          </tr>
           </tbody>
         </table>
       </div>
-      <p class="lp-small lp-pt-foot">Add the Xactimate (ESX) file to any roof report for <span data-price="esx">$5</span>. <a href="account.html#billing">Try a subscription free for 30 days.</a> <span class="lp-pt-soon">Coming soon: Certified Rapid Squares and Instant Squares.</span></p>
+      <div class="lp-plans" aria-labelledby="plans-h">
+        <div class="lp-plans-head">
+          <b id="plans-h">Subscription</b>
+          <span>Subscriber prices on every report, plus Instant Squares when it launches. Cancel any time.</span>
+        </div>
+        <div class="lp-plan">
+          <span class="lp-plan-name">Monthly</span>
+          <span><b data-plan="monthly">$100</b>/month</span>
+          <span class="lp-plan-trial"><span data-trial-days>30</span> days free</span>
+        </div>
+        <div class="lp-plan">
+          <span class="lp-plan-name">Yearly <span class="lp-pt-tag lp-plan-save" id="plan-save">Save $200</span></span>
+          <span><b data-plan="yearly">$1,000</b>/year</span>
+          <span class="lp-plan-trial"><span data-trial-days>30</span> days free</span>
+        </div>
+        <a href="account.html#billing" class="btn btn-primary">Start free trial</a>
+      </div>
+      <p class="lp-small lp-pt-foot">Add the Xactimate (ESX) file to any roof report for <span data-price="esx">$5</span>. After the free trial the plan renews unless you cancel. <span class="lp-pt-soon">Also coming soon: Certified Rapid Squares.</span></p>
     </div>
   </section>
 
@@ -175,6 +198,14 @@
         if (id === 'esx') { if (r.esx_price_cents != null) n.textContent = money(r.esx_price_cents); return; }
         var p = byId[id]; if (p) n.textContent = money(n.hasAttribute('data-sub') ? p.subscriber_price_cents : p.price_cents);
       });
+      var pl = r.plans, whole = function (c) { return '$' + Math.round(c / 100).toLocaleString('en-US'); };
+      if (pl && pl.monthly_cents && pl.yearly_cents) {
+        document.querySelector('[data-plan="monthly"]').textContent = whole(pl.monthly_cents);
+        document.querySelector('[data-plan="yearly"]').textContent = whole(pl.yearly_cents);
+        var save = pl.monthly_cents * 12 - pl.yearly_cents, tag = document.getElementById('plan-save');
+        if (save > 0) tag.textContent = 'Save ' + whole(save); else tag.classList.add('hidden');
+      }
+      if (r.trial_days) document.querySelectorAll('[data-trial-days]').forEach(function (n) { n.textContent = r.trial_days; });
     }).catch(function () { /* keep the fallback prices */ });
   })();
 </script>

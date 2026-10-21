@@ -31,7 +31,7 @@ function orderOut(o, prods, people) {
   const out = {
     id: o.id, report_number: 'RS-' + o.report_number, company_id: o.company_id, ordered_by: o.ordered_by,
     ordered_by_name: (people[o.ordered_by] && people[o.ordered_by].full_name) || 'Former team member',
-    report_type: o.report_type, product_label: p.label, address: o.address, lat: o.lat, lon: o.lon, status: o.status,
+    report_type: o.report_type, product_label: p.label, address: o.address, lat: o.lat, lon: o.lon, status: o.status, rq_status: o.rq_status || null,
     status_detail: o.status_detail, price_cents: o.price_cents, esx_purchased: o.esx_purchased, used_free_report: o.used_free_report,
     total_squares: o.total_squares === null ? null : Number(o.total_squares), predominant_pitch: o.predominant_pitch,
     measurements: o.measurements, created_at: o.created_at, completed_at: o.completed_at, refunded: !!o.refunded_at,
@@ -88,6 +88,16 @@ function addressPartsIn(b) {
   const out = { street: str(p.street, 200), city: str(p.city, 100), state: str(p.state, 40), postalCode: str(p.postalCode, 12), country: str(p.country, 3).toUpperCase() };
   return Object.values(out).some(Boolean) ? out : null;
 }
+// Optional job details entered when ordering: claim number, client name / email / phone, notes.
+// A Storm Report also uses them as the starting details for its PDFs (claim number, insured name, notes).
+function jobDetailsIn(b, type) {
+  const j = b && typeof b.job === 'object' && b.job ? b.job : {};
+  const out = { claim: str(j.claim, 64), client_name: str(j.client_name, 120), client_email: str(j.client_email, 160).toLowerCase(), client_phone: str(j.client_phone, 32), notes: String(j.notes ?? '').trim().slice(0, 450) };
+  if (out.client_email && !emailOk(out.client_email)) fail(422, 'invalid', 'Check the client email, or leave it blank.');
+  if (type === 'storm_report' && out.client_name) out.insured_name = out.client_name;
+  Object.keys(out).forEach((k) => { if (!out[k]) delete out[k]; });
+  return Object.keys(out).length ? out : null;
+}
 // A Storm Report PDF's details, asked when it's downloaded: date of loss, claim number, insured name, notes.
 function stormDetailsIn(b) {
   const s = b && typeof b === 'object' ? b : {};
@@ -118,7 +128,8 @@ export function registerRoutes(r) {
   // Price list for visitors who aren't signed in (regular prices; free reports need an account).
   r.get('/api/public/products', async () => {
     const p = await products();
-    return { products: publicProducts(p), esx_price_cents: p.esx_addon ? p.esx_addon.price_cents : 500, free_reports_remaining: 0, subscribed: false, signup_free_reports: config.freeReportsOnSignup, trial_days: stripe.connected() ? config.trialDays : 0 };
+    return { products: publicProducts(p), esx_price_cents: p.esx_addon ? p.esx_addon.price_cents : 500, free_reports_remaining: 0, subscribed: false, signup_free_reports: config.freeReportsOnSignup, trial_days: stripe.connected() ? config.trialDays : 0,
+      plans: { monthly_cents: config.stripe.monthlyCents, yearly_cents: config.stripe.yearlyCents } };
   });
 
   // Guest order: no account. Saved as awaiting payment; it is only sent to RoofQuery after payment.
@@ -137,13 +148,14 @@ export function registerRoutes(r) {
     if (!emailOk(emailAddr)) fail(422, 'invalid', 'Enter the email address where we should send the report.');
     const name = str(b.name);
     if (!name) fail(422, 'invalid', 'Enter your name.');
+    const job = jobDetailsIn(b, type);
     if (!stripe.connected() && !config.allowUnpaidTestOrders) fail(503, 'payments_not_connected', 'Guest ordering isn\u2019t open yet: payments aren\u2019t connected.');
     const esxPrice = prods.esx_addon ? prods.esx_addon.price_cents : 500;
     const price = p.price_cents + (esx ? esxPrice : 0);
     const [order] = await db.insert('report_orders', {
       company_id: null, ordered_by: null, guest_email: emailAddr, guest_name: name, guest_phone: str(b.phone, 40) || null,
       report_type: type, address: str(b.address, 300), address_parts: addressPartsIn(b), lat: b.lat, lon: b.lon, status: 'awaiting_payment', price_cents: price, esx_purchased: esx,
-      status_detail: stripe.connected() ? 'Waiting for payment' : 'Test order: payment and RoofQuery aren\u2019t connected yet'
+      order_details: job, status_detail: stripe.connected() ? 'Waiting for payment' : 'Test order: payment and RoofQuery aren\u2019t connected yet'
     });
     if (stripe.connected()) {
       const url = await stripe.checkoutForOrder({ customer: null, email: emailAddr, guest: true, amountCents: price, order,
@@ -293,6 +305,7 @@ export function registerRoutes(r) {
     if (esx && !p.esx_addon_allowed) fail(422, 'invalid', `The ESX file isn\u2019t available for ${p.label}.`);
     if (!str(b.address) || typeof b.lat !== 'number' || typeof b.lon !== 'number' || Math.abs(b.lat) > 90 || Math.abs(b.lon) > 180) fail(422, 'invalid', 'Look up the property address first.');
     if (!stripe.connected() && !config.allowUnpaidTestOrders) fail(503, 'payments_not_connected', 'Ordering isn\u2019t open yet: payments aren\u2019t connected.');
+    const job = jobDetailsIn(b, type); // checked before anything is charged
 
     // Price: free report (Premium only), else subscriber or regular price, plus ESX.
     const subscribed = m.company.subscription_status === 'active';
@@ -307,7 +320,7 @@ export function registerRoutes(r) {
 
     const [order] = await db.insert('report_orders', {
       company_id: m.company.id, ordered_by: m.user.id, report_type: type, address: str(b.address, 300), address_parts: addressPartsIn(b), lat: b.lat, lon: b.lon,
-      status: 'awaiting_payment', price_cents: price, esx_purchased: esx, used_free_report: usedFree
+      status: 'awaiting_payment', price_cents: price, esx_purchased: esx, used_free_report: usedFree, order_details: job
     });
     let payment = null;
     try {
@@ -392,7 +405,10 @@ export function registerRoutes(r) {
     const details = stormDetailsIn(await readJson(req));
     if (params.template === 'date_of_loss' && !details.date_of_loss) fail(422, 'needs_date_of_loss', 'Enter the date of loss for this PDF.');
     // Homeowner summary takes no details; keep what was entered before.
-    if (params.template !== 'homeowner') await db.update('report_orders', { id: eq(o.id) }, { order_details: details });
+    if (params.template !== 'homeowner') {
+      const keep = Object.fromEntries(Object.entries(o.order_details || {}).filter(([k]) => /^client_/.test(k)));
+      await db.update('report_orders', { id: eq(o.id) }, { order_details: { ...keep, ...details } });
+    }
     return { url: fulfillment.downloadUrl(o.id, 'storm-' + params.template, 10 * 60 * 1000) };
   });
   r.get('/api/orders/:id/esx', async ({ req, params }) => fileLink(req, params.id, 'esx'));

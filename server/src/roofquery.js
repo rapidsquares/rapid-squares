@@ -73,6 +73,13 @@ export async function placeOrder(order) {
     reportType: REPORT_TYPE[order.report_type] || 'residential',
     reportName: 'RS-' + order.report_number
   };
+  // Optional job details from the order form. The claim number also names the ESX file.
+  const d = order.order_details || {};
+  if (d.claim) body.claim = d.claim;
+  if (d.notes) body.notes = d.notes;
+  const [first, ...rest] = String(d.client_name || '').split(/\s+/).filter(Boolean);
+  const client = { firstName: first, lastName: rest.join(' ') || undefined, email: d.client_email, phone: d.client_phone };
+  if (Object.values(client).some(Boolean)) body.clientInfo = Object.fromEntries(Object.entries(client).filter(([, v]) => v).map(([k, v]) => [k, String(v).slice(0, 200)]));
   return json('POST', '/api/v1/reports/orders', { body, idempotencyKey: 'rs-order-' + order.id });
 }
 // Storm Report (open beta): hail, wind and tornado history. The response is the finished report.

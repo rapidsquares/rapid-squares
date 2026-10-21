@@ -46,6 +46,17 @@
     has_map: false, nothing_found: false
   };
   var STORM_DOCS = { weather_history: 'Weather History', hail_verification: 'Hail Verification', wind_verification: 'Wind Verification', date_of_loss: 'Date of Loss', homeowner: 'Homeowner Storm Summary' };
+  // Optional job details from the order form, same rules as the server.
+  function jobDetails(b, type) {
+    var j = (b && b.job) || {}, out = {};
+    if (str(j.claim)) out.claim = str(j.claim, 64);
+    if (str(j.client_name)) out.client_name = str(j.client_name, 120);
+    if (str(j.client_email)) { out.client_email = str(j.client_email, 160).toLowerCase(); if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(out.client_email)) fail(422, 'invalid', 'Check the client email, or leave it blank.'); }
+    if (str(j.client_phone)) out.client_phone = str(j.client_phone, 32);
+    if (str(j.notes)) out.notes = str(j.notes, 450);
+    if (type === 'storm_report' && out.client_name) out.insured_name = out.client_name;
+    return Object.keys(out).length ? out : null;
+  }
   function stormDocs() {
     return Object.keys(STORM_DOCS).map(function (t) { return { template: t, title: STORM_DOCS[t], needs_date_of_loss: t === 'date_of_loss' }; });
   }
@@ -102,7 +113,7 @@
     var orders = [
       order(1048, 'u_marcus', 'premium_residential', '907 Live Oak Ln, Round Rock, TX 78664', 30.5083, -97.6789, 'pending', now - 8 * MIN, null),
       order(1047, 'u_priya', 'premium_residential', '1418 Brushy Creek Rd, Cedar Park, TX 78613', 30.5121, -97.8076, 'in_progress', now - 40 * MIN, null),
-      order(1046, 'u_priya', 'premium_residential', '3305 Hidden Hollow Dr, Austin, TX 78748', 30.1712, -97.8203, 'needs_info', now - 1 * DAY, null),
+      order(1046, 'u_priya', 'premium_residential', '3305 Hidden Hollow Dr, Austin, TX 78748', 30.1712, -97.8203, 'in_progress', now - 1 * DAY, null),
       order(1045, 'u_marcus', 'commercial', '12100 Metric Blvd, Austin, TX 78758', 30.3955, -97.7166, 'delivered', now - 2 * DAY, m(186.4, '1/12', 4), true),
       order(1044, 'u_owner', 'premium_residential', '615 Mesa Verde Trl, Leander, TX 78641', 30.5788, -97.8531, 'delivered', now - 3 * DAY, m(34.2, '6/12', 14), true),
       order(1043, 'u_priya', 'premium_residential', '2209 Pecan Grove Cv, Georgetown, TX 78626', 30.6332, -97.6772, 'delivered', now - 6 * DAY, m(27.8, '8/12', 11), false),
@@ -254,7 +265,8 @@
   route('GET', '/api/public/products', function () {
     return {
       products: Object.keys(PRODUCTS).map(function (k) { var p = PRODUCTS[k]; return { id: k, label: p.label, price_cents: p.price, subscriber_price_cents: p.subscriber_price, available: p.available, esx_addon_allowed: p.esx, delivery_minutes: p.delivery_minutes }; }),
-      esx_price_cents: ESX_PRICE, free_reports_remaining: 0, subscribed: false, signup_free_reports: 0, trial_days: 30
+      esx_price_cents: ESX_PRICE, free_reports_remaining: 0, subscribed: false, signup_free_reports: 0, trial_days: 30,
+      plans: { monthly_cents: 10000, yearly_cents: 100000 }
     };
   });
   route('POST', '/api/guest-orders', function (c) {
@@ -267,6 +279,7 @@
     var email = str(b.email).toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail(422, 'invalid', 'Enter the email address where we should send the report.');
     if (!str(b.name)) fail(422, 'invalid', 'Enter your name.');
+    jobDetails(b, type);
     var n = c.db.next_report++; save(c.db);
     var price = p.price + (b.esx ? ESX_PRICE : 0);
     return { order: { report_number: 'RS-' + n, product_label: p.label, address: str(b.address, 300), price_cents: price, esx_purchased: !!b.esx, status: 'awaiting_payment' }, checkout_url: null, email: email };
@@ -303,7 +316,7 @@
     var subscribed = c.db.company.subscription && c.db.company.subscription.status === 'active';
     var free = c.db.company.free_reports_remaining > 0 && type === 'premium_residential';
     if (b.esx && !p.esx) fail(422, 'invalid', 'The ESX file isn’t available for ' + p.label + '.');
-    var storm = type === 'storm_report';
+    var storm = type === 'storm_report', job = jobDetails(b, type);
     // A free report covers the Premium report, including the ESX add-on.
     var price = free ? 0 : (subscribed ? p.subscriber_price : p.price) + (b.esx ? ESX_PRICE : 0);
     if (free) c.db.company.free_reports_remaining -= 1;
@@ -313,7 +326,7 @@
       address: str(b.address, 300), lat: b.lat, lon: b.lon, status: 'pending', price_cents: price, esx_purchased: !!b.esx,
       stripe_payment_id: price ? 'pi_sample_' + n : null, roofquery_order_id: 'rq_sample_' + n,
       total_squares: null, predominant_pitch: null, measurements: null, created_at: iso(Date.now()), completed_at: null, simulate: true,
-      order_details: null
+      order_details: job
     };
     // Storm Reports come back finished straight away.
     if (storm) {
@@ -339,7 +352,10 @@
     if (!STORM_DOCS[c.params.template]) fail(404, 'not_found', 'That PDF isn\u2019t part of a storm report.');
     var d = stormDetails(c.body);
     if (c.params.template === 'date_of_loss' && !d.date_of_loss) fail(422, 'needs_date_of_loss', 'Enter the date of loss for this PDF.');
-    if (c.params.template !== 'homeowner') { o.order_details = d; save(c.db); }
+    if (c.params.template !== 'homeowner') {
+      var keep = {}; Object.keys(o.order_details || {}).forEach(function (k) { if (/^client_/.test(k)) keep[k] = o.order_details[k]; });
+      o.order_details = Object.assign(keep, d); save(c.db);
+    }
     fail(501, 'not_connected', 'Your details are saved. The ' + STORM_DOCS[c.params.template] + ' PDF will download once RoofQuery is connected. This is sample data.');
   });
   route('GET', '/api/orders/:id/esx', notYet('The Xactimate (ESX) file'));
