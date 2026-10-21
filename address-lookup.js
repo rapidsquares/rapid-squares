@@ -1,4 +1,4 @@
-// Rapid Squares — order a report, step by step: report type → address → confirm the roof → review and place.
+// Rapid Squares — order a report, step by step: report type and address → confirm the roof → review and place.
 //
 // Address: type an address → suggestions from Azure Maps Autocomplete → pick one (or press Look up)
 // → Azure Maps Geocoding gives the coordinates. The roof step shows satellite imagery (Azure Maps Web SDK)
@@ -236,7 +236,7 @@
     if (map) map.setCamera({ center: [p.lon, p.lat], zoom: ZOOM });
     showPin();
     refresh();
-    if (step === 'address') goTo('location'); // picking an address moves straight on
+    if (step === 'report') nextBtn.focus(); // both chosen: Continue is next
   }
 
   // ---------- Azure Maps Web SDK ----------
@@ -318,12 +318,11 @@
   });
 
   // ---------- Steps ----------
-  var STEPS = ['report', 'address', 'location', 'review'];
-  var TITLES = { address: 'Find the property', report: 'Choose a report', location: 'Confirm the roof', review: 'Review and place order', done: 'Order placed' };
+  var STEPS = ['report', 'location', 'review'];
+  var TITLES = { report: 'New order', location: 'Confirm the roof', review: 'Review and place order', done: 'Order placed' };
   var wiz = $('wiz'), nextBtn = $('wiz-next'), backBtn = $('wiz-back');
   function goTo(to) {
-    if (to !== 'report' && to !== 'done' && !current()) to = 'report';
-    if ((to === 'location' || to === 'review') && !selected) to = 'address';
+    if ((to === 'location' || to === 'review') && !(current() && selected)) to = 'report';
     step = to;
     wiz.querySelectorAll('[data-panel]').forEach(function (p) { p.classList.toggle('hidden', p.getAttribute('data-panel') !== to); });
     var at = STEPS.indexOf(to);
@@ -339,14 +338,12 @@
     if (to === 'review') fillReview();
     wiz.querySelector('.wiz-body').scrollTop = 0;
     refresh();
-    if (to === 'address') input.focus();
   }
   // Footer buttons follow the step: what "Continue" says, and whether it can be pressed yet.
   function refresh() {
     backBtn.classList.toggle('invisible', step === 'report');
     var p = current();
-    if (step === 'address') { nextBtn.textContent = 'Continue'; nextBtn.disabled = !selected; }
-    else if (step === 'report') { nextBtn.textContent = 'Continue'; nextBtn.disabled = !p; }
+    if (step === 'report') { nextBtn.textContent = !p ? 'Choose a report' : !selected ? 'Pick the address' : 'Continue'; nextBtn.disabled = !p || !selected; }
     else if (step === 'location') { nextBtn.textContent = isStorm() ? 'This is the property' : 'This is the roof'; nextBtn.disabled = false; }
     else if (step === 'review') {
       var t = total();
@@ -355,8 +352,7 @@
     }
   }
   nextBtn.addEventListener('click', function () {
-    if (step === 'report') goTo('address');
-    else if (step === 'address') goTo('location');
+    if (step === 'report') goTo('location');
     else if (step === 'location') goTo('review');
     else if (step === 'review') placeOrder();
   });

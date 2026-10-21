@@ -27,7 +27,7 @@
   </a>
   <nav class="topnav" aria-label="Primary">
     <a href="orders.html">Home</a>
-    <a href="account.html">Account</a>
+    <a href="account.html">Settings</a>
 </nav>
 </header>
 
@@ -41,21 +41,20 @@
     <header class="wiz-head">
       <div>
         <p class="eyebrow">Order a report</p>
-        <h1 id="wiz-title">Choose a report</h1>
+        <h1 id="wiz-title">New order</h1>
       </div>
       <button type="button" class="modal-x hidden" id="wiz-close" aria-label="Close"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     </header>
     <ol class="wiz-steps" aria-label="Order steps">
-      <li data-step="report"><span class="wiz-n">1</span><span>Report</span></li>
-      <li data-step="address"><span class="wiz-n">2</span><span>Address</span></li>
-      <li data-step="location"><span class="wiz-n">3</span><span>Confirm roof</span></li>
-      <li data-step="review"><span class="wiz-n">4</span><span>Review</span></li>
+      <li data-step="report"><span class="wiz-n">1</span><span>Report &amp; address</span></li>
+      <li data-step="location"><span class="wiz-n">2</span><span>Confirm roof</span></li>
+      <li data-step="review"><span class="wiz-n">3</span><span>Review</span></li>
     </ol>
 
     <div class="wiz-body">
-      <!-- 1. Report type -->
-      <section class="wiz-panel" data-panel="report" aria-label="Report type">
-        <p class="lede">What do you need for this property?</p>
+      <!-- 1. Report type and address -->
+      <section class="wiz-panel" data-panel="report" aria-label="Report and address">
+        <h2 class="wiz-sub">What do you need?</h2>
         <fieldset class="report-opts">
           <legend class="sr">Report type</legend>
           <div id="od-options"><p class="hint">Loading report types…</p></div>
@@ -65,11 +64,7 @@
           <span class="esx-line"><b>Add Xactimate (ESX) file</b><span class="opt-price" id="od-esx-price">$5.00</span></span>
         </label>
         <p class="od-trial hidden" id="od-trial">Get subscriber prices free for <span id="od-trial-days">30</span> days. <a href="account.html#billing" target="_top">Start your free trial</a></p>
-      </section>
-
-      <!-- 2. Address -->
-      <section class="wiz-panel hidden" data-panel="address" aria-label="Property address">
-        <p class="lede">Type the property address and pick it from the list.</p>
+        <h2 class="wiz-sub">Where is the property?</h2>
         <form id="lookup-form" class="lookup" role="search" autocomplete="off">
           <div class="fld lookup-field">
             <label for="addr">Property address</label>
@@ -111,7 +106,7 @@
       <!-- 4. Review and place -->
       <section class="wiz-panel hidden" data-panel="review" aria-label="Review your order">
         <dl class="rv">
-          <div><dt>Property</dt><dd><b id="rv-line1"></b><span id="rv-line2" class="hint"></span><span id="rv-pin" class="hint hidden">Using your pin location</span></dd><dd><button type="button" class="linkbtn" data-goto="address">Change</button></dd></div>
+          <div><dt>Property</dt><dd><b id="rv-line1"></b><span id="rv-line2" class="hint"></span><span id="rv-pin" class="hint hidden">Using your pin location</span></dd><dd><button type="button" class="linkbtn" data-goto="report">Change</button></dd></div>
           <div><dt>Report</dt><dd><b id="rv-report"></b><span id="rv-report-hint" class="hint"></span></dd><dd><button type="button" class="linkbtn" data-goto="report">Change</button></dd></div>
         </dl>
         <div class="wiz-group" id="job-fields">
@@ -158,7 +153,7 @@
 <nav class="tabbar" aria-label="Primary (mobile)">
   <a href="orders.html"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-5h4v5"/></svg>Home</a>
   <a href="orders.html?order=1"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>Order</a>
-  <a href="account.html"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>Account</a>
+  <a href="account.html"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>Settings</a>
 </nav>
 
 <script src="runtime-config.js"></script>

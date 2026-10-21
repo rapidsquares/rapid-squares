@@ -71,7 +71,7 @@
   var NEEDS = { 'new-sketch.html': 'orders.create', 'orders.html?order=1': 'orders.create' };
   var PAGE_NEEDS = { 'new-sketch': ['orders.create', 'Order reports'] };
   function setupNav() {
-    document.querySelectorAll('.topnav a, .tabbar a, a.btn-primary').forEach(function (a) {
+    document.querySelectorAll('.topnav a, .tabbar a, .app-side a, a.btn-primary').forEach(function (a) {
       var perm = NEEDS[a.getAttribute('href')];
       if (perm && !can(perm)) a.classList.add('hidden');
     });
@@ -245,6 +245,7 @@
   function setupQuickOrder(onOrdered) {
     var btn = document.querySelector('.page-head a[href="new-sketch.html"]');
     if (!btn) return;
+    var side = document.querySelector('.app-side a[href="orders.html?order=1"]');
     var dlg = null, first = new URLSearchParams(location.search), src = 'new-sketch.html?embed=1';
     if (first.get('order') && can('orders.create')) {
       ['address', 'resume'].forEach(function (k) { if (first.get(k)) src += '&' + k + '=' + encodeURIComponent(first.get(k)); });
@@ -263,9 +264,11 @@
       }
       dlg.showModal();
     }
-    btn.addEventListener('click', function (e) {
-      if (e.ctrlKey || e.metaKey || e.shiftKey || !window.HTMLDialogElement) return; // new tab / old browser: go to the page
-      e.preventDefault(); open();
+    [btn, side].forEach(function (a) {
+      if (a) a.addEventListener('click', function (e) {
+        if (e.ctrlKey || e.metaKey || e.shiftKey || !window.HTMLDialogElement) return; // new tab / old browser: go to the page
+        e.preventDefault(); open();
+      });
     });
     window.addEventListener('message', function (e) {
       if (e.origin !== location.origin || !e.data) return;
