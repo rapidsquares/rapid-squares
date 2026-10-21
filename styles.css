@@ -643,25 +643,6 @@ body.embed .page-head h1 { font-size: 24px; }
 .inv-expires { display: block; margin-top: 4px; font-size: 12px; }
 
 /* Landing: report types */
-.lp-reports { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-bottom: 16px; align-items: stretch; }
-.lp-report { display: flex; flex-direction: column; gap: 12px; padding: 26px 24px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); }
-.lp-report-main { border: 2px solid var(--accent); box-shadow: 0 12px 30px rgba(176, 58, 10, .10); }
-.lp-report-tag { align-self: flex-start; padding: 4px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-dark); font-size: 12px; font-weight: 600; }
-.lp-report h3 { margin: 0; font-family: 'Archivo', sans-serif; font-size: 22px; }
-.lp-report-lede { margin: 0; color: var(--ink-2); font-size: 15px; line-height: 1.5; }
-.lp-report ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; color: var(--ink-2); font-size: 14px; line-height: 1.45; flex: 1 1 auto; }
-.lp-report-price { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding-top: 12px; border-top: 1px solid var(--line-2); }
-.lp-report-price b { font-family: 'Archivo', sans-serif; font-size: 28px; font-weight: 800; }
-.lp-report-price span { color: var(--muted); font-size: 14px; }
-.lp-report .btn { align-self: stretch; }
-.lp-report-price-text { flex-direction: column; align-items: flex-start; gap: 2px; }
-.lp-report-price-text b { line-height: 1.15; }
-.lp-report-tag-soon { background: var(--line-2); color: var(--ink-2); }
-.lp-report .btn:disabled { opacity: .6; cursor: not-allowed; }
-.lp-price-sub { flex-direction: column; align-items: flex-start; gap: 2px; }
-.lp-price-sub .lp-price-label { color: var(--accent-dark); font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
-.lp-price-sub b { font-size: 40px; line-height: 1.05; color: var(--accent-dark); }
-.lp-price-sub .lp-price-reg { color: var(--muted); font-size: 14px; }
 
 /* ---------- Order: step-by-step panel (a pop-up on Home, a card for visitors) ---------- */
 .wiz-page { max-width: 920px; }
@@ -750,3 +731,32 @@ body.embed .notice { margin: 12px 16px 0; }
 .sr-haz .opt-tag { margin-left: 0; }
 .modal textarea { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--field); border-radius: 6px; font: inherit; font-size: 14px; resize: vertical; }
 @media (max-width: 640px) { .sr-headline { font-size: 17px; } .sr-pdfs { position: static; } }
+
+/* ---------- Landing: compact price table ---------- */
+.lp-pt-wrap { border: 1px solid var(--line); border-radius: 12px; background: var(--paper); overflow: hidden; }
+.lp-pt { width: 100%; border-collapse: collapse; }
+.lp-pt thead th { padding: 12px 20px; text-align: left; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); background: var(--paper-2); border-bottom: 1px solid var(--line); }
+.lp-pt td, .lp-pt tbody th { padding: 16px 20px; text-align: left; vertical-align: middle; border-top: 1px solid var(--line-2); }
+.lp-pt tbody tr:first-child > * { border-top: 0; }
+.lp-pt tbody th { font-weight: 400; background: transparent; text-transform: none; letter-spacing: 0; color: var(--ink); display: flex; flex-direction: column; gap: 2px; }
+.lp-pt tbody th b { font-family: 'Archivo', sans-serif; font-size: 17px; }
+.lp-pt tbody th span { font-size: 14px; color: var(--muted); }
+.lp-pt-main { background: var(--accent-soft); }
+.lp-pt-sub b { font-family: 'Archivo', sans-serif; font-size: 26px; font-weight: 800; color: var(--accent-dark); }
+.lp-pt-reg span { font-size: 16px; color: var(--ink-2); }
+.lp-pt-go { text-align: right !important; width: 1%; white-space: nowrap; }
+.lp-pt-go .btn { height: 40px; padding: 0 20px; }
+.lp-pt-foot { margin-top: 12px; color: var(--muted); }
+.lp-pt-foot a { color: var(--accent-dark); font-weight: 600; }
+.lp-pt-soon { display: block; margin-top: 4px; }
+@media (max-width: 640px) {
+  .lp-pt thead { display: none; }
+  .lp-pt, .lp-pt tbody { display: block; }
+  .lp-pt tr { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; padding: 16px; border-top: 1px solid var(--line-2); }
+  .lp-pt tbody tr:first-child { border-top: 0; }
+  .lp-pt td, .lp-pt tbody th { padding: 0; border: 0; }
+  .lp-pt tbody th { grid-column: 1 / -1; }
+  .lp-pt td[data-label]::before { content: attr(data-label); display: block; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .lp-pt-go { grid-column: 1 / -1; width: auto; }
+  .lp-pt-go .btn { width: 100%; height: 44px; }
+}

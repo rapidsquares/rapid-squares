@@ -10,7 +10,7 @@ Clickable mockups for an aerial roof report tool. These are design mockups only:
 | `orders.html` | **Home**: order a new report (pop-up) and see ordered reports with status filters and search |
 | `new-sketch.html` | **Order form**, step by step: address → report type → confirm the roof on the map (Azure Maps satellite imagery) → review and place. Shown in the Home pop-up; visitors without an account use it as a page, and signed-in visits forward to Home |
 | `storm-report.html` | **Storm Report**: the results (damage chance, hail, wind, tornadoes, every storm day) and its five PDFs. Date of loss, claim number, insured name and notes are asked when a PDF is downloaded |
-| `account.html` | **Account**, with three tabs: **Settings** (profile, contact info, billing, password), **Report settings** (company name, logo, license number, contact info, roof photos) and **Team & invites** (admin: invite employees, pick a role, set permissions) |
+| `account.html` | **Account**, one side list: **Profile** (photo, name, job title, time zone, sign-in email), **Company & branding** (company name, license number, logo, colors and the one set of contact details printed on reports), **Team & invites** (admin), **Billing** and **Password & security** |
 | `report-settings.html`, `team.html` | Old links; they forward to the matching Account tab |
 
 The top nav links all five screens together.

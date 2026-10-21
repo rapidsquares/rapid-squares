@@ -676,7 +676,7 @@
         if (on) a.parentNode.scrollLeft = a.offsetLeft - a.parentNode.offsetLeft - 16; // phones: the list scrolls sideways
       });
       document.querySelectorAll('[data-panel]').forEach(function (p) { p.classList.toggle('hidden', p.getAttribute('data-panel') !== tab); });
-      $('acct-save-bar').classList.toggle('hidden', tab !== 'profile' && tab !== 'contact');
+      $('acct-save-bar').classList.toggle('hidden', tab !== 'profile');
       window.scrollTo(0, 0);
     }
     window.addEventListener('hashchange', show);
@@ -689,20 +689,20 @@
       var parts = (u.full_name || '').split(' ');
       $('fn').value = parts.shift() || ''; $('ln').value = parts.join(' ');
       $('ti').value = u.job_title || ''; $('em').value = u.email || ''; $('em').disabled = true;
-      $('ph').value = u.phone || ''; $('op').value = u.office_phone || '';
-      if (u.preferred_contact) $('ct').value = u.preferred_contact;
       if (u.timezone) $('tz').value = u.timezone;
       if (u.avatar_url) { $('avatar-img').src = u.avatar_url; $('avatar-img').classList.remove('hidden'); $('avatar-empty').classList.add('hidden'); }
     }
     fill(me);
     $('org').value = ME.company.name;
+    // People who edit the company see its name under Company & branding; everyone else sees it here, locked.
+    if (can('branding.edit')) $('org-card').classList.add('hidden');
     $('em').setAttribute('title', 'Your sign-in email. It can be changed from the sign-in settings.');
 
     $('acct-cancel').addEventListener('click', function () { fill(me); toast('Changes discarded.'); });
     $('acct-save').addEventListener('click', function () {
       var btn = this, name = ($('fn').value.trim() + ' ' + $('ln').value.trim()).trim();
       busy(btn, true);
-      api.patch('/api/me', { full_name: name, job_title: $('ti').value.trim(), phone: $('ph').value.trim(), office_phone: $('op').value.trim(), preferred_contact: $('ct').value, timezone: $('tz').value })
+      api.patch('/api/me', { full_name: name, job_title: $('ti').value.trim(), timezone: $('tz').value })
         .then(function (r) { me = r.user; ME.user = r.user; toast('Your profile is saved.'); }).catch(showError).then(function () { busy(btn, false); });
     });
     $('avatar-input').addEventListener('change', function (e) {
