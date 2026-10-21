@@ -1,5 +1,5 @@
 // Landing page search: address suggestions as you type (places.js). Picking one (or pressing
-// "Look up roof") opens the order page with that address looked up.
+// "Search") opens the order page with that address looked up.
 (function () {
   'use strict';
   var form = document.querySelector('.lp-search'), input = document.getElementById('lp-addr'), list = document.getElementById('lp-sugg');
