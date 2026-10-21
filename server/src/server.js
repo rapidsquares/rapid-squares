@@ -26,7 +26,7 @@ const SECURITY_HEADERS = {
 
 // The browser learns how to reach sign-in and the API from this file. Only PUBLIC values go here.
 function runtimeConfig() {
-  const cfg = { mode: 'live', supabaseUrl: config.supabase.url, supabasePublishableKey: config.supabase.publishableKey, apiBaseUrl: '', azureMapsKey: config.azureMapsKey };
+  const cfg = { mode: 'live', supabaseUrl: config.supabase.url, supabasePublishableKey: config.supabase.publishableKey, apiBaseUrl: '', azureMapsKey: config.azureMapsKey, googleMapsKey: config.googleMapsKey };
   return `window.RS_RUNTIME = ${JSON.stringify(cfg)};\n`;
 }
 

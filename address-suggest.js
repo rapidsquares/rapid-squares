@@ -1,28 +1,8 @@
-// Address suggestions (Azure Maps) for ordinary form fields: add data-address-suggest to an input.
+// Address suggestions (places.js) for ordinary form fields: add data-address-suggest to an input.
 // Picking a suggestion fills in the full address; the field still saves the way it always did.
 (function () {
   'use strict';
-  var cfg = window.RS_CONFIG || {}, rt = window.RS_RUNTIME || {};
-  var KEY = (rt.azureMapsKey || cfg.azureMapsKey || '').trim();
-  var COUNTRY = cfg.countryRegion || 'US';
-  var BBOX = COUNTRY === 'US' ? '-179.9,18.5,-66.5,71.5' : '-180,-85,180,85';
-  if (!KEY) return; // without a key the fields are plain text boxes
-  var extra = { countryRegion: COUNTRY, resultTypeGroups: 'Address' };
-
-  function fetchSuggestions(q) {
-    var params = Object.assign({ 'api-version': '2026-01-01', 'subscription-key': KEY, query: q, top: 5, bbox: BBOX }, extra);
-    return fetch('https://atlas.microsoft.com/geocode:autocomplete?' + new URLSearchParams(params)).then(function (r) {
-      if (r.status === 400 && Object.keys(extra).length) { extra = {}; return fetchSuggestions(q); } // optional filters rejected
-      if (!r.ok) throw new Error('azure ' + r.status);
-      return r.json();
-    });
-  }
-  function toItem(f) {
-    var a = (f.properties && f.properties.address) || {};
-    var line1 = a.addressLine || (f.properties && f.properties.name) || a.formattedAddress || '';
-    var label = a.formattedAddress || line1;
-    return { label: label, line1: line1, line2: label.replace(line1, '').replace(/^[,\s]+/, '') };
-  }
+  if (!window.RS || !RS.places || !RS.places.available) return; // without a key the fields are plain text boxes
 
   function attach(input, n) {
     // The list sits right under the field, like the order form's address search.
@@ -71,9 +51,9 @@
       if (q.length < 3) { reqId++; render([]); return; }
       timer = setTimeout(function () {
         var id = ++reqId;
-        fetchSuggestions(q).then(function (data) {
+        RS.places.suggest(q).then(function (next) {
           if (id !== reqId) return; // a newer keystroke won
-          render((data.features || []).map(toItem).filter(function (p) { return p.label; }));
+          render(next);
         }).catch(function () { if (id === reqId) render([]); });
       }, 200);
     });

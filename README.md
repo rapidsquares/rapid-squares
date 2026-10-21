@@ -53,13 +53,13 @@ PDF and ESX downloads, Stripe's billing page, and sign-out show a short message 
 
 **Switching to the real backend:** set `apiBaseUrl` in `config.js` to the backend's address, for example `https://api.rapidsquares.com`. The pages stay the same. `api.js` sends the same calls to the server instead.
 
-## Address lookup (Azure Maps)
+## Address search (Google Places) and map (Azure Maps)
 
-The **order pop-up** (`order.html`) searches addresses and shows an aerial view of the property. It uses three parts of Azure Maps:
+Every address box (the order pop-up, the landing page search and Business address in Settings) suggests addresses as you type through `places.js`, using **Google Places API (New)** with `GOOGLE_MAPS_KEY` (in `server/.env` and on Render). Picking one gets its exact location and address parts with one more call; a session token makes the typing and the pick count as one lookup. Pressing Enter without picking takes Google's best match.
 
-- **Autocomplete** (`/geocode:autocomplete`, Search API 2026-01-01) suggests addresses as you type.
-- **Geocoding** (`/geocode`) turns the address you pick into coordinates.
-- **Web SDK v3** shows the `satellite` map style zoomed in on the roof, with a pin on the property and a switcher for satellite, satellite with labels, or road views.
+**Azure Maps** is only the map: the **Web SDK v3** shows the `satellite` map style zoomed in on the roof, with a pin on the property and a switcher for satellite, satellite with labels, or road views.
+
+The Google key is used in the browser, so in Google Cloud › Credentials restrict it to **Places API (New)** and to your site's addresses (`https://rapidsquares.com/*`, plus `http://localhost:3000/*` for local work).
 
 ### Turning it on
 

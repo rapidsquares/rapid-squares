@@ -48,6 +48,8 @@ export const config = {
     yearlyCents: parseInt(env.SUBSCRIPTION_YEARLY_CENTS, 10) || 100000
   },
   azureMapsKey: String(env.AZURE_MAPS_KEY || '').trim(),
+  // Google Places (New): address suggestions as people type. A browser key: restrict it to your site in Google Cloud.
+  googleMapsKey: String(env.GOOGLE_MAPS_KEY || '').trim(),
   email: {
     resendKey: String(env.RESEND_API_KEY || '').trim().replace(/^["']|["']$/g, ''),
     apiBase: trimSlash(env.RESEND_API_BASE) || 'https://api.resend.com',

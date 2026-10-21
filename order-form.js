@@ -1,28 +1,17 @@
 // Rapid Squares — order a report, step by step: address and report type → confirm the roof → review and place.
 //
-// Address: type an address → suggestions from Azure Maps Autocomplete → pick one (Enter looks up what's typed)
-// → Azure Maps Geocoding gives the coordinates. The roof step shows satellite imagery (Azure Maps Web SDK)
-// with a pin that can be dragged onto the right roof.
-//
-// APIs used (Search 2026-01-01, Web SDK v3):
-//   GET https://atlas.microsoft.com/geocode:autocomplete
-//   GET https://atlas.microsoft.com/geocode
-//   https://atlas.microsoft.com/sdk/javascript/mapcontrol/3/atlas.min.js
+// Address: type an address → suggestions from Google Places (places.js) → pick one for its exact
+// location (Enter without picking takes the best match).
+// Roof: satellite imagery from the Azure Maps Web SDK v3 (atlas.min.js), with a pin that can be
+// dragged onto the right roof.
 (function () {
   var cfg = window.RS_CONFIG || {};
-  // The key comes from the server's AZURE_MAPS_KEY setting when it has one, otherwise from config.js.
+  // The map key comes from the server's AZURE_MAPS_KEY setting when it has one, otherwise from config.js.
   var rt = window.RS_RUNTIME || {};
   var KEY = (rt.azureMapsKey || cfg.azureMapsKey || '').trim();
-  var COUNTRY = cfg.countryRegion || 'US';
   var ZOOM = cfg.propertyZoom || 19;
-  var API = 'https://atlas.microsoft.com';
-  var API_VERSION = '2026-01-01';
   var SDK_CSS = 'https://atlas.microsoft.com/sdk/javascript/mapcontrol/3/atlas.min.css';
   var SDK_JS = 'https://atlas.microsoft.com/sdk/javascript/mapcontrol/3/atlas.min.js';
-  // Search area as lon1,lat1,lon2,lat2. Autocomplete needs a bbox or a point to rank results, and
-  // Geocoding with a free-text query only accepts bbox/coordinates/view/top (not countryRegion).
-  // US box covers all 50 states incl. Alaska and Hawaii; other countries fall back to the whole world.
-  var SEARCH_BBOX = COUNTRY === 'US' ? '-179.9,18.5,-66.5,71.5' : '-180,-85,180,85';
 
   var $ = function (id) { return document.getElementById(id); };
   var form = $('lookup-form'), input = $('addr'), list = $('suggestions'), status = $('lookup-status');
@@ -31,57 +20,19 @@
   var selected = null, suggestions = [], active = -1, debounce = null, reqId = 0;
   var map = null, marker = null, sdkPromise = null;
 
-  if (!KEY) $('key-missing').classList.remove('hidden');
+  if (!KEY || !RS.places.available) {
+    var missing = $('key-missing');
+    missing.querySelector('span').innerHTML = !RS.places.available
+      ? '<b>Address search isn\u2019t connected yet.</b> Set <code>GOOGLE_MAPS_KEY</code> on the server (or <code>googleMapsKey</code> in <code>config.js</code>) for address suggestions.'
+      : '<b>The aerial map isn\u2019t connected yet.</b> Set <code>AZURE_MAPS_KEY</code> on the server (or <code>azureMapsKey</code> in <code>config.js</code>) to show the roof from above.';
+    missing.classList.remove('hidden');
+  }
   if (location.protocol === 'file:') {
     var warn = $('key-missing');
     warn.querySelector('span').innerHTML = '<b>Open the site with start-windows.bat.</b> This page was opened directly as a file, and browsers block map lookups from files.';
     warn.classList.remove('hidden');
   }
 
-  // ---------- Azure Maps REST ----------
-  function azure(path, params) {
-    var q = new URLSearchParams(Object.assign({ 'api-version': API_VERSION, 'subscription-key': KEY }, params));
-    var url = API + path + '?' + q.toString();
-    return fetch(url).catch(function (e) {
-      // The request never got an answer: blocked by the browser (CORS), an ad blocker, a firewall, or offline.
-      var err = new Error('network'); err.kind = 'network'; err.path = path; err.cause = e;
-      console.error('[Rapid Squares] Azure Maps request failed before a response:', path, e);
-      throw err;
-    }).then(function (res) {
-      if (res.ok) return res.json();
-      return res.text().then(function (text) {
-        var code = '', detail = '';
-        try { var j = JSON.parse(text); code = (j.error && j.error.code) || ''; detail = (j.error && j.error.message) || ''; } catch (_) { detail = text.slice(0, 200); }
-        var err = new Error('http');
-        err.kind = (res.status === 401 || res.status === 403) ? 'auth' : 'http';
-        err.status = res.status; err.code = code; err.detail = detail; err.path = path;
-        console.error('[Rapid Squares] Azure Maps error', res.status, path, code, detail);
-        throw err;
-      });
-    });
-  }
-  function toPlace(f) {
-    var a = (f.properties && f.properties.address) || {};
-    var coords = f.geometry && f.geometry.coordinates;
-    var line1 = a.addressLine || (f.properties && f.properties.name) || a.formattedAddress || '';
-    var rest = (a.formattedAddress || '').replace(line1, '').replace(/^[,\s]+/, '');
-    return {
-      label: a.formattedAddress || line1,
-      line1: line1,
-      line2: rest,
-      lon: coords ? coords[0] : null,
-      lat: coords ? coords[1] : null,
-      confidence: f.properties && f.properties.confidence,
-      // Address pieces RoofQuery needs to place the order.
-      parts: {
-        street: a.addressLine || '',
-        city: a.locality || '',
-        state: (a.adminDistricts && a.adminDistricts[0] && (a.adminDistricts[0].shortName || a.adminDistricts[0].name)) || '',
-        postalCode: a.postalCode || '',
-        country: (a.countryRegion && a.countryRegion.ISO) || ''
-      }
-    };
-  }
   // Where to rank suggestions around ([lon, lat]): the device's location when the browser has already
   // been allowed to share it, otherwise the company's most recent order. Without either, the whole country.
   var near = null, nearFromDevice = false;
@@ -97,53 +48,15 @@
     }).catch(function () { /* fall back to the whole country */ });
   }
   if (window.RS && RS.me) findNear(); else document.addEventListener('rs:ready', findNear, { once: true });
-  function area(params) {
-    // Azure ranks by distance from "coordinates"; bbox only limits the area.
-    return Object.assign(params, near ? { coordinates: near[0].toFixed(4) + ',' + near[1].toFixed(4) } : { bbox: SEARCH_BBOX });
-  }
-  function geocode(query, top) {
-    // Only query + bbox/coordinates/view/top are allowed alongside a free-text query.
-    return azure('/geocode', area({ query: query, top: top || 5 }))
-      .then(function (data) { return (data.features || []).map(toPlace).filter(function (p) { return p.lat != null; }); });
-  }
-  var autoParams = { countryRegion: COUNTRY, resultTypeGroups: 'Address' };
-  function autocomplete(query) {
-    var base = area({ query: query, top: 5 });
-    return azure('/geocode:autocomplete', Object.assign({}, base, autoParams)).catch(function (err) {
-      // If Azure rejects the optional filters, drop them for the rest of the session and retry once.
-      // Same for the "near you" ranking.
-      if (err && err.status === 400 && (Object.keys(autoParams).length || near)) {
-        console.warn('[Rapid Squares] Autocomplete rejected optional filters; retrying without them.', err.detail);
-        autoParams = {}; near = null;
-        return azure('/geocode:autocomplete', { query: query, top: 5, bbox: SEARCH_BBOX });
-      }
-      throw err;
-    }).then(function (data) { return (data.features || []).map(toPlace).filter(function (p) { return p.label; }); });
-  }
 
   // ---------- Status + errors ----------
   function say(msg, isError) {
     status.textContent = msg;
     status.classList.toggle('error', !!isError);
   }
-  function explain(err) {
-    err = err || {};
-    var info = (err.code && String(err.code).indexOf(String(err.status)) === 0) ? err.code : [err.status, err.code].filter(Boolean).join(' ');
-    if (err.kind === 'auth') {
-      return 'Azure Maps rejected the key (' + info + '). Check that azureMapsKey in config.js is the full Primary Key from your Azure Maps account, with no extra spaces.' + (err.detail ? ' Azure said: “' + err.detail + '”' : '');
-    }
-    if (err.kind === 'http') {
-      if (err.status === 429) return 'Azure Maps is limiting requests right now (429). Wait a moment and try again.';
-      return 'Azure Maps returned an error (' + info + ')' + (err.detail ? ': “' + err.detail + '”' : '.') ;
-    }
-    if (location.protocol === 'file:') {
-      return 'The page was opened as a file, so the browser blocked the request. Start the site with start-windows.bat and try again.';
-    }
-    return 'Your browser couldn’t get a response from Azure Maps. If your Azure Maps account has CORS rules, add ' + location.origin + ' to them. Ad blockers or a work network can also block atlas.microsoft.com.';
-  }
   function needKey() {
-    if (KEY) return false;
-    say('Add your Azure Maps key to config.js to look up addresses.', true);
+    if (RS.places.available) return false;
+    say('Address search needs the Google key (GOOGLE_MAPS_KEY).', true);
     return true;
   }
 
@@ -179,14 +92,15 @@
     clearTimeout(debounce);
     var q = input.value.trim();
     if (q.length < 3) { closeSuggestions(); say('Type at least 3 characters to see suggestions.'); return; }
-    if (!KEY) { closeSuggestions(); needKey(); return; }
+    if (!RS.places.available) { closeSuggestions(); needKey(); return; }
     debounce = setTimeout(function () {
       var id = ++reqId;
-      autocomplete(q).then(function (items) {
+      // Suggestions come from Google Places when it's set up, otherwise Azure (places.js).
+      RS.places.suggest(q, { near: near }).then(function (items) {
         if (id !== reqId) return;               // a newer keystroke won
         renderSuggestions(items);
         say(items.length ? items.length + ' suggestion' + (items.length > 1 ? 's' : '') + '. Pick one, or use the arrow keys.' : 'No matches yet. Keep typing, or press Enter to search.');
-      }).catch(function (err) { if (id === reqId) { closeSuggestions(); say(explain(err), true); } });
+      }).catch(function (err) { if (id === reqId) { closeSuggestions(); say(suggestError(err), true); } });
     }, 200);
   });
   // Typed before this script was ready (slow first load)? Show suggestions for it now.
@@ -216,33 +130,30 @@
     if (!q) { say('Enter an address to look up.', true); input.focus(); return; }
     if (needKey()) return;
     closeSuggestions();
-    say('Looking up “' + q + '”…');
-    geocode(q, 5).then(function (places) {
-      if (!places.length) { say('No address found for “' + q + '”. Check the spelling or add the city and state.', true); return; }
-      if (places.length > 1 && places[0].confidence !== 'High') {
-        clearTimeout(blurTimer);
-        renderSuggestions(places);
-        input.focus();
-        say('Several matches — pick the right one.');
-        return;
-      }
-      show(places[0]);
-    }).catch(function (err) { say(explain(err), true); });
+    // Enter without picking: take Google's best match for what was typed.
+    say('Looking up \u201c' + q + '\u201d\u2026');
+    RS.places.suggest(q, { near: near }).then(function (items) {
+      if (!items.length) { say('No address found for \u201c' + q + '\u201d. Check the spelling or add the city and state.', true); return; }
+      choose(items[0]);
+    }).catch(function (err) { say(suggestError(err), true); });
   });
+
+  function suggestError(err) {
+    if (err && err.kind === 'auth') return 'Google rejected the address-suggestion key' + (err.message ? ': \u201c' + err.message + '\u201d' : '.') + ' Check GOOGLE_MAPS_KEY and the key\u2019s website restrictions in Google Cloud.';
+    return (err && err.message) || 'Address suggestions aren\u2019t working right now. Type the full address and press Enter.';
+  }
 
   // ---------- Choosing a place ----------
   function choose(p) {
     cancelSuggestions();
     closeSuggestions();
     input.value = p.label;
-    if (p.lat != null) { show(p); return; }
-    // Autocomplete results don't always include coordinates — geocode the full address.
-    say('Finding the roof for ' + p.label + '…');
-    geocode(p.label, 1).then(function (places) {
-      if (!places.length) { say('Couldn’t place that address on the map.', true); return; }
-      places[0].line1 = p.line1; places[0].line2 = p.line2;
-      show(places[0]);
-    }).catch(function (err) { say(explain(err), true); });
+    say('Finding ' + p.label + '\u2026');
+    // Google suggestions carry an id: one more call gives the exact location and address parts.
+    RS.places.details(p).then(function (place) {
+      if (!place) { say('Couldn\u2019t find that address on the map. Try another suggestion.', true); return; }
+      input.value = place.label; show(place);
+    }).catch(function (err) { say(suggestError(err), true); });
   }
 
   function show(p) {
@@ -591,7 +502,8 @@
   if (/[?&]resume=1/.test(location.search) && !RS.guest) document.addEventListener('rs:ready', resumePending, { once: true });
 
   goTo('report');
-  // Prefill from ?address=… (e.g. the landing page search)
-  var pre = new URLSearchParams(location.search).get('address');
-  if (pre) { input.value = pre; if (KEY) form.requestSubmit(); }
+  // Prefill from the landing page search: ?address=… (and &place=… when a Google suggestion was picked)
+  var qs = new URLSearchParams(location.search), pre = qs.get('address'), preId = qs.get('place');
+  if (pre && preId) { input.value = pre; choose({ label: pre, placeId: preId }); }
+  else if (pre) { input.value = pre; if (RS.places.available) form.requestSubmit(); }
 })();

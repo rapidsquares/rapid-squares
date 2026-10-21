@@ -1,6 +1,6 @@
 // Rapid Squares settings.
 //
-// Address lookup and aerial imagery use Azure Maps. Paste your Azure Maps
+// Aerial imagery uses Azure Maps; address suggestions use Google Places. Paste your Azure Maps
 // subscription key below (Azure portal › your Azure Maps account ›
 // Settings › Authentication › Primary Key).
 //
@@ -9,6 +9,8 @@
 // (Settings › CORS) or switch to Microsoft Entra ID / SAS token auth.
 window.RS_CONFIG = {
   azureMapsKey: '',
+  // Google Places API (New) key for address suggestions (on the real server: GOOGLE_MAPS_KEY).
+  googleMapsKey: '',
 
   // Country to search in (ISO 3166-1 alpha-2). 'US' limits suggestions and lookups to the
   // United States; any other code searches worldwide with that country preferred in suggestions.

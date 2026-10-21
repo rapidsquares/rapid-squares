@@ -1,29 +1,12 @@
-// Landing page search: Azure Maps address suggestions as you type. Picking one (or pressing
+// Landing page search: address suggestions as you type (places.js). Picking one (or pressing
 // "Look up roof") opens the order page with that address looked up.
 (function () {
   'use strict';
-  var cfg = window.RS_CONFIG || {}, rt = window.RS_RUNTIME || {};
-  var KEY = (rt.azureMapsKey || cfg.azureMapsKey || '').trim();
-  var COUNTRY = cfg.countryRegion || 'US';
-  var BBOX = COUNTRY === 'US' ? '-179.9,18.5,-66.5,71.5' : '-180,-85,180,85';
   var form = document.querySelector('.lp-search'), input = document.getElementById('lp-addr'), list = document.getElementById('lp-sugg');
-  if (!form || !input || !list || !KEY) return; // without a key the box still works as a plain search
+  // Without a key the box still works as a plain search.
+  if (!form || !input || !list || !window.RS || !RS.places || !RS.places.available) return;
 
-  var items = [], active = -1, timer = null, reqId = 0, extra = { countryRegion: COUNTRY, resultTypeGroups: 'Address' };
-  function fetchSuggestions(q) {
-    var params = Object.assign({ 'api-version': '2026-01-01', 'subscription-key': KEY, query: q, top: 5, bbox: BBOX }, extra);
-    return fetch('https://atlas.microsoft.com/geocode:autocomplete?' + new URLSearchParams(params)).then(function (r) {
-      if (r.status === 400 && Object.keys(extra).length) { extra = {}; return fetchSuggestions(q); } // optional filters rejected
-      if (!r.ok) throw new Error('azure ' + r.status);
-      return r.json();
-    });
-  }
-  function toItem(f) {
-    var a = (f.properties && f.properties.address) || {};
-    var line1 = a.addressLine || (f.properties && f.properties.name) || a.formattedAddress || '';
-    var label = a.formattedAddress || line1;
-    return { label: label, line1: line1, line2: label.replace(line1, '').replace(/^[,\s]+/, '') };
-  }
+  var items = [], active = -1, timer = null, reqId = 0;
   function render(next) {
     items = next; active = -1; list.innerHTML = '';
     items.forEach(function (p, i) {
@@ -32,7 +15,7 @@
       var b = document.createElement('b'); b.textContent = p.line1;
       var s = document.createElement('span'); s.textContent = p.line2;
       li.appendChild(b); li.appendChild(s);
-      li.addEventListener('mousedown', function (e) { e.preventDefault(); go(p.label); });
+      li.addEventListener('mousedown', function (e) { e.preventDefault(); go(p); });
       list.appendChild(li);
     });
     list.classList.toggle('hidden', !items.length);
@@ -46,9 +29,10 @@
     input.setAttribute('aria-activedescendant', 'lp-sugg-' + active);
     list.children[active].scrollIntoView({ block: 'nearest' });
   }
-  function go(address) {
-    input.value = address; render([]);
-    location.href = 'order.html?address=' + encodeURIComponent(address);
+  // Open the order page with this address looked up (a Google suggestion also passes its place id).
+  function go(p) {
+    input.value = p.label; render([]);
+    location.href = 'order.html?address=' + encodeURIComponent(p.label) + (p.placeId ? '&place=' + encodeURIComponent(p.placeId) : '');
   }
 
   input.addEventListener('input', function () {
@@ -57,9 +41,9 @@
     if (q.length < 3) { reqId++; render([]); return; }
     timer = setTimeout(function () {
       var id = ++reqId;
-      fetchSuggestions(q).then(function (data) {
+      RS.places.suggest(q).then(function (next) {
         if (id !== reqId) return; // a newer keystroke won
-        render((data.features || []).map(toItem).filter(function (p) { return p.label; }));
+        render(next);
       }).catch(function () { if (id === reqId) render([]); });
     }, 200);
   });
@@ -70,7 +54,7 @@
     if (e.key === 'ArrowDown' && open) { e.preventDefault(); highlight(active + 1); }
     else if (e.key === 'ArrowUp' && open) { e.preventDefault(); highlight(active - 1); }
     else if (e.key === 'Escape') render([]);
-    else if (e.key === 'Enter' && open && active >= 0) { e.preventDefault(); go(items[active].label); }
+    else if (e.key === 'Enter' && open && active >= 0) { e.preventDefault(); go(items[active]); }
   });
   input.addEventListener('blur', function () { setTimeout(function () { render([]); }, 150); });
 })();
