@@ -42,36 +42,39 @@
 </aside>
 
 <main class="page" style="max-width: 1280px; display: flex; flex-direction: column; gap: 24px;">
-  <div class="page-head" style="margin-bottom: 0;">
-    <div>
-      <p class="eyebrow"><span class="co-name"></span></p>
-      <h1>Home</h1>
-      <p class="lede">Order a new roof report, or check on the ones you've ordered (newest first).</p>
+  <!-- Stays at the top on phones while the reports scroll under it -->
+  <div class="home-top" id="home-top">
+    <div class="page-head" style="margin-bottom: 0;">
+      <div>
+        <p class="eyebrow"><span class="co-name"></span></p>
+        <h1>Home</h1>
+        <p class="lede">Order a new roof report, or check on the ones you've ordered (newest first).</p>
+      </div>
+      <a href="order.html" class="btn btn-primary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        Order new report
+      </a>
     </div>
-    <a href="order.html" class="btn btn-primary">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-      Order new report
-    </a>
+
+    <div class="split">
+      <div class="tabs" role="tablist" aria-label="Filter by status">
+        <button type="button" class="tab" role="tab" data-filter="all" aria-selected="true">All<span class="count"></span></button>
+        <button type="button" class="tab" role="tab" data-filter="processing" aria-selected="false">Processing<span class="count"></span></button>
+        <button type="button" class="tab" role="tab" data-filter="in_progress" aria-selected="false">In progress<span class="count"></span></button>
+        <button type="button" class="tab" role="tab" data-filter="completed" aria-selected="false">Completed<span class="count"></span></button>
+        <button type="button" class="tab" role="tab" data-filter="cancelled" aria-selected="false">Cancelled<span class="count"></span></button>
+      </div>
+      <div style="position: relative; flex: 0 1 320px; min-width: 220px;" class="fld search-box">
+        <label for="q" class="sr">Search reports</label>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#56616B" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="position: absolute; left: 14px; top: 14px;"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+        <input id="q" type="search" placeholder="Search address or report #" style="padding-left: 40px; font-size: 14px;">
+      </div>
+    </div>
   </div>
 
   <div id="trial-banner" class="trial-banner hidden" role="region" aria-label="Free trial">
     <div><b>Try a subscription free for <span id="tb-days">30</span> days</b><span class="hint">Subscriber prices on every report. Your plan starts after the trial unless you cancel.</span></div>
     <a href="account.html#billing" class="btn btn-primary">Start free trial</a>
-  </div>
-
-  <div class="split">
-    <div class="tabs" role="tablist" aria-label="Filter by status">
-      <button type="button" class="tab" role="tab" data-filter="all" aria-selected="true">All<span class="count"></span></button>
-      <button type="button" class="tab" role="tab" data-filter="processing" aria-selected="false">Processing<span class="count"></span></button>
-      <button type="button" class="tab" role="tab" data-filter="in_progress" aria-selected="false">In progress<span class="count"></span></button>
-      <button type="button" class="tab" role="tab" data-filter="completed" aria-selected="false">Completed<span class="count"></span></button>
-      <button type="button" class="tab" role="tab" data-filter="cancelled" aria-selected="false">Cancelled<span class="count"></span></button>
-    </div>
-    <div style="position: relative; flex: 0 1 320px; min-width: 220px;" class="fld search-box">
-      <label for="q" class="sr">Search reports</label>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#56616B" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="position: absolute; left: 14px; top: 14px;"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
-      <input id="q" type="search" placeholder="Search address or report #" style="padding-left: 40px; font-size: 14px;">
-    </div>
   </div>
 
   <!-- One card per report; the whole card opens it -->
@@ -81,13 +84,8 @@
   <p id="no-results" class="hidden order-empty">No reports match.</p>
   <p id="scope-note" class="hint hidden" style="margin: 0;">You’re seeing only reports you ordered.</p>
 
-  <div class="split">
-    <span class="hint" id="showing"></span>
-    <div class="actions" style="gap: 6px;">
-      <button type="button" class="btn" id="prev-page" disabled>Previous</button>
-      <button type="button" class="btn" id="next-page" disabled>Next</button>
-    </div>
-  </div>
+  <!-- More reports load as this comes into view -->
+  <p class="hint list-more" id="list-more" aria-live="polite"></p>
 </main>
 </div>
 

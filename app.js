@@ -202,28 +202,50 @@
   var RQ_LABEL = { 'on-hold': 'On hold', revisions_requested: 'Revision requested' };
   function initReports() {
     var FILTERS = { all: '', processing: 'pending', in_progress: 'in_progress,needs_info', completed: 'delivered', cancelled: 'failed,cancelled' };
-    var state = { filter: 'all', q: '', page: 1 }, timer = null, refresh = null;
+    var state = { filter: 'all', q: '' }, timer = null, refresh = null;
     var tbody = $('report-rows'), tabs = document.querySelectorAll('.tab');
+    // Endless list: 20 reports at a time, more as the end of the list comes into view.
+    var PAGE = 20, loaded = 0, total = 0, nextPage = 1, busyLoading = false, seq = 0, live = false;
 
     tabs.forEach(function (t) {
       t.addEventListener('click', function () {
-        state.filter = t.getAttribute('data-filter'); state.page = 1;
+        state.filter = t.getAttribute('data-filter');
         tabs.forEach(function (x) { x.setAttribute('aria-selected', x === t ? 'true' : 'false'); });
         load();
       });
     });
     $('q').addEventListener('input', function () {
       clearTimeout(timer);
-      timer = setTimeout(function () { state.q = $('q').value.trim(); state.page = 1; load(); }, 250);
+      timer = setTimeout(function () { state.q = $('q').value.trim(); load(); }, 250);
     });
-    $('prev-page').addEventListener('click', function () { state.page--; load(); });
-    $('next-page').addEventListener('click', function () { state.page++; load(); });
 
-    function load() {
-      var qs = new URLSearchParams({ page: state.page, page_size: 10 });
+    function query(page, size) {
+      var qs = new URLSearchParams({ page: page, page_size: size });
       if (FILTERS[state.filter]) qs.set('status', FILTERS[state.filter]);
       if (state.q) qs.set('q', state.q);
-      return api.get('/api/orders?' + qs.toString()).then(render).catch(showError);
+      return '/api/orders?' + qs.toString();
+    }
+    // From the top: a new filter or search, or a refresh that keeps what's already loaded (up to 40).
+    function load(keep) {
+      var my = ++seq, size = keep ? Math.min(40, Math.max(PAGE, Math.ceil(loaded / PAGE) * PAGE)) : PAGE;
+      busyLoading = true;
+      return api.get(query(1, size)).then(function (data) {
+        if (my !== seq) return;
+        busyLoading = false; loaded = 0; nextPage = size / PAGE + 1;
+        tbody.innerHTML = '';
+        render(data);
+      }).catch(function (e) { if (my === seq) { busyLoading = false; showError(e); } });
+    }
+    function more() {
+      if (busyLoading || loaded >= total) return;
+      var my = seq; busyLoading = true;
+      if ($('list-more')) $('list-more').textContent = 'Loading more reports…';
+      api.get(query(nextPage, PAGE)).then(function (data) {
+        if (my !== seq) return;
+        busyLoading = false; nextPage++;
+        clearTimeout(refresh);
+        render(data);
+      }).catch(function (e) { if (my === seq) { busyLoading = false; if ($('list-more')) $('list-more').textContent = ''; showError(e); } });
     }
 
     function render(data) {
@@ -232,8 +254,9 @@
       tabs.forEach(function (t) { t.querySelector('.count').textContent = n[t.getAttribute('data-filter')]; });
       $('scope-note').classList.toggle('hidden', data.scope !== 'mine');
 
-      tbody.innerHTML = '';
       data.orders.forEach(function (o) { tbody.appendChild(orderRow(o)); });
+      loaded += data.orders.length; total = data.total;
+      if (data.orders.some(function (o) { return o.status === 'pending' || o.status === 'in_progress'; })) live = true;
 
       var empty = $('no-results');
       empty.classList.toggle('hidden', data.total !== 0);
@@ -245,15 +268,25 @@
           if (can('orders.create')) empty.appendChild(el('a', { href: 'order.html', text: 'Order your first report' }));
         }
       }
-      var from = data.total ? (data.page - 1) * data.page_size + 1 : 0, to = Math.min(data.total, data.page * data.page_size);
-      $('showing').textContent = data.total ? 'Showing ' + from + '–' + to + ' of ' + data.total + ' reports' : '';
-      $('prev-page').disabled = data.page <= 1;
-      $('next-page').disabled = to >= data.total;
+      if ($('list-more')) $('list-more').textContent = loaded < total ? '' : total > PAGE ? 'That’s all ' + total + ' reports.' : '';
+      // Short screens: keep going until the list fills it.
+      if (loaded < total && near()) more();
 
-      // Sample orders move along on their own; check again while any are in progress.
+      // Orders in progress move along on their own; check again while any are showing (not once far down the list).
       clearTimeout(refresh);
-      if (data.orders.some(function (o) { return o.status === 'pending' || o.status === 'in_progress'; })) refresh = setTimeout(load, 10000);
+      if (live && loaded <= 40) refresh = setTimeout(function () { if (loaded <= 40 && !busyLoading) { live = false; load(true); } }, 10000);
     }
+    function near() { var m = $('list-more'); return !!m && m.getBoundingClientRect().top < window.innerHeight + 600; }
+    // The pinned header sits right under the phone top bar.
+    function topbarHeight() {
+      var tb = document.querySelector('.topbar');
+      document.documentElement.style.setProperty('--topbar-h', (tb && getComputedStyle(tb).position === 'sticky' ? tb.offsetHeight : 0) + 'px');
+    }
+    topbarHeight(); window.addEventListener('resize', topbarHeight);
+    if (!$('list-more')) { /* an older copy of the page: no endless list */ }
+    else if ('IntersectionObserver' in window) {
+      new IntersectionObserver(function (entries) { if (entries[0].isIntersecting) more(); }, { rootMargin: '600px 0px' }).observe($('list-more'));
+    } else window.addEventListener('scroll', function () { if (near()) more(); }, { passive: true });
 
     function orderRow(o) {
       var addr = splitAddress(o.address), s = STATUS[o.status] || ['cancelled', o.status];
@@ -296,7 +329,7 @@
     if (can('billing.manage')) api.get('/api/products').then(function (pr) {
       if (pr.trial_eligible && pr.trial_days && !pr.subscribed) { $('tb-days').textContent = pr.trial_days; $('trial-banner').classList.remove('hidden'); }
     }).catch(function () { /* the banner is optional */ });
-    setupQuickOrder(function () { state.page = 1; load(); });
+    setupQuickOrder(function () { load(); });
     var back = new URLSearchParams(location.search);
     if (back.get('paid')) { toast('Payment received for ' + back.get('paid') + '. Your order is placed.'); setTimeout(load, 2500); }
     else if (back.get('placed')) toast(back.get('placed') + ' placed' + (back.get('charged') ? ' · ' + money(+back.get('charged')) + ' charged to your card on file.' : back.get('free') ? ' · used 1 free report.' : '.'));
@@ -1175,7 +1208,7 @@
   RS.ui = { toast: toast, showError: showError, el: el, money: money, can: can };
 
   // ---------- start ----------
-  if (page === 'order' && /[?&]embed=1/.test(location.search)) { document.body.classList.add('embed'); RS.embed = true; }
+  if (page === 'order' && /[?&]embed=1/.test(location.search)) { document.documentElement.classList.add('embed'); document.body.classList.add('embed'); RS.embed = true; }
   labelTables();
   // Show what we already know before the server answers, so pages don't pop in.
   if ($('side-signout')) $('side-signout').addEventListener('click', signOut);

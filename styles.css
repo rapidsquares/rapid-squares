@@ -603,8 +603,12 @@ dialog.modal.qo[open] { display: flex; }
 .wiz-done .actions { justify-content: center; }
 .wiz-check { width: 64px; height: 64px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: #E3F1E7; color: #1F6B3A; }
 /* Inside the Home pop-up the panel is the whole frame. */
-.embed .wiz-page { max-width: none; padding: 0 !important; margin: 0; }
-.embed .wiz { height: 100vh; height: 100dvh; border: 0; border-radius: 0; box-shadow: none; }
+.embed .wiz-page { max-width: none; padding: 0 !important; margin: 0; display: flex; flex-direction: column; height: 100%; }
+.embed .wiz { flex: 1 1 auto; min-height: 0; border: 0; border-radius: 0; box-shadow: none; }
+/* Inside the order pop-up the form fills its frame: the frame's own page never scrolls or bounces, so
+   dragging past the bottom bar can't pull up empty space. Only the form's middle scrolls. */
+html.embed, html.embed body { height: 100%; overflow: hidden; overscroll-behavior: none; background: var(--paper); }
+.embed .wiz-body { overscroll-behavior: contain; }
 .embed .notice { margin: 12px 16px 0; }
 @media (max-width: 640px) {
   .wiz { border-radius: 14px; }
@@ -792,6 +796,19 @@ table.pitch-waste tr.est td { background: var(--paper-2); font-weight: 700; }
 .rp-outline .rp-shape { transition: opacity 0.2s; }
 .rp-dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; margin-right: 6px; vertical-align: -1px; }
 .rp-facts { margin: 0; font-weight: 600; }
+/* Home: the header and filters stay put on phones while the reports scroll under them. */
+.home-top { display: flex; flex-direction: column; gap: 24px; }
+.list-more { margin: 0; text-align: center; min-height: 1px; }
+.list-more:empty { margin-top: -24px; }
+@media (max-width: 720px) {
+  .home-top { position: sticky; top: var(--topbar-h, 56px); z-index: 10; gap: 12px; margin: -20px -16px 0; padding: 14px 16px 12px; background: var(--ground); box-shadow: 0 1px 0 var(--line); }
+  .home-top .page-head { flex-wrap: nowrap; align-items: center; gap: 12px; }
+  .home-top .page-head .eyebrow, .home-top .page-head .lede { display: none; }
+  .home-top .page-head h1 { font-size: 24px; }
+  .home-top .page-head > .btn { width: auto; flex: 0 0 auto; }
+  .home-top .split { gap: 10px; }
+  .home-top .search-box { flex: 1 1 100% !important; min-width: 0 !important; }
+}
 /* Home: one card per report; the whole card opens it */
 .order-list { display: flex; flex-direction: column; gap: 10px; }
 .order-loading, .order-empty { margin: 0; padding: 36px 20px; text-align: center; color: var(--muted); background: var(--paper); border: 1px solid var(--line); border-radius: 12px; }
@@ -837,11 +854,12 @@ dialog.modal.is-closing::backdrop { animation: rs-fade-out .2s ease forwards; }
   dialog.modal.is-closing { animation: rs-sheet-out .22s ease-in forwards; }
   dialog.modal.dragging { transition: none; }
   dialog.modal.snapping { transition: transform .22s cubic-bezier(.2, .8, .2, 1); }
-  .sheet-handle { display: block; position: sticky; top: 0; z-index: 3; height: 24px; margin-bottom: -24px; touch-action: none; cursor: grab; }
-  .sheet-handle::before { content: ''; display: block; width: 40px; height: 5px; margin: 8px auto 0; border-radius: 3px; background: #C9CDD1; }
-  dialog.modal .modal-body { padding-top: 28px; }
+  /* The grab zone is taller than the bar it shows, so it's easy to catch with a thumb. */
+  .sheet-handle { display: block; position: sticky; top: 0; z-index: 3; height: 36px; margin-bottom: -36px; touch-action: none; cursor: grab; }
+  .sheet-handle::before { content: ''; display: block; width: 48px; height: 5px; margin: 12px auto 0; border-radius: 3px; background: #C9CDD1; }
+  dialog.modal .modal-body { padding-top: 36px; }
   dialog.modal.qo { height: 94dvh; margin: auto 0 0; border-radius: 16px 16px 0 0; }
-  dialog.modal.qo .sheet-handle { position: relative; flex: 0 0 24px; margin-bottom: 0; background: var(--paper); }
+  dialog.modal.qo .sheet-handle { position: relative; flex: 0 0 36px; margin-bottom: 0; background: var(--paper); }
 }
 @media (prefers-reduced-motion: reduce) {
   dialog.modal[open], dialog.modal[open]::backdrop, dialog.modal.is-closing, dialog.modal.is-closing::backdrop { animation: none !important; transition: none !important; }
