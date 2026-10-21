@@ -76,6 +76,18 @@
       if (perm && !can(perm)) a.classList.add('hidden');
     });
   }
+  // Bottom of the sidebar: the signed-in email and Sign out.
+  function showSignedIn(me) {
+    var box = $('side-me'); if (!box) return;
+    $('side-email').textContent = me.user.email || '';
+    $('side-signout').addEventListener('click', signOut);
+    box.classList.remove('hidden');
+  }
+  function signOut() {
+    if (api.mode === 'sample') { toast('On sample data there\u2019s no real sign-in, so there\u2019s nothing to sign out of.'); return; }
+    toast('Signing out\u2026');
+    RS.auth.signOut().then(function () { location.href = 'signin.html'; });
+  }
   function guardPage() {
     var need = PAGE_NEEDS[page];
     if (!need || can(need[0])) return true;
@@ -87,28 +99,6 @@
       el('div', { class: 'actions' }, [el('a', { href: 'orders.html', class: 'btn btn-primary', text: 'Go to Home' })])
     ]));
     return false;
-  }
-
-  // ---------- sample-data switcher (only when running on sample data) ----------
-  function setupSampleSwitcher() {
-    if (!api || api.mode !== 'sample' || !RS.mock) return;
-    var users = RS.mock.users(), current = RS.mock.currentUserId();
-    var LABEL = { admin: 'Admin', manager: 'Manager', estimator: 'Estimator', viewer: 'Viewer', custom: 'Custom' };
-    var select = el('select', { id: 'demo-user', onchange: function () { RS.mock.switchUser(select.value); location.reload(); } },
-      users.map(function (u) {
-        return el('option', { value: u.id, selected: u.id === current, text: u.name + ' · ' + (u.role === 'owner' ? 'Owner' : (LABEL[u.preset] || 'Custom')) });
-      }));
-    var details = el('details', { class: 'demo' }, [
-      el('summary', { text: 'Sample data' }),
-      el('div', { class: 'demo-panel' }, [
-        el('p', { text: 'This site is running on sample data saved in this browser. Nothing is sent anywhere.' }),
-        el('div', { class: 'fld' }, [el('label', { for: 'demo-user', text: 'View the site as' }), select]),
-        el('button', { type: 'button', class: 'btn', id: 'demo-reset', text: 'Reset sample data', onclick: function () {
-          if (window.confirm('Reset all sample data back to the start? Your changes in this browser will be lost.')) { RS.mock.reset(); location.reload(); }
-        } })
-      ])
-    ]);
-    document.querySelector('.topbar').appendChild(details);
   }
 
   // ---------- Home (reports list + ordering) ----------
@@ -723,11 +713,7 @@
         toast('Profile photo updated.');
       }).catch(showError);
     });
-    $('sign-out').addEventListener('click', function () {
-      if (api.mode === 'sample') { toast('On sample data there\u2019s no real sign-in. Use the Sample data button to switch people.'); return; }
-      toast('Signing out\u2026');
-      RS.auth.signOut().then(function () { location.href = 'signin.html'; });
-    });
+    $('sign-out').addEventListener('click', signOut);
 
     if (!can('billing.manage')) { $('billing').classList.add('hidden'); $('nav-billing').classList.add('hidden'); return; }
     function goTo(path, body) {
@@ -828,7 +814,6 @@
   labelTables();
   if (!api) return;
   if (isGuest()) { setupGuest(); document.dispatchEvent(new CustomEvent('rs:ready', { detail: null })); return; }
-  if (!RS.embed) setupSampleSwitcher();
   if (api.mode === 'live' && !(RS.auth && RS.auth.signedIn())) { RS.auth.toSignIn(); return; }
   if (page === 'new-sketch' && !RS.embed) {
     // Signed-in people order from Home now; this page is only for visitors without an account.
@@ -842,6 +827,7 @@
     RS.me = me;
     replaceCompanyName(me.company.name);
     setupNav();
+    showSignedIn(me);
     if (!guardPage()) return;
     if (page === 'reports') initReports();
     else if (page === 'storm-report') initStorm();

@@ -780,24 +780,60 @@ body.embed .notice { margin: 12px 16px 0; }
   .lp-plans .btn { flex: 1 1 100%; }
 }
 
-/* ---------- App sidebar (Home, Order a report, Settings) ---------- */
-.app-shell { display: flex; align-items: flex-start; max-width: 1520px; margin: 0 auto; }
-.app-side { flex: 0 0 232px; position: sticky; top: 0; align-self: flex-start; padding: 28px 14px 28px 20px; min-height: calc(100vh - 60px); box-sizing: border-box; border-right: 1px solid var(--line); }
+/* ---------- App sidebar: logo, New order, Home, Settings, who's signed in ---------- */
+.app-shell { display: flex; align-items: flex-start; }
 .app-shell > .page { flex: 1 1 auto; min-width: 0; }
-.side-main { display: flex; flex-direction: column; gap: 2px; }
-.side-main > a { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; color: var(--ink-2); text-decoration: none; font-size: 14px; font-weight: 500; }
-.side-main > a svg { flex: 0 0 18px; color: var(--muted); }
-.side-main > a:hover { background: var(--paper); color: var(--ink); }
-.side-main > a[aria-current="page"] { background: var(--paper); color: var(--ink); font-weight: 600; box-shadow: inset 3px 0 0 var(--accent); }
-.side-main > a[aria-current="page"] svg { color: var(--accent); }
-.side-main > a:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.sidenav.side-sub { flex: none; margin: 2px 0 8px 21px; padding-left: 10px; border-left: 1px solid var(--line); gap: 1px; }
-.sidenav.side-sub a { padding: 8px 12px; font-size: 13px; }
+.side-brand, .side-cta, .side-foot { display: none; }
+@media (min-width: 721px) {
+  body.app .topbar { display: none; }
+  .app-side {
+    flex: 0 0 256px; position: sticky; top: 0; height: 100vh; box-sizing: border-box; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 18px; padding: 22px 16px 18px;
+    background: var(--navy); color: #D3DAE0;
+    background-image: linear-gradient(180deg, rgba(240, 138, 75, .07), rgba(240, 138, 75, 0) 220px);
+  }
+  .side-brand { display: flex; align-items: center; gap: 10px; padding: 2px 8px 6px; color: #FFFFFF; text-decoration: none; }
+  .side-brand > span { display: flex; flex-direction: column; line-height: 1.15; }
+  .side-brand b { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 18px; letter-spacing: .01em; }
+  .side-brand > span > span { font-size: 12px; color: #8E9BA6; }
+  .side-cta {
+    display: flex; align-items: center; justify-content: center; gap: 8px; height: 46px; border-radius: 10px;
+    background: var(--accent); color: #FFFFFF; font-weight: 600; font-size: 15px; text-decoration: none;
+    box-shadow: 0 6px 18px rgba(176, 58, 10, .35); transition: background .15s, transform .15s;
+  }
+  .side-cta:hover { background: #C4470F; transform: translateY(-1px); }
+  .side-cta:focus-visible { outline: 2px solid var(--accent-light); outline-offset: 2px; }
+  .side-cta svg { stroke: #FFFFFF; }
+  .side-main { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; }
+  .side-main > a {
+    display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: 9px;
+    color: #C3CCD3; text-decoration: none; font-size: 15px; font-weight: 500; transition: background .12s, color .12s;
+  }
+  .side-main > a svg { flex: 0 0 18px; color: #8E9BA6; transition: color .12s; }
+  .side-main > a:hover { background: rgba(255, 255, 255, .06); color: #FFFFFF; }
+  .side-main > a[aria-current="page"] { background: rgba(255, 255, 255, .09); color: #FFFFFF; font-weight: 600; }
+  .side-main > a[aria-current="page"] svg { color: var(--accent-light); }
+  .side-main > a:focus-visible { outline: 2px solid var(--accent-light); outline-offset: -2px; }
+  /* Settings sections, under Settings */
+  .app-side .sidenav.side-sub { flex: none; display: flex; flex-direction: column; gap: 1px; margin: 4px 0 6px 21px; padding-left: 12px; border-left: 1px solid #2E3E4B; }
+  .app-side .sidenav.side-sub a { padding: 8px 12px; border: 0; border-radius: 7px; background: transparent; color: #9DA9B3; font-size: 13.5px; font-weight: 500; }
+  .app-side .sidenav.side-sub a:hover { color: #FFFFFF; background: rgba(255, 255, 255, .05); }
+  .app-side .sidenav.side-sub a.current { color: #FFFFFF; background: transparent; font-weight: 600; box-shadow: inset 2px 0 0 var(--accent-light); border-radius: 0 7px 7px 0; }
+  /* Who's signed in, and the sample-data switcher */
+  .side-foot { display: flex; flex-direction: column; gap: 10px; padding-top: 14px; border-top: 1px solid #2A3A47; }
+  .side-me { display: flex; flex-direction: column; gap: 6px; padding: 4px 8px; }
+  .side-email { font-size: 13px; color: #C3CCD3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .side-signout { align-self: flex-start; padding: 0; border: 0; background: none; color: #8E9BA6; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .side-signout:hover { color: #FFFFFF; text-decoration: underline; }
+  .side-signout:focus-visible { outline: 2px solid var(--accent-light); outline-offset: 2px; border-radius: 3px; }
+}
 @media (max-width: 720px) {
   .app-shell { display: block; }
-  .app-side { position: static; min-height: 0; padding: 16px 16px 0; border-right: 0; }
+  .app-side { padding: 16px 16px 0; }
   .side-main > a { display: none; }
-  .sidenav.side-sub { margin: 0; padding: 0 16px; border-left: 0; }
+  /* Settings sections wrap onto as many rows as they need, instead of scrolling off screen */
+  .app-side .sidenav.side-sub { flex-wrap: wrap; overflow: visible; margin: 0; padding: 0; border-left: 0; gap: 6px; }
+  .app-side .sidenav.side-sub a { flex: 0 0 auto; padding: 8px 12px; font-size: 13px; }
   .app-side:not(:has(.side-sub)) { display: none; }
 }
 .wiz-sub { margin: 4px 0 -4px; font-family: 'Archivo', sans-serif; font-size: 17px; }

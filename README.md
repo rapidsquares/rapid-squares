@@ -48,7 +48,7 @@ What works on sample data:
 
 PDF and ESX downloads, Stripe's billing page, and sign-out show a short message explaining they need RoofQuery, Stripe or Supabase connected first. Roof photos on Report settings preview only, because they'll attach to orders later.
 
-**Sample data button:** in the top bar. Use it to view the site as the Owner, a Manager, an Estimator or a Viewer, so you can check what each role can see and do. You can also reset the sample data back to the start.
+**Sample data:** the site signs you in as the company owner. To start over, clear this site’s data in your browser.
 
 **Switching to the real backend:** set `apiBaseUrl` in `config.js` to the backend's address, for example `https://api.rapidsquares.com`. The pages stay the same. `api.js` sends the same calls to the server instead, and `mock-api.js` can then be deleted.
 
