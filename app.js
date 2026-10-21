@@ -201,7 +201,7 @@
   };
   var RQ_LABEL = { 'on-hold': 'On hold', revisions_requested: 'Revision requested' };
   function initReports() {
-    var FILTERS = { all: '', processing: 'pending,awaiting_payment', in_progress: 'in_progress,needs_info', completed: 'delivered', cancelled: 'failed,cancelled' };
+    var FILTERS = { all: '', processing: 'pending', in_progress: 'in_progress,needs_info', completed: 'delivered', cancelled: 'failed,cancelled' };
     var state = { filter: 'all', q: '', page: 1 }, timer = null, refresh = null;
     var tbody = $('report-rows'), tabs = document.querySelectorAll('.tab');
 
@@ -228,7 +228,7 @@
 
     function render(data) {
       var c = data.counts || {};
-      var n = { all: c.all || 0, processing: (c.pending || 0) + (c.awaiting_payment || 0), in_progress: (c.in_progress || 0) + (c.needs_info || 0), completed: c.delivered || 0, cancelled: (c.failed || 0) + (c.cancelled || 0) };
+      var n = { all: c.all || 0, processing: c.pending || 0, in_progress: (c.in_progress || 0) + (c.needs_info || 0), completed: c.delivered || 0, cancelled: (c.failed || 0) + (c.cancelled || 0) };
       tabs.forEach(function (t) { t.querySelector('.count').textContent = n[t.getAttribute('data-filter')]; });
       $('scope-note').classList.toggle('hidden', data.scope !== 'mine');
 
@@ -259,12 +259,12 @@
       var addr = splitAddress(o.address), s = STATUS[o.status] || ['cancelled', o.status];
       if (RQ_LABEL[o.rq_status]) s = [s[0], RQ_LABEL[o.rq_status]];
       var storm = o.measurements && o.measurements.storm;
-    var detail = o.total_squares != null ? o.total_squares + ' squares · ' + o.predominant_pitch + ' pitch'
-      : storm && storm.damage_chance ? storm.damage_chance.charAt(0).toUpperCase() + storm.damage_chance.slice(1) + ' damage chance' + (storm.hail_days != null ? ' · ' + storm.hail_days + ' hail days' : '') : '';
-    var job = o.order_details || {};
-    var SCOPE_SHORT = { primary_only: 'Main building', primary_and_garage: 'Main building + garage', all_structures: 'Every building' };
-    var jobLine = [SCOPE_SHORT[job.scope], job.claim ? 'Claim ' + job.claim : null, job.client_name || job.insured_name].filter(Boolean).join(' · ');
-    if (jobLine) detail = detail ? detail + ' · ' + jobLine : jobLine;
+      // Squares and pitch live on the report page; the card says what was ordered and for whom.
+      var detail = storm && storm.damage_chance ? storm.damage_chance.charAt(0).toUpperCase() + storm.damage_chance.slice(1) + ' damage chance' + (storm.hail_days != null ? ' · ' + storm.hail_days + ' hail days' : '') : '';
+      var job = o.order_details || {};
+      var SCOPE_SHORT = { primary_only: 'Main building', primary_and_garage: 'Main building + garage', all_structures: 'Every building' };
+      var jobLine = [SCOPE_SHORT[job.scope], job.claim ? 'Claim ' + job.claim : null, job.client_name || job.insured_name].filter(Boolean).join(' · ');
+      if (jobLine) detail = detail ? detail + ' · ' + jobLine : jobLine;
       // One card per report: the whole card is a link to the report's own page.
       var href = (o.report_type === 'storm_report' ? 'storm-report.html' : 'report.html') + '?id=' + encodeURIComponent(o.id);
       var when = o.status === 'delivered' ? 'Ready' + (o.completed_at ? ' ' + fmtDate(o.completed_at) : '')
@@ -299,10 +299,11 @@
     setupQuickOrder(function () { state.page = 1; load(); });
     var back = new URLSearchParams(location.search);
     if (back.get('paid')) { toast('Payment received for ' + back.get('paid') + '. Your order is placed.'); setTimeout(load, 2500); }
+    else if (back.get('placed')) toast(back.get('placed') + ' placed' + (back.get('charged') ? ' · ' + money(+back.get('charged')) + ' charged to your card on file.' : back.get('free') ? ' · used 1 free report.' : '.'));
     else if (back.get('esx')) { toast('ESX file bought for ' + back.get('esx') + '. Use “ESX file” to download it.'); setTimeout(load, 2500); }
     else if (back.get('unpaid') && back.get('for') === 'esx') toast('Payment wasn\u2019t finished, so the ESX file for ' + back.get('unpaid') + ' wasn\u2019t bought.', { error: true });
     else if (back.get('unpaid')) toast('Payment wasn\u2019t finished, so ' + back.get('unpaid') + ' wasn\u2019t placed. Order again when you\u2019re ready.', { error: true });
-    if (back.get('paid') || back.get('unpaid') || back.get('esx')) history.replaceState(null, '', location.pathname);
+    if (back.get('paid') || back.get('placed') || back.get('unpaid') || back.get('esx')) history.replaceState(null, '', location.pathname);
   }
 
   // "Order new report" opens the order form in a pop-up on Home. Links to orders.html?order=1
@@ -363,6 +364,7 @@
   var SCOPE_TEXT = { primary_only: 'Main building only', primary_and_garage: 'Main building + detached garage', all_structures: 'Every building on the property' };
   var DRAWING_LABEL = { lengths: 'Lengths', area: 'Area', pitch: 'Pitch' };
   var WASTE = [0, 5, 7, 10, 12, 15, 19, 24];
+  var RAPID_WASTE = [0, 10, 12, 15];
   function initReport() {
     var id = new URLSearchParams(location.search).get('id'), data = null;
     var num = function (v, d) { return v == null ? '—' : Number(v).toLocaleString('en-US', { maximumFractionDigits: d == null ? 1 : d }); };
@@ -403,6 +405,7 @@
       }
       var s = rep.summary || {};
       if (rep.revision_open) main.appendChild(el('p', { class: 'notice', style: 'margin: 0;', text: 'A correction is in progress. The files below stay available, and we’ll email the corrected report when it’s ready.' }));
+      if (rep.kind === 'rapid_squares') { renderRapid(main, rep); renderJob(main, job, rep.scope_label); labelTables(main); return; }
       // Summary
       main.appendChild(card('Summary', [el('div', { class: 'iq-stats' }, [
         stat('Total squares', num(s.squares, 2), s.area_sqft != null ? num(s.area_sqft) + ' sq ft' : null),
@@ -431,6 +434,109 @@
       }))]));
       renderJob(main, job, rep.scope_label);
       labelTables(main);
+    }
+    // Rapid Squares: one estimated pitch per building, and the squares the roof would be at every other pitch.
+    function renderRapid(main, rep) {
+      var s = rep.summary || {}, bs = rep.buildings || [], many = bs.length > 1;
+      main.appendChild(card('Summary', [el('div', { class: 'iq-stats' }, [
+        stat('Total squares', num(s.squares, 2), s.area_sqft != null ? num(s.area_sqft) + ' sq ft' : null),
+        stat(many ? 'Estimated pitch (largest)' : 'Estimated pitch', s.pitch || '—'),
+        stat('Buildings', num(s.structures, 0)),
+        stat('Footprint', s.footprint_sqft != null ? num(s.footprint_sqft) + ' sq ft' : '—'),
+        stat('Perimeter', s.perimeter_ft != null ? num(s.perimeter_ft) + ' ft' : '—')
+      ])], rep.sandbox ? el('span', { class: 'opt-tag', text: 'Sandbox' }) : null));
+      main.appendChild(buildingsCard(rep.outline, bs, s));
+    }
+    // The photo with each building outlined, and the squares to order at every pitch and waste allowance.
+    // With more than one building, a selector (All, 1, 2…) switches both: the photo zooms to that building
+    // and the table shows its squares, with its own estimated pitch marked.
+    var OUTLINE_COLORS = ['#F2622E', '#2F8FE8', '#F5C518', '#3CB371', '#B565F0'];
+    function buildingsCard(o, bs, s) {
+      var many = bs.length > 1, sel = 'all';
+      var sq = function (v) { return v == null ? '—' : Number(v).toFixed(2); };
+      var bundle = function (v, w) { return (Math.ceil(v * (1 + w / 100) * 3 - 1e-9) / 3).toFixed(2); };
+      var at = function (b, pitch) { var x = b.by_pitch.filter(function (p) { return p.pitch === pitch; })[0]; return x ? x.squares : 0; };
+      var pitches = [];
+      bs.forEach(function (b) { b.by_pitch.forEach(function (p) { if (pitches.indexOf(p.pitch) < 0) pitches.push(p.pitch); }); });
+      pitches.sort(function (a, b) { return parseFloat(a) - parseFloat(b); });
+      var color = function (i) { return OUTLINE_COLORS[i % OUTLINE_COLORS.length]; };
+
+      // ---- selector ----
+      var tabs = many ? el('div', { class: 'tabs', role: 'tablist', 'aria-label': 'Building' }, ['all'].concat(bs.map(function (b) { return String(b.index); })).map(function (id) {
+        var i = bs.findIndex(function (b) { return String(b.index) === id; });
+        return el('button', { type: 'button', class: 'tab', role: 'tab', 'data-id': id, onclick: function () { sel = id; show(); } },
+          [i >= 0 ? el('i', { class: 'rp-dot', style: 'background:' + color(i) }) : null, id === 'all' ? 'All' : id]);
+      })) : null;
+
+      // ---- photo ----
+      var NS = 'http://www.w3.org/2000/svg', root = null, groups = {}, msg = null;
+      function svg(tag, attrs) { var n = document.createElementNS(NS, tag); Object.keys(attrs).forEach(function (k) { n.setAttribute(k, attrs[k]); }); return n; }
+      var ring = function (pts) { return 'M' + pts.map(function (p) { return p[0] + ' ' + p[1]; }).join('L') + 'Z'; };
+      if (o) {
+        root = svg('svg', { viewBox: '0 0 ' + o.width + ' ' + o.height, class: 'rp-outline', role: 'img', 'aria-label': 'Aerial photo with each building outlined' });
+        var photo = svg('image', { href: o.photo_url, x: 0, y: 0, width: o.width, height: o.height, preserveAspectRatio: 'none' });
+        msg = el('p', { class: 'hint hidden', style: 'margin: 0;', text: 'The photo couldn’t be loaded right now.' });
+        photo.addEventListener('error', function () { msg.classList.remove('hidden'); });
+        root.appendChild(photo);
+        var w = Math.max(2, o.width / 220);
+        o.buildings.forEach(function (b, i) {
+          var g = svg('g', { class: 'rp-shape' }), d = b.outlines.concat(b.holes).map(ring).join(''), xs = [], ys = [];
+          b.outlines[0].forEach(function (p) { xs.push(p[0]); ys.push(p[1]); });
+          g.appendChild(svg('path', { d: d, 'fill-rule': 'evenodd', fill: color(i), 'fill-opacity': 0.18, stroke: '#fff', 'stroke-width': w * 2.2, 'stroke-linejoin': 'round', 'stroke-opacity': 0.85 }));
+          g.appendChild(svg('path', { d: d, 'fill-rule': 'evenodd', fill: 'none', stroke: color(i), 'stroke-width': w, 'stroke-linejoin': 'round' }));
+          if (many) {
+            var cx = xs.reduce(function (a, v) { return a + v; }, 0) / xs.length, cy = ys.reduce(function (a, v) { return a + v; }, 0) / ys.length, r = Math.max(10, o.width / 45);
+            g.appendChild(svg('circle', { cx: cx, cy: cy, r: r, fill: color(i), stroke: '#fff', 'stroke-width': w }));
+            var t = svg('text', { x: cx, y: cy, 'text-anchor': 'middle', 'dominant-baseline': 'central', 'font-size': r * 1.15, 'font-weight': 700, fill: '#fff' });
+            t.textContent = String(b.index || i + 1); g.appendChild(t);
+          }
+          root.appendChild(g);
+          groups[String(b.index)] = { g: g, box: [Math.min.apply(null, xs), Math.min.apply(null, ys), Math.max.apply(null, xs), Math.max.apply(null, ys)] };
+        });
+      }
+      // Zoom to one building: a square around it with room to spare, kept inside the photo.
+      function viewFor(id) {
+        var x = groups[id];
+        if (!x) return '0 0 ' + o.width + ' ' + o.height;
+        var side = Math.min(Math.max(o.width, o.height), Math.max(x.box[2] - x.box[0], x.box[3] - x.box[1], o.width / 4) * 2.2);
+        var cx = (x.box[0] + x.box[2]) / 2, cy = (x.box[1] + x.box[3]) / 2;
+        var left = Math.min(Math.max(0, cx - side / 2), o.width - side), top = Math.min(Math.max(0, cy - side / 2), o.height - side);
+        return [left, top, side, side].map(function (v) { return Math.round(v * 10) / 10; }).join(' ');
+      }
+
+      // ---- table ----
+      var facts = el('p', { class: 'rp-facts' });
+      var body = el('tbody');
+      var grid = el('table', { class: 'rp-table pitch-waste' }, [
+        el('thead', {}, [el('tr', {}, [el('th', { text: 'Pitch' })].concat(RAPID_WASTE.map(function (w) { return el('th', { text: w + '%' }); })))]), body]);
+      var hint = el('p', { class: 'hint', style: 'margin: 0;' });
+      function row(label, value, on) {
+        return el('tr', { class: on ? 'est' : '' }, [el('td', { text: label })].concat(RAPID_WASTE.map(function (w) { return el('td', { text: bundle(value, w) }); })));
+      }
+      function show() {
+        var b = bs.filter(function (x) { return String(x.index) === sel; })[0], one = b || (!many && bs[0]);
+        if (tabs) tabs.querySelectorAll('.tab').forEach(function (t) { t.setAttribute('aria-selected', String(t.getAttribute('data-id') === sel)); });
+        if (root) {
+          root.setAttribute('viewBox', b ? viewFor(sel) : '0 0 ' + o.width + ' ' + o.height);
+          Object.keys(groups).forEach(function (id) { groups[id].g.style.opacity = !b || id === sel ? 1 : 0.3; });
+        }
+        body.innerHTML = '';
+        if (one) {
+          facts.textContent = [many ? 'Building ' + one.index : null, sq(one.squares) + ' squares', 'est. ' + (one.pitch || '—') + ' pitch',
+            one.footprint_sqft != null ? num(one.footprint_sqft, 0) + ' sq ft footprint' : null].filter(Boolean).join(' · ');
+          pitches.forEach(function (p) { body.appendChild(row(p === one.pitch ? p + ' ✓' : p, at(one, p), p === one.pitch)); });
+          hint.textContent = 'Columns are the waste allowance. ✓ marks the estimated pitch; use another row if you know the pitch. Rounded up to the next bundle (⅓ square).';
+        } else {
+          facts.textContent = bs.length + ' buildings · ' + sq(s.squares) + ' squares at their estimated pitches';
+          // First row: every building at its own estimated pitch. Then all of them at the same pitch.
+          body.appendChild(row('Est. ✓', s.squares || bs.reduce(function (t, x) { return t + (x.squares || 0); }, 0), true));
+          pitches.forEach(function (p) { body.appendChild(row(p, bs.reduce(function (t, x) { return t + at(x, p); }, 0), false)); });
+          hint.textContent = 'All buildings together. Columns are the waste allowance. The first row has each building at its own estimated pitch; the rest have every building at that pitch. Pick a building to see it alone. Rounded up to the next bundle (⅓ square).';
+        }
+      }
+      show();
+      return card(many ? 'Buildings' : 'Roof', [tabs, root ? el('div', { class: 'rp-outline-box' }, [root]) : null, msg, facts,
+        pitches.length ? el('div', { class: 'table-wrap' }, [grid]) : null, hint]);
     }
     function drawings(d) {
       var state = { target: 'all', type: d.types[0] };
@@ -962,8 +1068,10 @@
             : trial ? 'Subscriber prices on every report, no subscription charge for ' + b.trial_days + ' days. Your plan starts after the trial unless you cancel.'
             : 'Subscribe to get lower prices on every report.';
           var lead = trial ? 'Start free trial \u00b7 ' : '';
-          actions.appendChild(el('button', { type: 'button', class: 'btn', text: lead + 'Monthly \u00b7 ' + perMo(plans.monthly_cents) + '/mo' + (trial ? ' after' : ''), onclick: function () { goTo('/api/billing/subscribe', { plan: 'monthly' }); } }));
-          actions.appendChild(el('button', { type: 'button', class: 'btn btn-dark', text: lead + 'Yearly \u00b7 ' + perMo(plans.yearly_cents) + '/yr' + (trial ? ' after' : ''), onclick: function () { goTo('/api/billing/subscribe', { plan: 'yearly' }); } }));
+          // With a card already saved, confirm here and start on that card; otherwise Stripe's page asks for one.
+          var start = function (plan) { if (b.card) openSub(b, plan, plans); else goTo('/api/billing/subscribe', { plan: plan }); };
+          actions.appendChild(el('button', { type: 'button', class: 'btn', text: lead + 'Monthly \u00b7 ' + perMo(plans.monthly_cents) + '/mo' + (trial ? ' after' : ''), onclick: function () { start('monthly'); } }));
+          actions.appendChild(el('button', { type: 'button', class: 'btn btn-dark', text: lead + 'Yearly \u00b7 ' + perMo(plans.yearly_cents) + '/yr' + (trial ? ' after' : ''), onclick: function () { start('yearly'); } }));
         }
         $('bill-count').textContent = b.reports_this_month;
         $('bill-spend').textContent = money(b.spend_this_month_cents);
@@ -989,6 +1097,36 @@
         labelTables($('billing'));
       }).catch(showError);
     }
+    // Start a plan on the saved card: say what happens and what it costs, then start it with no Stripe page.
+    var subPlan = null;
+    function openSub(b, plan, plans) {
+      var trial = b.trial_eligible && b.trial_days, cents = plan === 'yearly' ? plans.yearly_cents : plans.monthly_cents, per = plan === 'yearly' ? '/year' : '/month';
+      var card = b.card.brand + ' ending in ' + b.card.last4, then = new Date(Date.now() + (trial || 0) * 86400000);
+      subPlan = plan;
+      $('sub-dlg-h').textContent = trial ? 'Start your free trial' : 'Start your subscription';
+      $('sub-dlg-sub').textContent = (plan === 'yearly' ? 'Yearly' : 'Monthly') + ' plan \u00b7 ' + money(cents) + per;
+      $('sub-dlg-text').textContent = trial
+        ? 'Subscriber prices on every report, free for ' + b.trial_days + ' days. Then ' + money(cents) + per + ' on your ' + card + ', starting ' + fmtDate(then.toISOString()) + '.'
+        : 'Subscriber prices on every report, ' + money(cents) + per + ' on your ' + card + '.';
+      $('sub-total').textContent = money(trial ? 0 : cents);
+      $('sub-note').textContent = trial ? 'Cancel any time before ' + fmtDate(then.toISOString()) + ' and you won\u2019t be charged.' : 'Renews automatically. Cancel any time.';
+      $('sub-go').textContent = trial ? 'Start free trial' : 'Subscribe \u00b7 ' + money(cents);
+      $('sub-err').classList.add('hidden');
+      $('sub-dlg').showModal();
+    }
+    function closeSub() { $('sub-dlg').close(); }
+    $('sub-cancel').addEventListener('click', closeSub); $('sub-dlg-x').addEventListener('click', closeSub);
+    $('sub-form').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var btn = $('sub-go'); busy(btn, true);
+      api.post('/api/billing/subscribe', { plan: subPlan, use_saved_card: true }).then(function (r) {
+        if (r.url) { location.href = r.url; return; } // the bank wants to confirm: Stripe's page
+        closeSub();
+        toast(r.trial_days ? 'Free trial started. Subscriber prices apply to your next order.' : 'Subscription started. Subscriber prices apply to your next order.');
+        loadBilling();
+      }).catch(function (x) { $('sub-err').textContent = (x && x.message) || 'That didn\u2019t work. Try again.'; $('sub-err').classList.remove('hidden'); })
+        .then(function () { busy(btn, false); });
+    });
     loadBilling();
     $('bill-card-btn').addEventListener('click', function () { goTo('/api/billing/card'); });
     $('billing').addEventListener('click', function (e) {

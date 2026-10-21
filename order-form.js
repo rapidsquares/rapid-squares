@@ -91,7 +91,7 @@
   input.addEventListener('input', function () {
     clearTimeout(debounce);
     var q = input.value.trim();
-    if (q.length < 3) { closeSuggestions(); say('Type at least 3 characters to see suggestions.'); return; }
+    if (q.length < 3) { closeSuggestions(); say(''); return; }
     if (!RS.places.available) { closeSuggestions(); needKey(); return; }
     debounce = setTimeout(function () {
       var id = ++reqId;
@@ -276,7 +276,7 @@
     else if (step === 'location') { nextBtn.textContent = isStorm() ? 'This is the property' : 'This is the roof'; nextBtn.disabled = false; }
     else if (step === 'review') {
       var t = total();
-      nextBtn.textContent = RS.guest ? (t ? 'Pay ' + money(t) : 'Place guest order') : (t ? 'Place order · ' + money(t) : 'Place order');
+      nextBtn.textContent = RS.guest ? (t ? 'Pay ' + money(t) : 'Place order') : (t ? 'Place order · ' + money(t) : 'Place order');
       nextBtn.disabled = !p || busyNow;
     }
   }
@@ -318,7 +318,7 @@
   // One line under each report's name.
   var BLURB = {
     storm_report: 'Hail, wind and tornado history for the last 5 years. 5 PDFs, ready in seconds.',
-    certified_residential: 'Certified roof squares and pitch. About 30 minutes.',
+    certified_residential: 'Squares and an estimated pitch for each building. About an hour.',
     premium_residential: 'Full measurement report with the roof sketch. Under 2 hours.',
     commercial: 'Every building on the property measured.'
   };
@@ -352,8 +352,7 @@
     if (pick) pick.checked = true;
     // Free trial: shown to visitors (as a reason to sign up) and to companies that haven't used theirs.
     var days = catalog.trial_days || 0;
-    $('od-trial-n').textContent = days; $('od-trial-days').textContent = days;
-    $('od-trial-clause').classList.toggle('hidden', !days);
+    $('od-trial-days').textContent = days;
     $('od-trial').classList.toggle('hidden', !(days && catalog.trial_eligible && !catalog.subscribed && !RS.guest));
     $('od-esx-price').textContent = money(catalog.esx_price_cents);
     if (preselect && preselect.esx) $('od-esx').checked = true;
@@ -409,12 +408,12 @@
     // Notes for the measuring team are only for roof reports; a Storm Report has no measuring.
     var storm = isStorm();
     $('job-hint').textContent = storm ? 'Printed on the storm PDFs. You can change them when you download each PDF.'
-      : 'Added to the report and the ESX file. The claim number also names the ESX file.';
+      : p.esx_addon_allowed ? 'Added to the report and the ESX file. The claim number also names the ESX file.' : 'Added to the report.';
     $('notes-group').classList.toggle('hidden', storm);
     $('od-total').textContent = money(t);
     var note = '';
     if (usesFree()) note = 'Uses 1 of your free reports' + ($('od-esx').checked ? ', ESX file included.' : '.');
-    else if (t > 0) note = RS.guest ? 'You’ll pay on Stripe’s secure page next.' : (catalog.has_card === false ? 'You’ll add your card on Stripe’s secure page; it’s saved for next time.' : 'Charged to the card on file when you place the order.');
+    else if (t > 0) note = RS.guest ? 'You’ll pay on Stripe’s secure page next, or with your saved card if you already have an account.' : (catalog.has_card === false ? 'You’ll add your card on Stripe’s secure page; it’s saved for next time.' : 'Charged to the card on file when you place the order.');
     $('od-note').textContent = note;
     $('od-error').classList.add('hidden');
   }
@@ -431,16 +430,25 @@
     var body = { address: place.label, parts: place.parts, lat: place.lat, lon: place.lon, report_type: p.id, esx: esx, scope: scope() || undefined,
       job: { claim: $('jb-claim').value.trim(), client_name: $('jb-name').value.trim(), client_email: $('jb-email').value.trim(), client_phone: $('jb-phone').value.trim(), notes: isStorm() ? '' : $('jb-notes').value.trim() } };
     if (body.job.client_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.job.client_email)) { showError('Check the client email, or leave it blank.', 'jb-email'); return; }
+    var who = null;
     if (RS.guest) {
-      body.name = $('og-name').value.trim(); body.email = $('og-email').value.trim(); body.phone = $('og-phone').value.trim();
-      if (!body.name) { showError('Enter your name.', 'og-name'); return; }
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email)) { showError('Enter the email address where we should send the report.', 'og-email'); return; }
+      who = { name: $('og-name').value.trim(), company: $('og-company').value.trim(), email: $('og-email').value.trim(), pass: $('og-pass').value };
+      if (!who.name) { showError('Enter your name.', 'og-name'); return; }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(who.email)) { showError('Enter your email address.', 'og-email'); return; }
+      if (who.pass.length < 8) { showError('Choose a password with at least 8 characters.', 'og-pass'); return; }
     }
     busyNow = true; nextBtn.setAttribute('aria-busy', 'true'); $('od-error').classList.add('hidden'); refresh();
     nextBtn.textContent = isStorm() ? 'Getting the storm history…' : 'Placing order…';
-    RS.api.post(RS.guest ? '/api/guest-orders' : '/api/orders', body)
+    // A new visitor gets an account first, then orders like anyone signed in, and lands on Home.
+    (who && RS.auth ? setUpAccount(who) : Promise.resolve()).then(function () { return RS.api.post('/api/orders', body); })
       .then(function (r) {
         if (r.checkout_url) { goToPayment(r.checkout_url); return; }
+        // Paid with a card already on the account (or nothing to pay): straight to their page, saying what happened.
+        if (who) {
+          if (r.order.status === 'delivered' && r.order.report_type === 'storm_report') { location.href = 'storm-report.html?id=' + encodeURIComponent(r.order.id); return; }
+          location.href = 'orders.html?placed=' + encodeURIComponent(r.order.report_number) + (r.charged_cents ? '&charged=' + r.charged_cents : r.used_free_report ? '&free=1' : '');
+          return;
+        }
         catalog = null; // free-report count may have changed
         var o = r.order, label = o.product_label + (o.esx_purchased ? ' + ESX' : '');
         if (RS.embed && window.parent !== window) { window.parent.postMessage({ type: 'rs:ordered', report_number: o.report_number, label: label + ' for ' + place.label, ready: o.status === 'delivered' }, location.origin); }
@@ -449,15 +457,28 @@
       .catch(function (x) { showError((x && x.message) || 'The order didn’t go through. Try again.'); })
       .then(function () { busyNow = false; nextBtn.setAttribute('aria-busy', 'false'); refresh(); });
   }
+  // Signs a new visitor up (or in, when the email already has an account with that password) and sets up their company.
+  function setUpAccount(who) {
+    return RS.auth.signUp(who.email, who.pass, 'next=' + encodeURIComponent('order.html?resume=1')).catch(function (e) {
+      if (e.code !== 'user_already_exists' && !/already/i.test(e.message)) throw e;
+      return RS.auth.signIn(who.email, who.pass).then(function (s) { return { session: s }; }, function () {
+        throw new Error('There’s already an account with this email. Enter its password, or sign in.');
+      });
+    }).then(function (r) {
+      // Only when email confirmation is on: finish from the link, and the order comes back.
+      if (!r.session) { savePending(); throw new Error('We sent a link to ' + who.email + '. Open it to finish placing your order.'); }
+      RS.guest = false;
+      return RS.api.post('/api/onboarding', { company_name: who.company || who.name, full_name: who.name }).catch(function (e) { if (e.status !== 409) throw e; });
+    });
+  }
   function done(o, r, label, place) {
     var ready = o.status === 'delivered';
-    $('done-title').textContent = ready ? 'Your storm report is ready' : RS.guest ? 'Order received' : 'Order placed';
+    $('done-title').textContent = ready ? 'Your storm report is ready' : 'Order placed';
     var paid = r.used_free_report ? ' Used 1 free report.' : (r.charged_cents ? ' ' + money(r.charged_cents) + ' charged to the card on file.' : '');
-    $('done-text').textContent = o.report_number + ' · ' + label + ' for ' + place.label + '.' + (RS.guest ? ' We’ll email the report to ' + r.email + '.' : paid);
+    $('done-text').textContent = o.report_number + ' · ' + label + ' for ' + place.label + '.' + paid;
     var acts = $('done-actions'); acts.innerHTML = '';
     function link(text, href, cls) { var a = el('a', 'btn' + (cls ? ' ' + cls : ''), text); a.href = href; a.target = '_top'; acts.appendChild(a); }
-    if (RS.guest) link('Create a free account to track orders', 'signin.html?step=signup&next=orders.html', 'btn-primary');
-    else if (ready) link('View storm report', 'storm-report.html?id=' + encodeURIComponent(o.id), 'btn-primary');
+    if (ready) link('View storm report', 'storm-report.html?id=' + encodeURIComponent(o.id), 'btn-primary');
     else if (RS.embed) { var close = el('button', 'btn btn-primary', 'Done'); close.type = 'button'; close.addEventListener('click', closePopup); acts.appendChild(close); }
     else link('Track it on Home', 'orders.html', 'btn-primary');
     var again = el('button', 'btn', 'Order another'); again.type = 'button';
@@ -471,23 +492,13 @@
     nextBtn.textContent = 'Opening secure payment…';
     try { (RS.embed && window.top !== window ? window.top : window).location.href = url; } catch (_) { location.href = url; }
   }
-  // Back from Stripe after a guest payment.
-  (function () {
-    var q = new URLSearchParams(location.search);
-    if (!q.get('paid') && !q.get('unpaid')) return;
-    var text = q.get('paid') ? 'Payment received for ' + q.get('paid') + '. We’ll email your report when it’s ready.' : 'Payment wasn’t finished, so ' + q.get('unpaid') + ' wasn’t placed.';
-    if (RS.ui) RS.ui.toast(text, { error: !!q.get('unpaid') }); else say(text, !!q.get('unpaid'));
-    history.replaceState(null, '', location.pathname);
-  })();
-
-  // "Sign in" / "Create a free account" from the review step: remember the order, then come back to it.
+  // "Sign in" from the review step: remember the order, then come back to it.
   var PENDING = 'rs.pendingOrder';
   function savePending() {
     var p = current();
     try { localStorage.setItem(PENDING, JSON.stringify({ place: selected, report_type: p ? p.id : null, esx: $('od-esx').checked, at: Date.now() })); } catch (_) { /* storage blocked */ }
   }
   $('od-signin').addEventListener('click', function (e) { e.preventDefault(); savePending(); location.href = 'signin.html?next=' + encodeURIComponent('order.html?resume=1'); });
-  $('od-signup').addEventListener('click', function (e) { e.preventDefault(); savePending(); location.href = 'signin.html?step=signup&next=' + encodeURIComponent('order.html?resume=1'); });
 
   function resumePending() {
     var saved = null;

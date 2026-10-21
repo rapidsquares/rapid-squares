@@ -9,8 +9,10 @@ const rq = config.roofquery;
 export const connected = () => !!rq.apiKey;
 export const sandbox = () => /^rq_test_/.test(rq.apiKey);
 
-// Our products → RoofQuery report types.
-const REPORT_TYPE = { premium_residential: 'residential', certified_residential: 'residential', commercial: 'commercial' };
+// Our products → RoofQuery report types. Certified Residential is RoofQuery's Rapid Squares (beta, turned on
+// per account): each building outlined by a person, one estimated pitch, squares at every pitch. No ESX or drawings.
+const REPORT_TYPE = { premium_residential: 'residential', certified_residential: 'rapid_squares', commercial: 'commercial' };
+export const isRapidSquares = (reportType) => REPORT_TYPE[reportType] === 'rapid_squares';
 
 export class RqError extends Error {
   constructor(status, code, message) { super(message || code); this.status = status; this.code = code; }
@@ -110,6 +112,22 @@ export async function fetchStormPdf(rqId, template, { brand, details = {} } = {}
 export const DIAGRAM_TYPES = ['lengths', 'area', 'pitch'];
 export const fetchDiagram = (rqId, target, type, size = 1200) =>
   api('GET', `/api/v1/reports/orders/${encodeURIComponent(rqId)}/diagrams/${encodeURIComponent(target)}/${type}?format=svg&size=${size}`, { auth: false });
+// Rapid Squares: the photo the outlines were traced on, and the outlines from the XML in that photo's pixels.
+export const fetchPhoto = (rqId) => api('GET', `/api/v1/reports/orders/${encodeURIComponent(rqId)}/photo`, { auth: false });
+export async function rapidOutlines(rqId) {
+  const xml = await (await api('GET', `/api/v1/reports/orders/${encodeURIComponent(rqId)}/xml`, { auth: false })).text();
+  const attr = (tag, name) => { const m = tag.match(new RegExp('\\b' + name + '="([^"]*)"')); return m ? m[1] : null; };
+  const points = (body) => [...body.matchAll(/<POINT\b[^>]*>/g)].map((m) => [+attr(m[0], 'px'), +attr(m[0], 'py')]).filter((p) => p.every(Number.isFinite));
+  const image = (xml.match(/<IMAGE\b[^>]*>/) || [''])[0];
+  const width = +attr(image, 'width'), height = +attr(image, 'height');
+  if (!(width > 0 && height > 0)) return null;
+  const buildings = [...xml.matchAll(/<STRUCTURE\b([^>]*)>([\s\S]*?)<\/STRUCTURE>/g)].map((m) => ({
+    index: +attr(m[1], 'id') || null,
+    outlines: [...m[2].matchAll(/<OUTLINE\b[^>]*>([\s\S]*?)<\/OUTLINE>/g)].map((o) => points(o[1])).filter((p) => p.length > 2),
+    holes: [...m[2].matchAll(/<HOLE\b[^>]*>([\s\S]*?)<\/HOLE>/g)].map((o) => points(o[1])).filter((p) => p.length > 2)
+  })).filter((b) => b.outlines.length);
+  return { width, height, buildings };
+}
 export const fetchStormMap = (rqId) => api('GET', `/api/v1/storm/orders/${encodeURIComponent(rqId)}/map.png`, { auth: false });
 export const getOrder = (rqId) => json('GET', `/api/v1/reports/orders/${encodeURIComponent(rqId)}/status`);
 export const identity = () => json('GET', '/api/v1/identity');

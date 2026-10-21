@@ -16,7 +16,7 @@
 
   var ALL_PERMS = ['orders.create', 'orders.view_all', 'orders.download', 'branding.edit', 'billing.manage', 'users.manage'];
   var PRODUCTS = {
-    certified_residential: { label: 'Certified Residential Rapid Squares', price: 800, subscriber_price: 500, available: false, esx: false, delivery_minutes: 30 },
+    certified_residential: { label: 'Certified Residential Rapid Squares', price: 800, subscriber_price: 500, available: true, esx: false, delivery_minutes: 60 },
     premium_residential: { label: 'Premium Residential Report', price: 1200, subscriber_price: 800, available: true, esx: true, delivery_minutes: 120 },
     commercial: { label: 'Commercial Report', price: 3000, subscriber_price: 2500, available: true, esx: true, delivery_minutes: null },
     storm_report: { label: 'Storm Report', price: 500, subscriber_price: 300, available: true, esx: false, delivery_minutes: 0 }
@@ -274,21 +274,6 @@
       plans: { monthly_cents: 10000, yearly_cents: 100000 }
     };
   });
-  route('POST', '/api/guest-orders', function (c) {
-    var b = c.body || {};
-    var type = b.report_type || 'premium_residential', p = PRODUCTS[type];
-    if (!p) fail(422, 'invalid', 'Choose a report type.');
-    if (!p.available) fail(422, 'unavailable', p.label + ' isn’t available yet.');
-    if (b.esx && !p.esx) fail(422, 'invalid', 'The ESX file isn’t available for ' + p.label + '.');
-    if (!str(b.address) || typeof b.lat !== 'number' || typeof b.lon !== 'number') fail(422, 'invalid', 'Look up the property address first.');
-    var email = str(b.email).toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail(422, 'invalid', 'Enter the email address where we should send the report.');
-    if (!str(b.name)) fail(422, 'invalid', 'Enter your name.');
-    jobDetails(b, type);
-    var n = c.db.next_report++; save(c.db);
-    var price = p.price + (b.esx ? ESX_PRICE : 0);
-    return { order: { report_number: 'RS-' + n, product_label: p.label, address: str(b.address, 300), price_cents: price, esx_purchased: !!b.esx, status: 'awaiting_payment' }, checkout_url: null, email: email };
-  });
 
   route('GET', '/api/orders', function (c) {
     advance(c.db);
@@ -370,6 +355,15 @@
     var out = { order: orderOut(c.db, o), can_download: permsOf(c.me).indexOf('orders.download') !== -1, can_buy_esx: permsOf(c.me).indexOf('orders.create') !== -1, esx_price_cents: o.status === 'delivered' && !o.esx_purchased ? ESX_PRICE : null, report: null, live: false };
     if (o.status !== 'delivered') return out;
     var sq = o.total_squares || 55.97, k = sq / 55.97, f = function (n) { return Math.round(n * k * 10) / 10; };
+    if (o.report_type === 'certified_residential') {
+      // Rapid Squares: the footprint at every pitch from 1/12 to 12/12, the estimate marked.
+      var foot = Math.round(sq * 70.7 * 10) / 10, byPitch = [];
+      for (var n = 1; n <= 12; n++) byPitch.push({ pitch: n + '/12', squares: Math.round(foot * Math.sqrt(1 + n * n / 144)) / 100 });
+      out.report = { kind: 'rapid_squares', summary: { squares: sq, area_sqft: Math.round(sq * 1000) / 10, footprint_sqft: foot, perimeter_ft: f(288), structures: 1, pitch: '12/12' },
+        buildings: [{ index: 1, squares: sq, area_sqft: Math.round(sq * 1000) / 10, footprint_sqft: foot, perimeter_ft: f(288), pitch: '12/12', by_pitch: byPitch }],
+        drawings: null, scope_label: 'All structures on property', completed_at: o.completed_at, sandbox: true };
+      return out;
+    }
     var edges = [['eave', 'Eaves', 276.3, 27], ['rake', 'Rakes', 169.2, 13], ['ridge', 'Ridges', 114.6, 12], ['hip', 'Hips', 304.2, 20], ['valley', 'Valleys', 237.3, 17], ['step_flashing', 'Step flashing', 72.8, 9], ['wall_flashing', 'Wall flashing', 55.4, 14], ['parapet', 'Parapet walls', 0, 0], ['bend', 'Bends (pitch changes)', 4.7, 1], ['other', 'Other', 0, 0]]
       .map(function (e) { return { key: e[0], label: e[1], length_ft: f(e[2]), count: e[3] }; });
     var area = Math.round(sq * 1000) / 10, pitch = o.predominant_pitch || '12/12';
@@ -481,7 +475,7 @@
     var invoices = c.db.orders.filter(charged).map(function (o) {
       return { date: o.created_at, description: (PRODUCTS[o.report_type] || {}).label + (o.esx_purchased ? ' + ESX' : '') + ' · ' + o.report_number, amount_cents: o.price_cents };
     });
-    if (co.subscription && co.subscription.status === 'active') {
+    if (co.subscription && co.subscription.status === 'active' && !co.subscription.trial_ends_at) {
       var subStart = new Date(co.subscription.renews_at).getTime() - 30 * DAY;
       invoices.push({ date: iso(subStart), description: 'Rapid Squares subscription · monthly', amount_cents: co.subscription.price_cents });
     }
@@ -503,7 +497,14 @@
   });
   route('POST', '/api/billing/subscribe', function (c) {
     need(c.me, 'billing.manage');
-    return { url: null, message: 'Stripe’s subscription checkout opens here on the live site. This is sample data.' };
+    var co = c.db.company, b = c.body || {}, plan = b.plan === 'yearly' ? 'yearly' : 'monthly';
+    if (co.subscription && co.subscription.status === 'active') fail(409, 'already_subscribed', 'You already have a subscription. Use Manage billing to change it.');
+    if (!b.use_saved_card || !co.card) return { url: null, message: 'Stripe’s subscription checkout opens here on the live site. This is sample data.' };
+    // On the saved card: the trial starts right away.
+    var trial = !co.trial_used, now = Date.now();
+    co.subscription = { plan: plan, price_cents: plan === 'yearly' ? 100000 : 10000, status: 'active', renews_at: iso(now + (trial ? 30 : plan === 'yearly' ? 365 : 30) * DAY), trial_ends_at: trial ? iso(now + 30 * DAY) : null };
+    co.trial_used = true; save(c.db);
+    return { started: true, trial_days: trial ? 30 : 0, plan: plan };
   });
 
   // ---------- request entry point (adds a short delay, like a real network call) ----------
@@ -515,7 +516,7 @@
           new URLSearchParams(parts[1] || '').forEach(function (v, k) { query[k] = v; });
           var db = load();
           var me = db.users.filter(function (u) { return u.id === currentUserId(db); })[0];
-          var isPublic = /^\/api\/(public\/|guest-orders)/.test(pathname);
+          var isPublic = /^\/api\/public\//.test(pathname);
           if (!me && !isPublic) fail(401, 'unauthorized', 'Sign in to continue.');
           for (var i = 0; i < routes.length; i++) {
             var r = routes[i];

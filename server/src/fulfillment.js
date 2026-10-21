@@ -101,6 +101,12 @@ export function stormDocuments() {
 const RANK = { awaiting_payment: 0, pending: 1, in_progress: 2, needs_info: 2, delivered: 3, failed: 4, cancelled: 4 };
 function measurements(t, structures) {
   if (!t) return null;
+  // Rapid Squares: outlines and one estimated pitch per building, with squares at every pitch.
+  if (!t.edgeTotals && (structures || []).some((s) => s.squaresByPitch)) return {
+    kind: 'rapid_squares', total_area_sqft: t.totalAreaSqFt, total_squares: t.totalSquares, structures: t.structureCount,
+    footprint_sqft: t.footprintSqFt, perimeter_ft: t.perimeterFt,
+    buildings: structures.map((s) => ({ index: s.index, total_squares: s.totalSquares, total_area_sqft: s.totalAreaSqFt, estimated_pitch: s.estimatedPitch, footprint_sqft: s.footprintSqFt, perimeter_ft: s.perimeterFt, squares_by_pitch: s.squaresByPitch || {} }))
+  };
   const e = t.edgeTotals || {}, len = (k) => (e[k] ? Math.round(e[k].lengthFt * 10) / 10 : 0);
   return {
     total_area_sqft: t.totalAreaSqFt, total_squares: t.totalSquares, facets: t.facetCount, structures: t.structureCount,
@@ -119,7 +125,9 @@ export async function apply(order, r) {
   else if (st === 'on-hold') { next = 'in_progress'; patch.status_detail = 'Paused while the property is checked'; }
   else if (['completed', 'revisions_requested', 'revision_completed', 'updated'].includes(st)) {
     if (r.totals) {
-      patch.total_squares = r.totals.totalSquares; patch.predominant_pitch = r.totals.predominantPitch;
+      patch.total_squares = r.totals.totalSquares;
+      // Rapid Squares has no predominant pitch: use the largest building's estimated pitch.
+      patch.predominant_pitch = r.totals.predominantPitch || (r.structures && r.structures[0] && r.structures[0].estimatedPitch) || null;
       patch.measurements = measurements(r.totals, r.structures);
     }
     patch.completed_at = r.completedAt || order.completed_at || now();

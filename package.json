@@ -5,6 +5,9 @@
   "engines": { "node": ">=22" },
   "scripts": {
     "start": "node --env-file-if-exists=server/.env server/src/server.js",
-    "check": "node --env-file-if-exists=server/.env server/scripts/check.js"
+    "check": "node --env-file-if-exists=server/.env server/scripts/check.js",
+    "check:prod": "node --env-file=server/.env.production server/scripts/check.js",
+    "stripe:setup": "node --env-file-if-exists=server/.env server/scripts/stripe-setup.js",
+    "stripe:setup:prod": "node --env-file=server/.env.production server/scripts/stripe-setup.js --save-secret server/.env.production"
   }
 }

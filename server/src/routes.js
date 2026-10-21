@@ -136,45 +136,7 @@ export function registerRoutes(r) {
   r.get('/api/public/products', async () => {
     const p = await products();
     return { products: publicProducts(p), esx_price_cents: p.esx_addon ? p.esx_addon.price_cents : 500, free_reports_remaining: 0, subscribed: false, signup_free_reports: config.freeReportsOnSignup, trial_days: stripe.connected() ? config.trialDays : 0,
-      plans: { monthly_cents: config.stripe.monthlyCents, yearly_cents: config.stripe.yearlyCents } };
-  });
-
-  // Guest order: no account. Saved as awaiting payment; it is only sent to RoofQuery after payment.
-  r.post('/api/guest-orders', async ({ req }) => {
-    rateLimit(req, 'guest-order', 5, 60 * 60 * 1000);
-    const b = await readJson(req);
-    const prods = await products();
-    const type = str(b.report_type) || 'premium_residential';
-    const p = prods[type];
-    if (!p || type === 'esx_addon') fail(422, 'invalid', 'Choose a report type.');
-    if (!p.available) fail(422, 'unavailable', `${p.label} isn\u2019t available yet.`);
-    const esx = !!b.esx;
-    if (esx && !p.esx_addon_allowed) fail(422, 'invalid', `The ESX file isn\u2019t available for ${p.label}.`);
-    if (!str(b.address) || typeof b.lat !== 'number' || typeof b.lon !== 'number' || Math.abs(b.lat) > 90 || Math.abs(b.lon) > 180) fail(422, 'invalid', 'Look up the property address first.');
-    const emailAddr = str(b.email).toLowerCase();
-    if (!emailOk(emailAddr)) fail(422, 'invalid', 'Enter the email address where we should send the report.');
-    const name = str(b.name);
-    if (!name) fail(422, 'invalid', 'Enter your name.');
-    const job = jobDetailsIn(b, type);
-    if (!stripe.connected() && !config.allowUnpaidTestOrders) fail(503, 'payments_not_connected', 'Guest ordering isn\u2019t open yet: payments aren\u2019t connected.');
-    const esxPrice = prods.esx_addon ? prods.esx_addon.price_cents : 500;
-    const price = p.price_cents + (esx ? esxPrice : 0);
-    const [order] = await db.insert('report_orders', {
-      company_id: null, ordered_by: null, guest_email: emailAddr, guest_name: name, guest_phone: str(b.phone, 40) || null,
-      report_type: type, address: str(b.address, 300), address_parts: addressPartsIn(b), lat: b.lat, lon: b.lon, status: 'awaiting_payment', price_cents: price, esx_purchased: esx,
-      order_details: job, status_detail: stripe.connected() ? 'Waiting for payment' : 'Test order: payment and RoofQuery aren\u2019t connected yet'
-    });
-    if (stripe.connected()) {
-      const url = await stripe.checkoutForOrder({ customer: null, email: emailAddr, guest: true, amountCents: price, order,
-        description: `${p.label}${esx ? ' + ESX' : ''} \u00b7 RS-${order.report_number}` });
-      return { order: { report_number: 'RS-' + order.report_number, product_label: p.label, address: order.address, price_cents: price, esx_purchased: esx, status: order.status }, checkout_url: url, email: emailAddr };
-    }
-    await email.send({ to: emailAddr, subject: `Rapid Squares order RS-${order.report_number} received`,
-      text: `Hi ${name},\n\nWe received your order for a ${p.label}${esx ? ' + ESX file' : ''} at ${order.address}.\nOrder number: RS-${order.report_number}\nTotal: $${(price / 100).toFixed(2)}\n\nWe'll email your report to this address when it's ready.` });
-    return {
-      order: { report_number: 'RS-' + order.report_number, product_label: p.label, address: order.address, price_cents: price, esx_purchased: esx, status: order.status },
-      checkout_url: null, email: emailAddr
-    };
+      plans: await stripe.planCents() };
   });
 
   // ---------- health ----------
@@ -266,11 +228,12 @@ export function registerRoutes(r) {
   r.get('/api/orders', async ({ req, query }) => {
     const m = await member(req);
     const mine = !m.can('orders.view_all');
-    const scope = { company_id: eq(m.company.id), ...(mine ? { ordered_by: eq(m.user.id) } : {}) };
+    // Orders never paid for (the payment page was left) stay in the database for stats, but aren't shown.
+    const scope = { company_id: eq(m.company.id), status: 'neq.awaiting_payment', ...(mine ? { ordered_by: eq(m.user.id) } : {}) };
     const size = Math.min(50, parseInt(query.get('page_size'), 10) || 10);
     const page = Math.max(1, parseInt(query.get('page'), 10) || 1);
     const filters = { ...scope, order: 'created_at.desc', limit: size, offset: (page - 1) * size };
-    const status = (query.get('status') || '').split(',').map((s) => s.trim()).filter(Boolean);
+    const status = (query.get('status') || '').split(',').map((s) => s.trim()).filter((s) => s && s !== 'awaiting_payment');
     if (status.length) filters.status = inList(status);
     const q = str(query.get('q'), 100).replace(/[,()*"\\:]/g, ' ').trim();
     if (q) {
@@ -403,6 +366,17 @@ export function registerRoutes(r) {
       edges: edgesOut(t.edgeTotals), pitches: pitchesOut(t.pitchAreas, t.totalAreaSqFt)
     };
   }
+  // Rapid Squares: squares at the estimated pitch, and at every other pitch, per building. No faces, edges or drawings.
+  function rapidOut(t, structures) {
+    const pitchNum = (k) => parseFloat(k) || 0;
+    return {
+      kind: 'rapid_squares',
+      summary: { squares: t.squares, area_sqft: r1(t.area_sqft), footprint_sqft: r1(t.footprint_sqft), perimeter_ft: r1(t.perimeter_ft), structures: t.structures, pitch: structures[0] ? structures[0].pitch : null },
+      buildings: structures.map((b) => ({ index: b.index, squares: b.squares, area_sqft: r1(b.area_sqft), footprint_sqft: r1(b.footprint_sqft), perimeter_ft: r1(b.perimeter_ft), pitch: b.pitch,
+        by_pitch: Object.entries(b.by_pitch || {}).map(([pitch, sq]) => ({ pitch, squares: sq })).sort((x, y) => pitchNum(x.pitch) - pitchNum(y.pitch)) })),
+      drawings: null
+    };
+  }
   r.get('/api/orders/:id/report', async ({ req, params }) => {
     const m = await member(req); const o = await findOrder(m, params.id);
     if (o.report_type === 'storm_report') fail(404, 'not_found', 'Storm reports have their own page.');
@@ -418,15 +392,32 @@ export function registerRoutes(r) {
     if (!r || !r.totals) {
       // RoofQuery didn't answer: show what we saved when the report was delivered (no drawings).
       const s = o.measurements || {};
+      if (s.kind === 'rapid_squares') {
+        out.report = { ...rapidOut({ squares: s.total_squares, area_sqft: s.total_area_sqft, footprint_sqft: s.footprint_sqft, perimeter_ft: s.perimeter_ft, structures: s.structures },
+          (s.buildings || []).map((b) => ({ index: b.index, squares: b.total_squares, area_sqft: b.total_area_sqft, footprint_sqft: b.footprint_sqft, perimeter_ft: b.perimeter_ft, pitch: b.estimated_pitch, by_pitch: b.squares_by_pitch }))),
+          scope_label: null, completed_at: o.completed_at };
+        return out;
+      }
       out.report = { summary: { squares: s.total_squares, area_sqft: s.total_area_sqft, pitch: o.predominant_pitch, facets: s.facets, structures: s.structures, complexity: s.complexity, attic_sqft: s.estimated_attic_sqft, edges_ft: s.total_edge_ft, hips_ridges_ft: s.hips_and_ridges_ft,
         edges: Object.entries(s.lengths_ft || {}).map(([k, v]) => ({ key: k, label: EDGE_LABELS[k.toUpperCase()] || k, length_ft: v, count: null })),
         pitches: (s.pitch_breakdown || []).map((p) => ({ pitch: p.pitch, area_sqft: r1(p.area_sqft), pct: s.total_area_sqft ? Math.round((p.area_sqft / s.total_area_sqft) * 1000) / 10 : null })) },
         buildings: [], drawings: null, scope_label: null, completed_at: o.completed_at };
       return out;
     }
+    out.live = true;
+    if (r.report && r.report.type === 'rapid_squares') {
+      const t = r.totals;
+      out.report = { ...rapidOut({ squares: t.totalSquares, area_sqft: t.totalAreaSqFt, footprint_sqft: t.footprintSqFt, perimeter_ft: t.perimeterFt, structures: t.structureCount },
+        (r.structures || []).map((b) => ({ index: b.index, squares: b.totalSquares, area_sqft: b.totalAreaSqFt, footprint_sqft: b.footprintSqFt, perimeter_ft: b.perimeterFt, pitch: b.estimatedPitch, by_pitch: b.squaresByPitch }))),
+        completed_at: r.completedAt || o.completed_at, scope_label: (r.report && r.report.scopeLabel) || null, sandbox: !!r.sandbox,
+        revision_open: !!(r.statusDetail && r.statusDetail.openRevisionId) };
+      // Each building's outline over the photo it was traced on (the photo comes through our server, like drawings).
+      const shapes = await roofquery.rapidOutlines(o.roofquery_order_id).catch(() => null);
+      if (shapes) out.report.outline = { ...shapes, photo_url: fulfillment.downloadUrl(o.id, 'photo', 60 * 60 * 1000) };
+      return out;
+    }
     const hour = 60 * 60 * 1000;
     const targets = [{ id: 'all', label: 'Whole property' }, ...(r.structures || []).map((s) => ({ id: String(s.index), label: 'Building ' + s.index }))];
-    out.live = true;
     out.report = {
       summary: summaryOut(r.totals), completed_at: r.completedAt || o.completed_at, scope_label: (r.report && r.report.scopeLabel) || null, sandbox: !!r.sandbox,
       revision_open: !!(r.statusDetail && r.statusDetail.openRevisionId),
@@ -488,7 +479,7 @@ export function registerRoutes(r) {
     const bad = () => fail(404, 'not_found', 'This download link isn\u2019t valid or has expired. Download the report again from your Home page.');
     const stormTemplate = /^storm-([a-z_]+)$/.test(kind) && kind !== 'storm-map' ? kind.slice(6) : null;
     const diagram = kind.match(/^diagram-(all|\d{1,2})-(lengths|area|pitch)$/);
-    if (!(['pdf', 'esx', 'buy-esx', 'storm-map'].includes(kind) || diagram || (stormTemplate && roofquery.STORM_TEMPLATES[stormTemplate])) || !/^[0-9a-f-]{36}$/i.test(id) || !fulfillment.checkDownload(id, kind, query.get('exp'), query.get('sig'))) bad();
+    if (!(['pdf', 'esx', 'buy-esx', 'storm-map', 'photo'].includes(kind) || diagram || (stormTemplate && roofquery.STORM_TEMPLATES[stormTemplate])) || !/^[0-9a-f-]{36}$/i.test(id) || !fulfillment.checkDownload(id, kind, query.get('exp'), query.get('sig'))) bad();
     let o = await db.one('report_orders', { id: eq(id) });
     if (!o || !o.roofquery_order_id || o.status !== 'delivered') bad();
     const year = 365 * 24 * 60 * 60 * 1000;
@@ -519,6 +510,14 @@ export function registerRoutes(r) {
       // An outside SVG on our address: allow only its own drawing and styles, never scripts.
       res.writeHead(200, { 'Content-Type': 'image/svg+xml; charset=utf-8', 'Cache-Control': 'private, max-age=3600', 'X-Content-Type-Options': 'nosniff',
         'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; sandbox" });
+      for await (const chunk of img.body) res.write(chunk);
+      return res.end();
+    }
+    if (kind === 'photo') {
+      if (!roofquery.isRapidSquares(o.report_type)) bad();
+      let img;
+      try { img = await roofquery.fetchPhoto(o.roofquery_order_id); } catch (e) { fail(502, 'download_failed', 'The photo couldn\u2019t be loaded right now.'); }
+      res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=3600' });
       for await (const chunk of img.body) res.write(chunk);
       return res.end();
     }
@@ -694,7 +693,7 @@ export function registerRoutes(r) {
     return {
       subscription: c.subscription_status === 'active' ? { plan: c.subscription_plan, status: 'active', price_cents: c.subscription_plan === 'yearly' ? config.stripe.yearlyCents : config.stripe.monthlyCents, renews_at: c.subscription_renews_at, cancel_at_period_end: !!cfg.cancel_at_period_end, trial_ends_at: c.trial_ends_at && new Date(c.trial_ends_at) > new Date() ? c.trial_ends_at : null } : { status: c.subscription_status || 'none' },
       trial_days: config.trialDays, trial_eligible: stripe.connected() && stripe.trialEligible(c),
-      plans: { monthly_cents: config.stripe.monthlyCents, yearly_cents: config.stripe.yearlyCents },
+      plans: await stripe.planCents(),
       card: cfg.card ? { brand: cfg.card.brand, last4: cfg.card.last4, exp: cfg.card.exp } : null, free_reports_remaining: c.free_reports_remaining,
       reports_this_month: month.length, spend_this_month_cents: month.reduce((s, o) => s + o.price_cents, 0) + esxThisMonth,
       billing_email: cfg.billing_email || c.email, billing_address: cfg.billing_address || c.address,
@@ -717,6 +716,8 @@ export function registerRoutes(r) {
   r.post('/api/billing/subscribe', async ({ req }) => {
     const m = await member(req); m.need('billing.manage'); const b = await readJson(req);
     if (!stripe.connected()) return { url: null, message: 'Subscriptions will work once Stripe is connected.' };
+    // With a card on file (and the customer's OK in the pop-up), start right away on that card.
+    if (b.use_saved_card) { const r = await stripe.subscribeWithCard(m.company, str(b.plan)); if (r) return r; }
     return { url: await stripe.subscribeUrl(m.company, str(b.plan)) };
   });
 

@@ -68,11 +68,13 @@ if (config.roofquery.apiKey) {
     const hooks = wr.ok ? ((await wr.json()).webhooks || []) : [];
     const want = `${config.appUrl}/webhooks/roofquery`;
     const env = me.sandbox ? 'test' : 'live';
-    const mine = hooks.filter((h) => h.active && String(h.url).startsWith(want) && (!h.env || h.env === env || (env === 'test' && h.env === 'sandbox')));
+    // One webhook serves the whole account (sandbox and live); its address is targetUrl (url in the older docs).
+    const hookUrl = (h) => String(h.targetUrl || h.url || '');
+    const mine = hooks.filter((h) => h.active && hookUrl(h).startsWith(want) && (!h.env || h.env === env || (env === 'test' && h.env === 'sandbox')));
     const shown = want + (config.roofquery.webhookSecret ? '/<your ROOFQUERY_WEBHOOK_SECRET>' : '');
     if (!wr.ok) skip('Couldn\u2019t list RoofQuery webhooks.');
     else if (!mine.length) bad(`No active RoofQuery webhook points at this site. In the RoofQuery portal, add ${shown}. (Orders still update every few minutes without it.)`);
-    else if (config.roofquery.webhookSecret && !mine.some((h) => String(h.url).includes(config.roofquery.webhookSecret))) bad(`The RoofQuery webhook doesn\u2019t include your ROOFQUERY_WEBHOOK_SECRET, so the site will refuse it. Set it to ${shown}.`);
+    else if (config.roofquery.webhookSecret && !mine.some((h) => hookUrl(h).includes(config.roofquery.webhookSecret))) bad(`The RoofQuery webhook doesn\u2019t include your ROOFQUERY_WEBHOOK_SECRET, so the site will refuse it. Set it to ${shown}.`);
     else ok('RoofQuery webhook: set');
     if (!config.roofquery.webhookSecret) skip('ROOFQUERY_WEBHOOK_SECRET is empty. Optional, but it stops junk requests to the webhook.');
   }

@@ -66,7 +66,7 @@
             </div>
           </div>
         </form>
-        <p id="lookup-status" class="hint" aria-live="polite" style="margin: 0;">Type at least 3 characters to see suggestions.</p>
+        <p id="lookup-status" class="hint" aria-live="polite" style="margin: 0;"></p>
         <h2 class="wiz-sub">What do you need?</h2>
         <fieldset class="report-opts">
           <legend class="sr">Report type</legend>
@@ -128,13 +128,16 @@
           <div class="fld"><label for="jb-notes" class="sr" id="jb-notes-l">Notes</label><textarea id="jb-notes" rows="3" maxlength="450" placeholder="e.g. Only measure the main house, not the detached garage.&#10;The small shed's pitch is 5/12."></textarea></div>
         </div>
         <div class="od-guest hidden" id="od-guest">
-          <p class="od-account"><b>Have an account?</b> <a href="#" id="od-signin">Sign in</a> to order. <b>New here?</b> <a href="#" id="od-signup">Create a free account</a><span id="od-trial-clause"> and try a subscription free for <span id="od-trial-n">30</span> days: subscriber prices on every report</span>. Or order as a guest below.</p>
-          <h3>Order as a guest</h3>
+          <h3>Your details</h3>
+          <p class="hint" style="margin: -6px 0 0;">Your report will be on your Rapid Squares page, ready to open or download any time. <a href="#" id="od-signin">Already have an account? Sign in</a></p>
           <div class="grid-fields">
             <div class="fld"><label for="og-name">Your name</label><input id="og-name" type="text" autocomplete="name"></div>
-            <div class="fld"><label for="og-email">Email for the report</label><input id="og-email" type="email" autocomplete="email" inputmode="email"></div>
+            <div class="fld"><label for="og-company">Company <span class="hint">(optional)</span></label><input id="og-company" type="text" autocomplete="organization"></div>
           </div>
-          <div class="fld"><label for="og-phone">Phone <span class="hint">(optional)</span></label><input id="og-phone" type="tel" autocomplete="tel"></div>
+          <div class="grid-fields">
+            <div class="fld"><label for="og-email">Email</label><input id="og-email" type="email" autocomplete="email" inputmode="email"></div>
+            <div class="fld"><label for="og-pass">Password</label><input id="og-pass" type="password" autocomplete="new-password" minlength="8" aria-describedby="og-pass-hint"><span class="hint" id="og-pass-hint">So you can open this report later. At least 8 characters.</span></div>
+          </div>
         </div>
         <div class="od-total"><span>Total</span><b id="od-total">—</b></div>
         <p class="hint" id="od-note" style="margin: 0;"></p>

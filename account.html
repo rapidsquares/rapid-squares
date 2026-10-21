@@ -315,6 +315,27 @@
     </div>
   </div>
 </main>
+
+<!-- Start a plan on the card already saved for reports -->
+<dialog id="sub-dlg" class="modal" aria-labelledby="sub-dlg-h">
+  <form id="sub-form" class="modal-body" novalidate>
+    <div class="modal-head">
+      <div>
+        <h2 id="sub-dlg-h">Start your free trial</h2>
+        <p class="hint" id="sub-dlg-sub" style="margin: 2px 0 0;"></p>
+      </div>
+      <button type="button" class="modal-x" id="sub-dlg-x" aria-label="Close"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <p class="lede" id="sub-dlg-text" style="margin: 0;"></p>
+    <div class="od-total"><span id="sub-total-l">Due today</span><b id="sub-total">—</b></div>
+    <p class="hint" id="sub-note" style="margin: 0;"></p>
+    <p class="form-error hidden" id="sub-err" role="alert"></p>
+    <div class="actions modal-actions">
+      <button type="button" class="btn" id="sub-cancel">Cancel</button>
+      <button type="submit" class="btn btn-primary" id="sub-go">Start free trial</button>
+    </div>
+  </form>
+</dialog>
 </div>
 
 <nav class="tabbar" aria-label="Primary (mobile)">

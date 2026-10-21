@@ -41,7 +41,7 @@
       .then(function (res) {
         return res.text().then(function (t) {
           var data = null; try { data = t ? JSON.parse(t) : null; } catch (_) { /* not JSON */ }
-          if (!res.ok) { var e = new Error(friendly(res.status, data)); e.status = res.status; throw e; }
+          if (!res.ok) { var e = new Error(friendly(res.status, data)); e.status = res.status; e.code = (data && (data.error_code || data.code || data.error)) || ''; throw e; }
           return data;
         });
       });

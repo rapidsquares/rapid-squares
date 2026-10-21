@@ -8,10 +8,18 @@ import { db, eq } from './supabase.js';
 
 const sk = () => config.stripe.secretKey;
 export const connected = () => !!sk();
+// The subscription product and its two prices live in Stripe (made by `npm run stripe:setup`), found by
+// lookup key so the same code works in test and live mode. The amounts here are only a fallback.
+export const SUBSCRIPTION_PRODUCT = { name: 'Rapid Squares Subscription', description: 'Subscriber prices on every report, plus Instant Squares when it launches. 30-day free trial for new companies.' };
 export const PLANS = {
-  monthly: { label: 'Rapid Squares subscription (monthly)', cents: config.stripe.monthlyCents, interval: 'month' },
-  yearly: { label: 'Rapid Squares subscription (yearly)', cents: config.stripe.yearlyCents, interval: 'year' }
+  monthly: { label: 'Rapid Squares subscription (monthly)', cents: config.stripe.monthlyCents, interval: 'month', lookupKey: 'rs_subscription_monthly' },
+  yearly: { label: 'Rapid Squares subscription (yearly)', cents: config.stripe.yearlyCents, interval: 'year', lookupKey: 'rs_subscription_yearly' }
 };
+// Every event the webhook handler below uses.
+export const WEBHOOK_EVENTS = [
+  'checkout.session.completed', 'checkout.session.async_payment_succeeded', 'checkout.session.async_payment_failed', 'checkout.session.expired',
+  'customer.subscription.created', 'customer.subscription.updated', 'customer.subscription.deleted', 'payment_method.attached', 'customer.updated'
+];
 
 // Stripe wants form encoding with brackets for nested values: a[b][0][c]=1
 function encode(obj, prefix, out = []) {
@@ -138,6 +146,24 @@ async function receiptUrl(pi) {
 }
 
 // ---------- subscriptions & billing portal ----------
+// The Stripe prices for each plan, looked up once and kept for 10 minutes. Null when they aren't set up.
+let priceCache = { at: 0, byPlan: null };
+async function planPrices() {
+  if (!connected()) return null;
+  if (priceCache.byPlan && Date.now() - priceCache.at < 10 * 60 * 1000) return priceCache.byPlan;
+  try {
+    const r = await api('GET', '/prices', { lookup_keys: Object.values(PLANS).map((p) => p.lookupKey), active: true });
+    const byPlan = {};
+    Object.entries(PLANS).forEach(([plan, p]) => { const pr = r.data.find((x) => x.lookup_key === p.lookupKey); if (pr) byPlan[plan] = pr; });
+    priceCache = { at: Date.now(), byPlan };
+    return byPlan;
+  } catch (e) { return priceCache.byPlan; }
+}
+// What each plan costs, for the site to show: Stripe's prices when they're set up, otherwise the settings.
+export async function planCents() {
+  const byPlan = (await planPrices()) || {};
+  return { monthly_cents: byPlan.monthly ? byPlan.monthly.unit_amount : PLANS.monthly.cents, yearly_cents: byPlan.yearly ? byPlan.yearly.unit_amount : PLANS.yearly.cents };
+}
 export async function subscribeUrl(company, plan) {
   const p = PLANS[plan];
   if (!p) fail(422, 'invalid', 'Choose monthly or yearly.');
@@ -146,7 +172,7 @@ export async function subscribeUrl(company, plan) {
   const trial = trialEligible(company) ? config.trialDays : 0;
   const s = await api('POST', '/checkout/sessions', {
     mode: 'subscription', customer,
-    line_items: [{ quantity: 1, price_data: { currency: 'usd', unit_amount: p.cents, recurring: { interval: p.interval }, product_data: { name: p.label } } }],
+    line_items: [await planLineItem(plan, p)],
     subscription_data: { metadata: { company_id: company.id, plan }, ...(trial ? { trial_period_days: trial } : {}) },
     // A card is always collected, so the plan starts by itself when the trial ends.
     payment_method_collection: 'always',
@@ -156,9 +182,59 @@ export async function subscribeUrl(company, plan) {
   });
   return s.url;
 }
+// Starts the plan on the card already saved for reports, with no Stripe page. Returns null when that
+// can't be done (no saved card, no Stripe price yet, or the bank wants the customer to confirm), and the
+// caller sends them to subscribeUrl's page instead.
+export async function subscribeWithCard(company, plan) {
+  const p = PLANS[plan];
+  if (!p) fail(422, 'invalid', 'Choose monthly or yearly.');
+  if (company.subscription_status === 'active') fail(409, 'already_subscribed', 'You already have a subscription. Use Manage billing to change it.');
+  const card = company.stripe_config && company.stripe_config.card;
+  const price = ((await planPrices()) || {})[plan];
+  if (!card || !card.id || !company.stripe_customer_id || !price) return null;
+  const trial = trialEligible(company) ? config.trialDays : 0;
+  let sub;
+  try {
+    sub = await api('POST', '/subscriptions', {
+      customer: company.stripe_customer_id, items: [{ price: price.id }], default_payment_method: card.id,
+      ...(trial ? { trial_period_days: trial } : {}),
+      // Without a trial the first payment is taken now; if the bank wants the customer there, nothing is created.
+      payment_behavior: 'error_if_incomplete', off_session: true,
+      metadata: { company_id: company.id, plan, trial_days: String(trial) }
+    }, { idempotencyKey: `sub-${company.id}-${plan}-${card.id}-${Math.floor(Date.now() / 600000)}` });
+  } catch (e) {
+    if (e.stripe && ['authentication_required', 'card_declined', 'subscription_payment_intent_requires_action'].includes(e.stripe.code)) return null;
+    throw e;
+  }
+  // A trial with a card that needs confirming for later charges: undo it and use the Stripe page instead.
+  if (sub.pending_setup_intent || !['active', 'trialing'].includes(sub.status)) {
+    await api('DELETE', `/subscriptions/${sub.id}`).catch(() => {});
+    return null;
+  }
+  await syncSubscription(company, sub);
+  return { started: true, trial_days: trial, plan };
+}
+// The plan's Stripe price; without one (setup not run), the same amount made up on the spot.
+async function planLineItem(plan, p) {
+  const price = ((await planPrices()) || {})[plan];
+  return price ? { quantity: 1, price: price.id }
+    : { quantity: 1, price_data: { currency: 'usd', unit_amount: p.cents, recurring: { interval: p.interval }, product_data: { name: p.label } } };
+}
+// The billing portal setup made by `npm run stripe:setup` (cancel, switch plans, card, invoices).
+let portalConfig = null;
+async function portalConfigId() {
+  if (portalConfig) return portalConfig;
+  try {
+    const r = await api('GET', '/billing_portal/configurations', { active: true, limit: 100 });
+    const c = r.data.find((x) => x.metadata && x.metadata.app === 'rapid-squares');
+    if (c) portalConfig = c.id;
+  } catch (e) { /* use Stripe's default */ }
+  return portalConfig;
+}
 export async function portalUrl(company) {
   const customer = await ensureCustomer(company);
-  const s = await api('POST', '/billing_portal/sessions', { customer, return_url: `${config.appUrl}/account.html#billing` });
+  const configuration = await portalConfigId();
+  const s = await api('POST', '/billing_portal/sessions', { customer, return_url: `${config.appUrl}/account.html#billing`, ...(configuration ? { configuration } : {}) });
   return s.url;
 }
 

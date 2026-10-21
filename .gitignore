@@ -1,8 +1,8 @@
 # Secret keys: never commit these. On Render they're set as environment variables.
 .env
+.env.*
 *.env
 !.env.example
-server/.env
 
 node_modules/
 .DS_Store
