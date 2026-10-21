@@ -286,7 +286,10 @@ export async function esxPriceFor(order) {
   const p = await db.one('products', { id: eq('esx_addon') });
   if (!p) return 500;
   if (order.company_id) {
-    const c = await db.one('companies', { id: eq(order.company_id), select: 'subscription_status' });
+    const c = await db.one('companies', { id: eq(order.company_id), select: 'subscription_status,email' });
+    const u = order.ordered_by ? await db.one('users', { id: eq(order.ordered_by), select: 'email' }) : null;
+    // FREE_ACCOUNT_EMAILS: no charge.
+    if ([c && c.email, u && u.email].some((e) => e && config.freeAccounts.has(String(e).toLowerCase()))) return 0;
     if (c && c.subscription_status === 'active') return p.subscriber_price_cents;
   }
   return p.price_cents;

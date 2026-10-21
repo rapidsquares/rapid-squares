@@ -12,6 +12,8 @@ const DAY = 86400000;
 const INVITE_DAYS = 7; // invitations always expire after 7 days
 const str = (v, max = 200) => String(v ?? '').trim().slice(0, max);
 const emailOk = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+// FREE_ACCOUNT_EMAILS: these companies get every report, add-on and subscriber feature at no charge.
+const freeAccount = (m) => [m.user && m.user.email, m.company && m.company.email].some((e) => e && config.freeAccounts.has(String(e).toLowerCase()));
 const startOfMonth = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toISOString(); };
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
 const newToken = () => crypto.randomBytes(24).toString('base64url');
@@ -169,7 +171,8 @@ export function registerRoutes(r) {
     const name = str(b.company_name), fullName = str(b.full_name);
     if (!name) fail(422, 'invalid', 'Enter your company name.');
     if (!fullName) fail(422, 'invalid', 'Enter your name.');
-    const [company] = await db.insert('companies', { name, email: auth.email, free_reports_remaining: config.freeReportsOnSignup });
+    // Free reports come with creating an account first; an account made while paying for an order gets none.
+    const [company] = await db.insert('companies', { name, email: auth.email, free_reports_remaining: b.at_checkout ? 0 : config.freeReportsOnSignup });
     try {
       const [u] = await db.insert('users', { id: auth.id, company_id: company.id, full_name: fullName, email: auth.email, role: 'owner', preset: 'admin', permissions: ALL_PERMS });
       return { user: userOut(u), company: { id: company.id, name: company.name } };
@@ -218,9 +221,10 @@ export function registerRoutes(r) {
     return {
       products: Object.values(p).filter((x) => x.id !== 'esx_addon').map((x) => ({ id: x.id, label: x.label, price_cents: x.price_cents, subscriber_price_cents: x.subscriber_price_cents, available: x.available, esx_addon_allowed: x.esx_addon_allowed, delivery_minutes: x.delivery_minutes })),
       esx_price_cents: p.esx_addon ? p.esx_addon.price_cents : 500,
-      free_reports_remaining: m.company.free_reports_remaining, subscribed: m.company.subscription_status === 'active',
-      trial_days: config.trialDays, trial_eligible: stripe.connected() && stripe.trialEligible(m.company),
-      has_card: !stripe.connected() || !!(m.company.stripe_config && m.company.stripe_config.card)
+      free_reports_remaining: m.company.free_reports_remaining, subscribed: m.company.subscription_status === 'active' || freeAccount(m),
+      free_account: freeAccount(m),
+      trial_days: config.trialDays, trial_eligible: !freeAccount(m) && stripe.connected() && stripe.trialEligible(m.company),
+      has_card: freeAccount(m) || !stripe.connected() || !!(m.company.stripe_config && m.company.stripe_config.card)
     };
   });
 
@@ -272,19 +276,20 @@ export function registerRoutes(r) {
     const esx = !!b.esx;
     if (esx && !p.esx_addon_allowed) fail(422, 'invalid', `The ESX file isn\u2019t available for ${p.label}.`);
     if (!str(b.address) || typeof b.lat !== 'number' || typeof b.lon !== 'number' || Math.abs(b.lat) > 90 || Math.abs(b.lon) > 180) fail(422, 'invalid', 'Look up the property address first.');
-    if (!stripe.connected() && !config.allowUnpaidTestOrders) fail(503, 'payments_not_connected', 'Ordering isn\u2019t open yet: payments aren\u2019t connected.');
+    const free = freeAccount(m);
+    if (!free && !stripe.connected() && !config.allowUnpaidTestOrders) fail(503, 'payments_not_connected', 'Ordering isn\u2019t open yet: payments aren\u2019t connected.');
     const job = jobDetailsIn(b, type); // checked before anything is charged
 
-    // Price: free report (Premium only), else subscriber or regular price, plus ESX.
+    // Price: free account, else free report (Premium only), else subscriber or regular price, plus ESX.
     const subscribed = m.company.subscription_status === 'active';
     let usedFree = false;
-    if (type === 'premium_residential' && m.company.free_reports_remaining > 0) {
+    if (!free && type === 'premium_residential' && m.company.free_reports_remaining > 0) {
       const claimed = await db.update('companies', { id: eq(m.company.id), free_reports_remaining: eq(m.company.free_reports_remaining) }, { free_reports_remaining: m.company.free_reports_remaining - 1 });
       usedFree = claimed.length === 1;
     }
     const esxPrice = prods.esx_addon ? prods.esx_addon.price_cents : 500;
     // A free report covers the Premium report, including the ESX add-on.
-    const price = usedFree ? 0 : (subscribed ? p.subscriber_price_cents : p.price_cents) + (esx ? esxPrice : 0);
+    const price = free || usedFree ? 0 : (subscribed ? p.subscriber_price_cents : p.price_cents) + (esx ? esxPrice : 0);
 
     const [order] = await db.insert('report_orders', {
       company_id: m.company.id, ordered_by: m.user.id, report_type: type, address: str(b.address, 300), address_parts: addressPartsIn(b), lat: b.lat, lon: b.lon,
@@ -310,7 +315,7 @@ export function registerRoutes(r) {
   // ---------- Instant Squares (RoofQuery Instant Query): subscribers only ----------
   r.post('/api/instant-query', async ({ req }) => {
     const m = await member(req); m.need('orders.create'); const b = await readJson(req);
-    if (m.company.subscription_status !== 'active') fail(403, 'subscribers_only', 'Instant Squares is for subscribers. Start a free trial on the Account page to use them.');
+    if (m.company.subscription_status !== 'active' && !freeAccount(m)) fail(403, 'subscribers_only', 'Instant Squares is for subscribers. Start a free trial on the Account page to use them.');
     const lat = Number(b.lat), lon = Number(b.lon);
     if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) fail(422, 'invalid', 'Look up the property first.');
     if (!roofquery.connected()) fail(503, 'not_connected', 'Instant Squares will work once RoofQuery is connected.');
@@ -692,7 +697,8 @@ export function registerRoutes(r) {
       .sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 10);
     return {
       subscription: c.subscription_status === 'active' ? { plan: c.subscription_plan, status: 'active', price_cents: c.subscription_plan === 'yearly' ? config.stripe.yearlyCents : config.stripe.monthlyCents, renews_at: c.subscription_renews_at, cancel_at_period_end: !!cfg.cancel_at_period_end, trial_ends_at: c.trial_ends_at && new Date(c.trial_ends_at) > new Date() ? c.trial_ends_at : null } : { status: c.subscription_status || 'none' },
-      trial_days: config.trialDays, trial_eligible: stripe.connected() && stripe.trialEligible(c),
+      trial_days: config.trialDays, trial_eligible: !freeAccount(m) && stripe.connected() && stripe.trialEligible(c),
+      free_account: freeAccount(m),
       plans: await stripe.planCents(),
       card: cfg.card ? { brand: cfg.card.brand, last4: cfg.card.last4, exp: cfg.card.exp } : null, free_reports_remaining: c.free_reports_remaining,
       reports_this_month: month.length, spend_this_month_cents: month.reduce((s, o) => s + o.price_cents, 0) + esxThisMonth,

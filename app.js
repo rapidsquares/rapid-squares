@@ -581,6 +581,7 @@
     function openEsx() {
       $('esx-dlg-sub').textContent = data.order.report_number + ' · ' + data.order.address;
       $('esx-price').textContent = money(data.esx_price_cents);
+      $('esx-note').textContent = data.esx_price_cents ? 'Charged to the card on file.' : 'No charge.';
       $('esx-err').classList.add('hidden');
       $('esx-dlg').showModal();
     }
@@ -1053,7 +1054,10 @@
         var s = b.subscription || {}, plans = b.plans || { monthly_cents: 10000, yearly_cents: 100000 };
         var actions = $('bill-plan-actions'); actions.innerHTML = '';
         var perMo = function (c) { return money(c).replace('.00', ''); };
-        if (s.status === 'active' && s.trial_ends_at) {
+        if (b.free_account) {
+          $('bill-plan').textContent = 'Free account';
+          $('bill-plan-detail').textContent = 'Every report and add-on is free, with subscriber features included. Nothing is charged.';
+        } else if (s.status === 'active' && s.trial_ends_at) {
           $('bill-plan').textContent = 'Free trial';
           $('bill-plan-detail').textContent = 'Subscriber prices on every report \u00b7 ' + (s.cancel_at_period_end ? 'ends ' + fmtDate(s.trial_ends_at) + ', no charge' : 'ends ' + fmtDate(s.trial_ends_at) + ', then ' + perMo(s.price_cents) + (s.plan === 'yearly' ? '/year' : '/month'));
           actions.appendChild(el('button', { type: 'button', class: 'btn', text: 'Manage subscription', onclick: function () { goTo('/api/billing/portal'); } }));

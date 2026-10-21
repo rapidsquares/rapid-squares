@@ -17,6 +17,8 @@ export const config = {
   siteDir: path.resolve(env.SITE_DIR || path.join(here, '..', '..')),
   allowedOrigins: list(env.ALLOWED_ORIGINS),
   freeReportsOnSignup: Math.max(0, parseInt(env.FREE_REPORTS_ON_SIGNUP, 10) || 0),
+  // Companies that get everything free (no charges, no subscription needed), by a member's or the company's email.
+  freeAccounts: new Set(list(env.FREE_ACCOUNT_EMAILS).map((e) => e.toLowerCase())),
   // Free trial of the subscription for a company's first subscription (0 turns it off).
   trialDays: Math.max(0, Number.isFinite(parseInt(env.TRIAL_DAYS, 10)) ? parseInt(env.TRIAL_DAYS, 10) : 30),
   allowUnpaidTestOrders: bool(env.ALLOW_UNPAID_TEST_ORDERS, false),

@@ -97,6 +97,13 @@
   });
 
   // ---------- start ----------
+  // Free Premium reports for a new company (not for someone joining a team by invite).
+  if (!inviteToken) RS.api.get('/api/public/products').then(function (r) {
+    var n = r.signup_free_reports || 0;
+    if (!n) return;
+    document.querySelectorAll('[data-free-n]').forEach(function (x) { x.textContent = n; });
+    $('#su-free').classList.remove('hidden');
+  }).catch(function () { /* optional */ });
   var ready = Promise.resolve();
   if (inviteToken) {
     ready = RS.api.get('/api/invites/preview?token=' + encodeURIComponent(inviteToken)).then(function (inv) {

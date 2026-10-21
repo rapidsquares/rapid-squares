@@ -65,6 +65,7 @@
     <div class="lp-wrap">
       <p class="lp-eyebrow">Our reports</p>
       <h2 id="rep-h">The right roof numbers for every job</h2>
+      <p class="lp-free" id="lp-free"><b>Your first <span data-free-n>3</span> Premium reports are free</b> when you create an account. <a href="signin.html?step=signup&amp;next=orders.html">Create an account</a></p>
       <div class="lp-pt-wrap">
         <table class="lp-pt">
           <thead>
@@ -203,6 +204,9 @@
         if (id === 'esx') { if (r.esx_price_cents != null) n.textContent = money(r.esx_price_cents); return; }
         var p = byId[id]; if (p) n.textContent = money(n.hasAttribute('data-sub') ? p.subscriber_price_cents : p.price_cents);
       });
+      var free = r.signup_free_reports || 0;
+      document.querySelectorAll('[data-free-n]').forEach(function (n) { n.textContent = free; });
+      if (!free) document.getElementById('lp-free').classList.add('hidden');
       var pl = r.plans, whole = function (c) { return '$' + Math.round(c / 100).toLocaleString('en-US'); };
       if (pl && pl.monthly_cents && pl.yearly_cents) {
         document.querySelector('[data-plan="monthly"]').textContent = whole(pl.monthly_cents);

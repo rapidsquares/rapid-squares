@@ -663,6 +663,11 @@ dialog.modal.qo[open] { display: flex; }
 .lp-pt-go { text-align: right !important; width: 1%; white-space: nowrap; }
 .lp-pt-go .btn { height: 40px; padding: 0 20px; }
 .lp-pt-foot { margin-top: 12px; color: var(--muted); }
+.lp-free { margin: -4px 0 18px; padding: 12px 16px; border-radius: 10px; background: var(--accent-soft); font-size: 15px; line-height: 1.45; }
+.lp-free a, .od-free a { color: var(--accent-dark); font-weight: 600; white-space: nowrap; }
+.od-free { margin: 18px 28px 0; padding: 12px 16px; border-radius: 10px; background: var(--accent-soft); font-size: 14px; line-height: 1.45; }
+.auth-free { margin: -4px 0 0; padding: 10px 12px; border-radius: 8px; background: var(--accent-soft); font-size: 14px; }
+@media (max-width: 640px) { .od-free { margin: 14px 16px 0; } }
 .lp-pt-foot a { color: var(--accent-dark); font-weight: 600; }
 @media (max-width: 640px) {
   .lp-pt thead { display: none; }

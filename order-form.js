@@ -300,13 +300,20 @@
   function money(c) { return '$' + (c / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
   // What this company pays for a product right now (server re-checks everything).
   function priceFor(p) {
-    if (!catalog) return 0;
+    if (!catalog || catalog.free_account) return 0;
     if (p.id === 'premium_residential' && catalog.free_reports_remaining > 0) return 0;
     return catalog.subscribed ? p.subscriber_price_cents : p.price_cents;
   }
   function loadCatalog() {
     if (catalog) return Promise.resolve(catalog);
-    return RS.api.get(RS.guest ? '/api/public/products' : '/api/products').then(function (r) { catalog = r; return r; });
+    return RS.api.get(RS.guest ? '/api/public/products' : '/api/products').then(function (r) { catalog = r; freeBanner(); return r; });
+  }
+  // Visitors: creating an account first gets the free Premium reports (an account made at checkout doesn't).
+  function freeBanner() {
+    var n = RS.guest && catalog && catalog.signup_free_reports;
+    if (!n) return;
+    document.querySelectorAll('#od-free [data-free-n]').forEach(function (x) { x.textContent = n; });
+    $('od-free').classList.remove('hidden');
   }
   function catalogFailed(err) {
     $('od-options').innerHTML = '';
@@ -332,11 +339,13 @@
       var radio = document.createElement('input');
       radio.type = 'radio'; radio.name = 'report_type'; radio.value = p.id; radio.disabled = !p.available;
       var main = el('span', 'opt-main'), top = el('span', 'opt-top'), name = el('b', null, p.label);
-      var free = p.id === 'premium_residential' && catalog.free_reports_remaining > 0 && p.available;
+      var free = !catalog.free_account && p.id === 'premium_residential' && catalog.free_reports_remaining > 0 && p.available;
       if (!p.available) name.appendChild(el('span', 'opt-tag', 'Coming soon'));
       else if (free) name.appendChild(el('span', 'opt-tag free', catalog.free_reports_remaining + ' free left'));
       var price = el('span', 'opt-price'), now = el('span', 'opt-now');
       if (free) { now.appendChild(el('s', null, money(catalog.subscribed ? p.subscriber_price_cents : p.price_cents))); now.appendChild(document.createTextNode('Free')); }
+      // Free account: the usual price greyed out, then $0.00.
+      else if (catalog.free_account) { now.appendChild(el('s', null, money(p.price_cents))); now.appendChild(document.createTextNode(money(0))); }
       else now.textContent = money(priceFor(p));
       price.appendChild(now);
       // Subscribers see only their price; everyone else also sees what a subscription would cost.
@@ -354,7 +363,9 @@
     var days = catalog.trial_days || 0;
     $('od-trial-days').textContent = days;
     $('od-trial').classList.toggle('hidden', !(days && catalog.trial_eligible && !catalog.subscribed && !RS.guest));
-    $('od-esx-price').textContent = money(catalog.esx_price_cents);
+    var ep = $('od-esx-price'); ep.innerHTML = '';
+    if (catalog.free_account) { ep.appendChild(el('s', null, money(catalog.esx_price_cents))); ep.appendChild(document.createTextNode(' ' + money(0))); }
+    else ep.textContent = money(catalog.esx_price_cents);
     if (preselect && preselect.esx) $('od-esx').checked = true;
     preselect = null;
     updateEsx();
@@ -385,10 +396,10 @@
   }
   function scope() { var p = current(), r = wiz.querySelector('input[name="scope"]:checked'); return p && p.id !== 'storm_report' && r ? r.value : null; }
   wiz.querySelectorAll('input[name="scope"]').forEach(function (r) { r.addEventListener('change', function () { scopePicked = true; }); });
-  function usesFree() { var p = current(); return !!(p && p.id === 'premium_residential' && catalog.free_reports_remaining > 0); }
+  function usesFree() { var p = current(); return !!(p && !catalog.free_account && p.id === 'premium_residential' && catalog.free_reports_remaining > 0); }
   function total() {
     var p = current();
-    return !p || usesFree() ? 0 : priceFor(p) + ($('od-esx').checked ? catalog.esx_price_cents : 0);
+    return !p || usesFree() || catalog.free_account ? 0 : priceFor(p) + ($('od-esx').checked ? catalog.esx_price_cents : 0);
   }
   $('od-options').addEventListener('change', updateEsx);
   $('od-esx').addEventListener('change', refresh);
@@ -412,7 +423,8 @@
     $('notes-group').classList.toggle('hidden', storm);
     $('od-total').textContent = money(t);
     var note = '';
-    if (usesFree()) note = 'Uses 1 of your free reports' + ($('od-esx').checked ? ', ESX file included.' : '.');
+    if (catalog.free_account) note = 'No charge on your account.';
+    else if (usesFree()) note = 'Uses 1 of your free reports' + ($('od-esx').checked ? ', ESX file included.' : '.');
     else if (t > 0) note = RS.guest ? 'You’ll pay on Stripe’s secure page next, or with your saved card if you already have an account.' : (catalog.has_card === false ? 'You’ll add your card on Stripe’s secure page; it’s saved for next time.' : 'Charged to the card on file when you place the order.');
     $('od-note').textContent = note;
     $('od-error').classList.add('hidden');
@@ -468,7 +480,7 @@
       // Only when email confirmation is on: finish from the link, and the order comes back.
       if (!r.session) { savePending(); throw new Error('We sent a link to ' + who.email + '. Open it to finish placing your order.'); }
       RS.guest = false;
-      return RS.api.post('/api/onboarding', { company_name: who.company || who.name, full_name: who.name }).catch(function (e) { if (e.status !== 409) throw e; });
+      return RS.api.post('/api/onboarding', { company_name: who.company || who.name, full_name: who.name, at_checkout: true }).catch(function (e) { if (e.status !== 409) throw e; });
     });
   }
   function done(o, r, label, place) {
@@ -498,6 +510,7 @@
     var p = current();
     try { localStorage.setItem(PENDING, JSON.stringify({ place: selected, report_type: p ? p.id : null, esx: $('od-esx').checked, at: Date.now() })); } catch (_) { /* storage blocked */ }
   }
+  $('od-free-go').addEventListener('click', function (e) { e.preventDefault(); savePending(); location.href = 'signin.html?step=signup&next=' + encodeURIComponent('order.html?resume=1'); });
   $('od-signin').addEventListener('click', function (e) { e.preventDefault(); savePending(); location.href = 'signin.html?next=' + encodeURIComponent('order.html?resume=1'); });
 
   function resumePending() {

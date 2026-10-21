@@ -262,7 +262,8 @@
     return {
       products: Object.keys(PRODUCTS).map(function (k) { var p = PRODUCTS[k]; return { id: k, label: p.label, price_cents: p.price, subscriber_price_cents: p.subscriber_price, available: p.available, esx_addon_allowed: p.esx, delivery_minutes: p.delivery_minutes }; }),
       esx_price_cents: ESX_PRICE, free_reports_remaining: co.free_reports_remaining, subscribed: !!(co.subscription && co.subscription.status === 'active'),
-      trial_days: 30, trial_eligible: !co.trial_used && !(co.subscription && co.subscription.status === 'active')
+      trial_days: 30, trial_eligible: !co.trial_used && !(co.subscription && co.subscription.status === 'active'),
+      free_account: !!co.free_account
     };
   });
 
@@ -270,7 +271,7 @@
   route('GET', '/api/public/products', function () {
     return {
       products: Object.keys(PRODUCTS).map(function (k) { var p = PRODUCTS[k]; return { id: k, label: p.label, price_cents: p.price, subscriber_price_cents: p.subscriber_price, available: p.available, esx_addon_allowed: p.esx, delivery_minutes: p.delivery_minutes }; }),
-      esx_price_cents: ESX_PRICE, free_reports_remaining: 0, subscribed: false, signup_free_reports: 0, trial_days: 30,
+      esx_price_cents: ESX_PRICE, free_reports_remaining: 0, subscribed: false, signup_free_reports: 3, trial_days: 30,
       plans: { monthly_cents: 10000, yearly_cents: 100000 }
     };
   });
@@ -482,7 +483,7 @@
     invoices.sort(function (a, b) { return b.date < a.date ? -1 : 1; });
     return {
       subscription: co.subscription ? clone(co.subscription) : { status: 'none' }, plans: { monthly_cents: 10000, yearly_cents: 100000 },
-      trial_days: 30, trial_eligible: !co.trial_used && !(co.subscription && co.subscription.status === 'active'), card: clone(co.card), free_reports_remaining: co.free_reports_remaining,
+      trial_days: 30, trial_eligible: !co.free_account && !co.trial_used && !(co.subscription && co.subscription.status === 'active'), free_account: !!co.free_account, card: clone(co.card), free_reports_remaining: co.free_reports_remaining,
       reports_this_month: month.filter(charged).length, spend_this_month_cents: month.filter(charged).reduce(function (s, o) { return s + o.price_cents; }, 0),
       billing_email: co.billing_email, billing_address: co.billing_address, invoices: invoices.slice(0, 10)
     };
