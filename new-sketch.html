@@ -46,24 +46,14 @@
       <button type="button" class="modal-x hidden" id="wiz-close" aria-label="Close"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     </header>
     <ol class="wiz-steps" aria-label="Order steps">
-      <li data-step="report"><span class="wiz-n">1</span><span>Report &amp; address</span></li>
+      <li data-step="report"><span class="wiz-n">1</span><span>Address &amp; report</span></li>
       <li data-step="location"><span class="wiz-n">2</span><span>Confirm roof</span></li>
       <li data-step="review"><span class="wiz-n">3</span><span>Review</span></li>
     </ol>
 
     <div class="wiz-body">
-      <!-- 1. Report type and address -->
-      <section class="wiz-panel" data-panel="report" aria-label="Report and address">
-        <h2 class="wiz-sub">What do you need?</h2>
-        <fieldset class="report-opts">
-          <legend class="sr">Report type</legend>
-          <div id="od-options"><p class="hint">Loading report types…</p></div>
-        </fieldset>
-        <label class="perm hidden" id="od-esx-row">
-          <input type="checkbox" id="od-esx">
-          <span class="esx-line"><b>Add Xactimate (ESX) file</b><span class="opt-price" id="od-esx-price">$5.00</span></span>
-        </label>
-        <p class="od-trial hidden" id="od-trial">Get subscriber prices free for <span id="od-trial-days">30</span> days. <a href="account.html#billing" target="_top">Start your free trial</a></p>
+      <!-- 1. Address and report type -->
+      <section class="wiz-panel" data-panel="report" aria-label="Address and report">
         <h2 class="wiz-sub">Where is the property?</h2>
         <form id="lookup-form" class="lookup" role="search" autocomplete="off">
           <div class="fld lookup-field">
@@ -74,13 +64,22 @@
               <ul id="suggestions" class="suggestions hidden" role="listbox" aria-label="Address suggestions"></ul>
             </div>
           </div>
-          <button type="submit" class="btn btn-primary lookup-btn">Look up</button>
         </form>
         <p id="lookup-status" class="hint" aria-live="polite" style="margin: 0;">Type at least 3 characters to see suggestions.</p>
         <div id="addr-picked" class="wiz-picked hidden">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>
           <div><b id="ap-line1"></b><span id="ap-line2" class="hint"></span></div>
         </div>
+        <h2 class="wiz-sub">What do you need?</h2>
+        <fieldset class="report-opts">
+          <legend class="sr">Report type</legend>
+          <div id="od-options"><p class="hint">Loading report types…</p></div>
+        </fieldset>
+        <label class="perm hidden" id="od-esx-row">
+          <input type="checkbox" id="od-esx">
+          <span class="esx-line"><b>Add Xactimate (ESX) file</b><span class="opt-price" id="od-esx-price">$5.00</span></span>
+        </label>
+        <p class="od-trial hidden" id="od-trial">Get subscriber prices free for <span id="od-trial-days">30</span> days. <a href="account.html#billing" target="_top">Start your free trial</a></p>
       </section>
 
       <!-- 3. Confirm the roof on the map -->

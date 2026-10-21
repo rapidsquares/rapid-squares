@@ -60,12 +60,14 @@
     });
   }
 
+  // The company name goes in every .co-name. It's remembered so the next page shows it straight away.
+  var CO_KEY = 'rs.companyName';
   function replaceCompanyName(name) {
-    var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-    var nodes = [];
-    while (walker.nextNode()) if (walker.currentNode.nodeValue.indexOf('[Company Name]') !== -1) nodes.push(walker.currentNode);
-    nodes.forEach(function (n) { n.nodeValue = n.nodeValue.split('[Company Name]').join(name); });
+    if (!name) return;
+    document.querySelectorAll('.co-name').forEach(function (n) { n.textContent = name; });
+    try { localStorage.setItem(CO_KEY, name); } catch (_) { /* storage blocked */ }
   }
+  try { replaceCompanyName(localStorage.getItem(CO_KEY)); } catch (_) { /* storage blocked */ }
 
   // ---------- navigation by permission ----------
   var NEEDS = { 'new-sketch.html': 'orders.create', 'orders.html?order=1': 'orders.create' };
@@ -86,6 +88,7 @@
   function signOut() {
     if (api.mode === 'sample') { toast('On sample data there\u2019s no real sign-in, so there\u2019s nothing to sign out of.'); return; }
     toast('Signing out\u2026');
+    try { localStorage.removeItem(CO_KEY); } catch (_) { /* storage blocked */ }
     RS.auth.signOut().then(function () { location.href = 'signin.html'; });
   }
   function guardPage() {

@@ -1,6 +1,6 @@
-// Rapid Squares — order a report, step by step: report type and address → confirm the roof → review and place.
+// Rapid Squares — order a report, step by step: address and report type → confirm the roof → review and place.
 //
-// Address: type an address → suggestions from Azure Maps Autocomplete → pick one (or press Look up)
+// Address: type an address → suggestions from Azure Maps Autocomplete → pick one (Enter looks up what's typed)
 // → Azure Maps Geocoding gives the coordinates. The roof step shows satellite imagery (Azure Maps Web SDK)
 // with a pin that can be dragged onto the right roof.
 //
@@ -165,7 +165,7 @@
       autocomplete(q).then(function (items) {
         if (id !== reqId) return;               // a newer keystroke won
         renderSuggestions(items);
-        say(items.length ? items.length + ' suggestion' + (items.length > 1 ? 's' : '') + '. Use the arrow keys to choose.' : 'No matches yet — keep typing or press Look up.');
+        say(items.length ? items.length + ' suggestion' + (items.length > 1 ? 's' : '') + '. Pick one, or use the arrow keys.' : 'No matches yet. Keep typing, or press Enter to search.');
       }).catch(function (err) { if (id === reqId) { closeSuggestions(); say(explain(err), true); } });
     }, 200);
   });
@@ -343,7 +343,7 @@
   function refresh() {
     backBtn.classList.toggle('invisible', step === 'report');
     var p = current();
-    if (step === 'report') { nextBtn.textContent = !p ? 'Choose a report' : !selected ? 'Pick the address' : 'Continue'; nextBtn.disabled = !p || !selected; }
+    if (step === 'report') { nextBtn.textContent = !selected ? 'Pick the address' : !p ? 'Choose a report' : 'Continue'; nextBtn.disabled = !p || !selected; }
     else if (step === 'location') { nextBtn.textContent = isStorm() ? 'This is the property' : 'This is the roof'; nextBtn.disabled = false; }
     else if (step === 'review') {
       var t = total();
