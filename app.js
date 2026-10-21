@@ -79,16 +79,18 @@
     });
   }
   // Bottom of the sidebar: the signed-in email and Sign out.
-  function showSignedIn(me) {
-    var box = $('side-me'); if (!box) return;
-    $('side-email').textContent = me.user.email || '';
-    $('side-signout').addEventListener('click', signOut);
+  // Remembered like the company name, so it's there straight away on the next page.
+  var EMAIL_KEY = 'rs.email';
+  function showSignedIn(email) {
+    var box = $('side-me'); if (!box || !email) return;
+    $('side-email').textContent = email;
     box.classList.remove('hidden');
+    try { localStorage.setItem(EMAIL_KEY, email); } catch (_) { /* storage blocked */ }
   }
   function signOut() {
     if (api.mode === 'sample') { toast('On sample data there\u2019s no real sign-in, so there\u2019s nothing to sign out of.'); return; }
     toast('Signing out\u2026');
-    try { localStorage.removeItem(CO_KEY); } catch (_) { /* storage blocked */ }
+    try { localStorage.removeItem(CO_KEY); localStorage.removeItem(EMAIL_KEY); } catch (_) { /* storage blocked */ }
     RS.auth.signOut().then(function () { location.href = 'signin.html'; });
   }
   function guardPage() {
@@ -663,27 +665,30 @@
   // ---------- Account ----------
   // Account page: each item in the side list shows its own section (#profile, #billing, #team, …).
   var ACCT_NEEDS = { billing: 'billing.manage', 'report-settings': 'branding.edit', team: 'users.manage' };
-  function setupAccountTabs() {
-    var links = document.querySelectorAll('[data-side]'), ok = {};
+  // ok: which sections this person may open. Before we know (page still loading), any section shows.
+  function showAccountTab(ok) {
+    var links = document.querySelectorAll('[data-side]');
+    var want = location.hash.slice(1), tab = (ok ? ok[want] : document.querySelector('[data-panel="' + want + '"]')) ? want : 'profile';
     links.forEach(function (a) {
+      var on = a.getAttribute('data-side') === tab;
+      a.classList.toggle('current', on);
+    });
+    document.querySelectorAll('[data-panel]').forEach(function (p) { p.classList.toggle('hidden', p.getAttribute('data-panel') !== tab); });
+    $('acct-save-bar').classList.toggle('hidden', tab !== 'profile');
+    window.scrollTo(0, 0);
+  }
+  function setupAccountTabs() {
+    var ok = {};
+    document.querySelectorAll('[data-side]').forEach(function (a) {
       var key = a.getAttribute('data-side'), need = ACCT_NEEDS[key];
       ok[key] = !need || can(need);
       if (!ok[key]) a.classList.add('hidden');
     });
-    function show() {
-      var want = location.hash.slice(1), tab = ok[want] ? want : 'profile';
-      links.forEach(function (a) {
-        var on = a.getAttribute('data-side') === tab;
-        a.classList.toggle('current', on);
-        if (on) a.parentNode.scrollLeft = a.offsetLeft - a.parentNode.offsetLeft - 16; // phones: the list scrolls sideways
-      });
-      document.querySelectorAll('[data-panel]').forEach(function (p) { p.classList.toggle('hidden', p.getAttribute('data-panel') !== tab); });
-      $('acct-save-bar').classList.toggle('hidden', tab !== 'profile');
-      window.scrollTo(0, 0);
-    }
-    window.addEventListener('hashchange', show);
-    show();
+    window.removeEventListener('hashchange', earlyTab);
+    window.addEventListener('hashchange', function () { showAccountTab(ok); });
+    showAccountTab(ok);
   }
+  function earlyTab() { showAccountTab(null); }
 
   function initAccount() {
     var me = ME.user;
@@ -815,6 +820,10 @@
   // ---------- start ----------
   if (page === 'new-sketch' && /[?&]embed=1/.test(location.search)) { document.body.classList.add('embed'); RS.embed = true; }
   labelTables();
+  // Show what we already know before the server answers, so pages don't pop in.
+  if ($('side-signout')) $('side-signout').addEventListener('click', signOut);
+  try { showSignedIn(localStorage.getItem(EMAIL_KEY)); } catch (_) { /* storage blocked */ }
+  if (page === 'account') { earlyTab(); window.addEventListener('hashchange', earlyTab); }
   if (!api) return;
   if (isGuest()) { setupGuest(); document.dispatchEvent(new CustomEvent('rs:ready', { detail: null })); return; }
   if (api.mode === 'live' && !(RS.auth && RS.auth.signedIn())) { RS.auth.toSignIn(); return; }
@@ -830,7 +839,7 @@
     RS.me = me;
     replaceCompanyName(me.company.name);
     setupNav();
-    showSignedIn(me);
+    showSignedIn(me.user.email);
     if (!guardPage()) return;
     if (page === 'reports') initReports();
     else if (page === 'storm-report') initStorm();

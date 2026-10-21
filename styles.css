@@ -662,8 +662,6 @@ body.embed .page-head h1 { font-size: 24px; }
 .wiz-body { flex: 1 1 auto; overflow-y: auto; padding: 22px 28px 26px; }
 .wiz-panel { display: flex; flex-direction: column; gap: 16px; }
 .wiz-panel .lede b { color: var(--ink); }
-.wiz-picked { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-radius: 10px; background: var(--accent-soft); color: var(--accent-dark); }
-.wiz-picked div { display: flex; flex-direction: column; gap: 2px; color: var(--ink); }
 #od-options { display: flex; flex-direction: column; gap: 10px; }
 #od-options .opt-card { transition: border-color .15s, box-shadow .15s; }
 #od-options .opt-card:hover:not(.off) { border-color: var(--accent); }
@@ -836,3 +834,12 @@ body.embed .notice { margin: 12px 16px 0; }
 }
 .wiz-sub { margin: 4px 0 -4px; font-family: 'Archivo', sans-serif; font-size: 17px; }
 .wiz-sub ~ .wiz-sub { margin-top: 10px; padding-top: 18px; border-top: 1px solid var(--line-2); }
+
+/* ---------- Page changes: fade instead of a blank flash; sidebar and bars stay put ---------- */
+@view-transition { navigation: auto; }
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: .16s; }
+.app-side { view-transition-name: app-side; }
+.tabbar { view-transition-name: tabbar; }
+body.app .topbar { view-transition-name: topbar; }
+@media (prefers-reduced-motion: reduce) { @view-transition { navigation: none; } }
+#lookup-status:empty { display: none; }

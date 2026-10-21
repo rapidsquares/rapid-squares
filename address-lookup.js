@@ -82,20 +82,40 @@
       }
     };
   }
+  // Where to rank suggestions around ([lon, lat]): the device's location when the browser has already
+  // been allowed to share it, otherwise the company's most recent order. Without either, the whole country.
+  var near = null, nearFromDevice = false;
+  function findNear() {
+    try {
+      if (navigator.permissions && navigator.geolocation) navigator.permissions.query({ name: 'geolocation' }).then(function (p) {
+        if (p.state === 'granted') navigator.geolocation.getCurrentPosition(function (pos) { near = [pos.coords.longitude, pos.coords.latitude]; nearFromDevice = true; }, function () {}, { maximumAge: 3600000, timeout: 8000 });
+      }).catch(function () {});
+    } catch (_) { /* not supported */ }
+    if (window.RS && RS.api && !RS.guest) RS.api.get('/api/orders?page=1&page_size=1').then(function (r) {
+      var o = r && r.orders && r.orders[0];
+      if (!nearFromDevice && o && o.lat != null && o.lon != null) near = [o.lon, o.lat];
+    }).catch(function () { /* fall back to the whole country */ });
+  }
+  if (window.RS && RS.me) findNear(); else document.addEventListener('rs:ready', findNear, { once: true });
+  function area(params) {
+    // Azure ranks by distance from "coordinates"; bbox only limits the area.
+    return Object.assign(params, near ? { coordinates: near[0].toFixed(4) + ',' + near[1].toFixed(4) } : { bbox: SEARCH_BBOX });
+  }
   function geocode(query, top) {
     // Only query + bbox/coordinates/view/top are allowed alongside a free-text query.
-    return azure('/geocode', { query: query, top: top || 5, bbox: SEARCH_BBOX })
+    return azure('/geocode', area({ query: query, top: top || 5 }))
       .then(function (data) { return (data.features || []).map(toPlace).filter(function (p) { return p.lat != null; }); });
   }
   var autoParams = { countryRegion: COUNTRY, resultTypeGroups: 'Address' };
   function autocomplete(query) {
-    var base = { query: query, top: 5, bbox: SEARCH_BBOX };
+    var base = area({ query: query, top: 5 });
     return azure('/geocode:autocomplete', Object.assign({}, base, autoParams)).catch(function (err) {
       // If Azure rejects the optional filters, drop them for the rest of the session and retry once.
-      if (err && err.status === 400 && Object.keys(autoParams).length) {
+      // Same for the "near you" ranking.
+      if (err && err.status === 400 && (Object.keys(autoParams).length || near)) {
         console.warn('[Rapid Squares] Autocomplete rejected optional filters; retrying without them.', err.detail);
-        autoParams = {};
-        return azure('/geocode:autocomplete', base);
+        autoParams = {}; near = null;
+        return azure('/geocode:autocomplete', { query: query, top: 5, bbox: SEARCH_BBOX });
       }
       throw err;
     }).then(function (data) { return (data.features || []).map(toPlace).filter(function (p) { return p.label; }); });
@@ -228,10 +248,8 @@
   function show(p) {
     selected = p;
     p.found = { lat: p.lat, lon: p.lon }; // where the address lookup put it; the pin can be moved from here
-    $('addr-picked').classList.remove('hidden');
-    $('ap-line1').textContent = p.line1 || p.label;
-    $('ap-line2').textContent = p.line2 || '';
-    say('Selected ' + p.label + '.');
+    input.value = p.label;
+    say(''); // the address in the box is the confirmation
     if (marker) marker.setOptions({ position: [p.lon, p.lat] });
     if (map) map.setCamera({ center: [p.lon, p.lat], zoom: ZOOM });
     showPin();
