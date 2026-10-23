@@ -9,20 +9,7 @@ const MIN = 60000;
 const money = (c) => '$' + (c / 100).toFixed(2);
 const now = () => new Date().toISOString();
 // Wait before trying a failed placement again: 5 min, 15 min, 1 hour, then every 3 hours.
-const BACKOFF = [5, 15, 60, 180];
-// Refusals that retrying can't fix: the order is refunded instead.
-const PERMANENT = new Set(['ADDRESS_INCOMPLETE', 'VALIDATION', 'validation', 'PRODUCT_NOT_ENABLED', 'ESX_NOT_SUPPORTED']);
-// Errors where RoofQuery may not have heard the request at all (or is still placing it): retry with the same key,
-// so an order that did go through isn't placed twice. After any other refusal RoofQuery remembers the failed key,
-// so the next try needs a new one.
-const SAME_KEY = new Set(['unreachable', 'ORDER_IN_PROGRESS']);
-function orderKey(order) {
-  const tries = order.rq_attempts || 0;
-  const last = String(order.rq_error || '').split(':')[0];
-  // A gateway error (an error page, not RoofQuery's own answer) also leaves it unknown whether the order went through.
-  const n = tries && (SAME_KEY.has(last) || /^http_5/.test(last)) ? tries - 1 : tries;
-  return (order.report_type === 'storm_report' ? 'rs-storm-' : 'rs-order-') + order.id + (n ? '-' + n : '');
-}
+// RoofQuery's answer when the balance won't cover an order: the alert says to add credit.
 const BALANCE = new Set(['INSUFFICIENT_CREDITS', 'BILLING_SETUP_REQUIRED']);
 
 // ---------- signed download links ----------
@@ -41,56 +28,43 @@ export function checkDownload(orderId, kind, exp, sig) {
 }
 
 // ---------- placing ----------
-// Sends a paid order to RoofQuery. Never throws: problems are recorded on the order and retried.
+// Sends a paid order to RoofQuery. Never throws. If RoofQuery won't take it, the order isn't retried: it's
+// cancelled and refunded, the customer is told we're having trouble, and ADMIN_EMAIL gets the error.
 export async function place(orderId) {
   if (!rq.connected()) return null;
   const order = await db.one('report_orders', { id: eq(orderId) });
   if (!order || order.status !== 'pending' || order.roofquery_order_id) return order;
   try {
     if (order.report_type === 'storm_report') return await placeStorm(order);
-    // The order keeps the company's brand for good, so its profile is brought up to date first.
+    // The order keeps the company's brand for good: try twice to have the profile up to date, then order
+    // without one rather than not at all.
     const company = order.company_id ? await db.one('companies', { id: eq(order.company_id) }) : null;
-    let brand = company ? await rq.ensureBrand(company) : null, r;
-    try { r = await rq.placeOrder(order, { key: orderKey(order), brand }); }
+    let brand = company ? (await rq.ensureBrand(company)) || (await rq.ensureBrand(company)) : null, r;
+    try { r = await rq.placeOrder(order, { brand }); }
     catch (e) {
       if (e.code !== 'BRAND_NOT_FOUND' || !company) throw e;
-      // The profile was deleted in RoofQuery's portal: make a new one and try once more (a new key, as this one failed).
+      // The profile was deleted in RoofQuery's portal: make a new one, or order without it.
       await db.update('companies', { id: eq(company.id) }, { roofquery_brand_profile_id: null, roofquery_brand_hash: null });
       brand = await rq.ensureBrand({ ...company, roofquery_brand_profile_id: null, roofquery_brand_hash: null });
-      r = await rq.placeOrder(order, { key: orderKey(order) + '-b', brand });
+      r = await rq.placeOrder(order, { brand, key: 'rs-order-' + order.id + '-b' });
     }
-    const [saved] = await db.update('report_orders', { id: eq(order.id) }, { roofquery_order_id: r.orderId, rq_status: r.status, rq_error: null, rq_next_try_at: null, rq_checked_at: now(), status_detail: null });
+    const [saved] = await db.update('report_orders', { id: eq(order.id) }, { roofquery_order_id: r.orderId, rq_status: r.status, rq_error: null, rq_checked_at: now(), status_detail: null });
     return apply(saved, r);
   } catch (e) {
-    const attempts = (order.rq_attempts || 0) + 1;
     const why = `${e.code || 'error'}: ${e.message}`;
-    if (PERMANENT.has(e.code)) {
-      // Our data can't be fixed by retrying: refund and tell everyone.
-      const [saved] = await db.update('report_orders', { id: eq(order.id) }, { rq_attempts: attempts, rq_error: why, rq_next_try_at: null, status: 'failed', status_detail: 'We couldn’t place this order: ' + e.message });
-      await alertAdmin(`Order RS-${order.report_number} couldn't be placed`, `RoofQuery refused RS-${order.report_number} (${order.address}).\n\n${why}\n\nThe customer has been refunded.`);
-      await refundAndTell(saved, 'We couldn’t place the order for this address (' + e.message + ').');
-      return saved;
-    }
-    const wait = BACKOFF[Math.min(attempts - 1, BACKOFF.length - 1)];
-    const [saved] = await db.update('report_orders', { id: eq(order.id) }, {
-      rq_attempts: attempts, rq_error: why, rq_next_try_at: new Date(Date.now() + wait * MIN).toISOString(),
-      status_detail: 'Queued: sending to the measuring team'
-    });
-    if (attempts === 1 && BALANCE.has(e.code)) {
-      await alertAdmin('RoofQuery balance too low: orders are waiting',
-        `RS-${order.report_number} couldn't be sent to RoofQuery because the account balance won't cover it (${e.code}).\n\nAdd credit in the RoofQuery portal. Waiting orders are retried automatically (next try in ${wait} minutes).`);
-    } else if (attempts === 3) {
-      await alertAdmin(`RS-${order.report_number} still not sent to RoofQuery`, `Three tries so far for RS-${order.report_number} (${order.address}).\n\nLast error: ${why}\n\nIt will keep retrying every few hours.`);
-    }
-    return saved;
+    const [saved] = await db.update('report_orders', { id: eq(order.id) }, { rq_attempts: (order.rq_attempts || 0) + 1, rq_error: why, status: 'failed', status_detail: 'We couldn’t place this order' });
+    await alertAdmin(`RS-${order.report_number} couldn't be placed and was refunded`,
+      `RoofQuery didn't take RS-${order.report_number} (${order.address}).\n\n${why}\n\n${BALANCE.has(e.code) ? 'The RoofQuery balance won’t cover it: add credit in the RoofQuery portal.\n\n' : ''}The order was cancelled, and the customer was refunded and told.`);
+    await refundAndTell(saved || order, 'We’re experiencing issues placing orders right now. Please try again a little later.');
+    return saved || order;
   }
 }
 
 // A Storm Report comes back finished in the same response (about 2 seconds), so it's delivered at once.
 async function placeStorm(order) {
-  const r = await rq.placeStorm(order, { key: orderKey(order) });
+  const r = await rq.placeStorm(order);
   const [saved] = await db.update('report_orders', { id: eq(order.id) }, {
-    roofquery_order_id: r.orderId, rq_status: r.status || 'completed', rq_error: null, rq_next_try_at: null, rq_checked_at: now(),
+    roofquery_order_id: r.orderId, rq_status: r.status || 'completed', rq_error: null, rq_checked_at: now(),
     status: 'delivered', status_detail: null, completed_at: r.completedAt || r.createdAt || now(), measurements: { storm: stormData(r) }
   });
   if (saved) await tellReady(saved);
@@ -406,14 +380,12 @@ async function alertAdmin(subject, text) {
   if (config.adminEmail) await email.send({ to: config.adminEmail, subject: '[Rapid Squares] ' + subject, text });
 }
 
-// ---------- background: retry failed placements, and check on orders whose webhook may have been missed ----------
+// ---------- background: check on orders whose webhook may have been missed ----------
 let running = false;
 export async function tick() {
   if (running || !rq.connected()) return;
   running = true;
   try {
-    const retry = await db.select('report_orders', { status: eq('pending'), roofquery_order_id: 'is.null', rq_attempts: 'gt.0', rq_next_try_at: 'lte.' + now(), order: 'rq_next_try_at.asc', limit: 10 });
-    for (const o of retry) await place(o.id);
     const stale = new Date(Date.now() - 15 * MIN).toISOString();
     const open = await db.select('report_orders', { roofquery_order_id: 'not.is.null', status: inList(['pending', 'in_progress']), rq_checked_at: 'lt.' + stale, order: 'rq_checked_at.asc', limit: 20 });
     for (const o of open) {
