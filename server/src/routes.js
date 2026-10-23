@@ -75,7 +75,7 @@ function publicProducts(p) {
 // Paid (or free): mark the order pending and send it to RoofQuery when that's connected.
 // A placement problem never fails the customer's request: it's recorded and retried in the background.
 async function markPaidAndPlace(order, company, payment) {
-  const patch = { status: 'pending', status_detail: roofquery.connected() ? null : 'Waiting for RoofQuery to be connected' };
+  const patch = { status: 'pending', status_detail: roofquery.connected() ? null : 'Waiting to be sent for measuring' };
   if (payment && payment.payment_id) patch.stripe_payment_id = payment.payment_id;
   if (payment && payment.receipt_url) patch.receipt_url = payment.receipt_url;
   const [saved] = await db.update('report_orders', { id: eq(order.id) }, patch);
@@ -323,7 +323,7 @@ export function registerRoutes(r) {
     if (m.company.subscription_status !== 'active' && !freeAccount(m)) fail(403, 'subscribers_only', 'Instant Squares is for subscribers. Start a free trial on the Account page to use them.');
     const lat = Number(b.lat), lon = Number(b.lon);
     if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) fail(422, 'invalid', 'Look up the property first.');
-    if (!roofquery.connected()) fail(503, 'not_connected', 'Instant Squares will work once RoofQuery is connected.');
+    if (!roofquery.connected()) fail(503, 'not_connected', 'Instant Squares isn\u2019t available right now.');
     rateLimit(null, 'iq|' + m.company.id, 120, 60 * 60 * 1000, 'You\u2019ve used Instant Squares a lot this hour. Try again in a little while.');
     let q;
     try { q = await roofquery.instantQuery(lat, lon); }
