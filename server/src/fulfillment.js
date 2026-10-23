@@ -10,7 +10,19 @@ const money = (c) => '$' + (c / 100).toFixed(2);
 const now = () => new Date().toISOString();
 // Wait before trying a failed placement again: 5 min, 15 min, 1 hour, then every 3 hours.
 const BACKOFF = [5, 15, 60, 180];
-const PERMANENT = new Set(['ADDRESS_INCOMPLETE', 'VALIDATION', 'validation']);
+// Refusals that retrying can't fix: the order is refunded instead.
+const PERMANENT = new Set(['ADDRESS_INCOMPLETE', 'VALIDATION', 'validation', 'PRODUCT_NOT_ENABLED', 'ESX_NOT_SUPPORTED']);
+// Errors where RoofQuery may not have heard the request at all (or is still placing it): retry with the same key,
+// so an order that did go through isn't placed twice. After any other refusal RoofQuery remembers the failed key,
+// so the next try needs a new one.
+const SAME_KEY = new Set(['unreachable', 'ORDER_IN_PROGRESS']);
+function orderKey(order) {
+  const tries = order.rq_attempts || 0;
+  const last = String(order.rq_error || '').split(':')[0];
+  // A gateway error (an error page, not RoofQuery's own answer) also leaves it unknown whether the order went through.
+  const n = tries && (SAME_KEY.has(last) || /^http_5/.test(last)) ? tries - 1 : tries;
+  return (order.report_type === 'storm_report' ? 'rs-storm-' : 'rs-order-') + order.id + (n ? '-' + n : '');
+}
 const BALANCE = new Set(['INSUFFICIENT_CREDITS', 'BILLING_SETUP_REQUIRED']);
 
 // ---------- signed download links ----------
@@ -36,7 +48,17 @@ export async function place(orderId) {
   if (!order || order.status !== 'pending' || order.roofquery_order_id) return order;
   try {
     if (order.report_type === 'storm_report') return await placeStorm(order);
-    const r = await rq.placeOrder(order);
+    // The order keeps the company's brand for good, so its profile is brought up to date first.
+    const company = order.company_id ? await db.one('companies', { id: eq(order.company_id) }) : null;
+    let brand = company ? await rq.ensureBrand(company) : null, r;
+    try { r = await rq.placeOrder(order, { key: orderKey(order), brand }); }
+    catch (e) {
+      if (e.code !== 'BRAND_NOT_FOUND' || !company) throw e;
+      // The profile was deleted in RoofQuery's portal: make a new one and try once more (a new key, as this one failed).
+      await db.update('companies', { id: eq(company.id) }, { roofquery_brand_profile_id: null, roofquery_brand_hash: null });
+      brand = await rq.ensureBrand({ ...company, roofquery_brand_profile_id: null, roofquery_brand_hash: null });
+      r = await rq.placeOrder(order, { key: orderKey(order) + '-b', brand });
+    }
     const [saved] = await db.update('report_orders', { id: eq(order.id) }, { roofquery_order_id: r.orderId, rq_status: r.status, rq_error: null, rq_next_try_at: null, rq_checked_at: now(), status_detail: null });
     return apply(saved, r);
   } catch (e) {
@@ -66,16 +88,18 @@ export async function place(orderId) {
 
 // A Storm Report comes back finished in the same response (about 2 seconds), so it's delivered at once.
 async function placeStorm(order) {
-  const r = await rq.placeStorm(order);
+  const r = await rq.placeStorm(order, { key: orderKey(order) });
   const [saved] = await db.update('report_orders', { id: eq(order.id) }, {
     roofquery_order_id: r.orderId, rq_status: r.status || 'completed', rq_error: null, rq_next_try_at: null, rq_checked_at: now(),
-    status: 'delivered', status_detail: null, completed_at: r.createdAt || now(), measurements: { storm: stormData(r) }
+    status: 'delivered', status_detail: null, completed_at: r.completedAt || r.createdAt || now(), measurements: { storm: stormData(r) }
   });
   if (saved) await tellReady(saved);
   return saved || order;
 }
 // What we keep of a Storm Report for the report page. The weather data never changes, so it's stored once.
-function stormData(r) {
+function stormData(order) {
+  // The weather data is under `storm`; the property, billing and files are on the order itself.
+  const r = { ...(order.storm || {}), property: order.property, billing: order.billing };
   const s = r.summary || {}, num = (v) => (typeof v === 'number' ? v : null);
   const pick = (o, keys) => (o ? Object.fromEntries(keys.filter((k) => o[k] !== undefined).map((k) => [k, o[k]])) : null);
   return {
@@ -88,7 +112,8 @@ function stormData(r) {
     hail: ((r.hail && r.hail.events) || []).slice(0, 40).map((e) => pick(e, ['date', 'atPropertyIn', 'within1MiIn', 'within3MiIn', 'within5MiIn', 'largestReport', 'confidence', 'damageChance'])),
     wind: ((r.wind && r.wind.events) || []).slice(0, 40).map((e) => pick(e, ['date', 'within1MiMph', 'within3MiMph', 'within5MiMph', 'damageReports', 'station', 'tornado', 'confidence', 'damageChance'])),
     days: (r.stormDays || []).slice(0, 80).map((e) => pick(e, ['date', 'hazards', 'confidence', 'maxHailIn', 'maxGustMph', 'evidence'])),
-    has_map: !!(r.map && r.map.imageUrl), nothing_found: !!(r.billing && r.billing.charged === false)
+    has_map: (order.files || []).some((f) => f && f.name === 'map.png') || !!(r.map && (r.map.imageUrl || r.map.swath)),
+    nothing_found: !!(r.billing && r.billing.charged === false)
   };
 }
 // The five Storm Report PDFs. Date of Loss needs a date, asked when it's downloaded.
@@ -142,16 +167,21 @@ export async function apply(order, r) {
     patch.status_detail = 'Couldn’t be measured' + (r.reason ? ': ' + r.reason : '');
   } else if (r.statusDetail && r.statusDetail.label) patch.status_detail = r.statusDetail.label;
   if (next && RANK[next] >= RANK[order.status]) patch.status = next;
+  // RoofQuery can still deliver an order it cancelled. The customer was refunded then, so it's theirs at no charge.
+  const lateDelivery = next === 'delivered' && order.status === 'failed' && order.roofquery_order_id;
+  if (lateDelivery) patch.status = 'delivered';
   // First word that measuring has started: claimed with a guarded update so it's emailed once.
   let started = false;
   if (next === 'in_progress' && order.status === 'pending') started = (await db.update('report_orders', { id: eq(order.id), status: eq('pending') }, { status: 'in_progress' })).length === 1;
   const [saved] = await db.update('report_orders', { id: eq(order.id) }, patch);
   if (!saved) return order;
   if (started && saved.status === 'in_progress') await tellStarted(saved);
+  if (lateDelivery) await alertAdmin(`RS-${saved.report_number} was delivered after all`, `RoofQuery delivered RS-${saved.report_number} (${saved.address}) after cancelling it. The customer was refunded when it was cancelled, so it's been sent to them at no charge.`);
   if (saved.status === 'delivered' && order.status !== 'delivered') await tellReady(saved);
   // A delivered report came back corrected (a finished revision, or new measurements): send the new files.
   else if (saved.status === 'delivered' && order.status === 'delivered' && order.roofquery_order_id) {
-    const revised = st === 'revision_completed' && order.rq_status !== 'revision_completed';
+    // A finished revision: the order goes from revisions_requested back to completed (revision_completed is only an event now).
+    const revised = (order.rq_status === 'revisions_requested' && st === 'completed') || (st === 'revision_completed' && order.rq_status !== 'revision_completed');
     const changed = !!patch.measurements && !sameJson(patch.measurements, order.measurements);
     if (revised || changed) await tellCorrected(saved);
   }
@@ -233,7 +263,7 @@ export async function attachment(order, kind) {
     const company = order.company_id ? await db.one('companies', { id: eq(order.company_id) }) : null;
     const brand = (kind === 'pdf' || template) && company ? await rq.ensureBrand(company) : null;
     const res = template ? await rq.fetchStormPdf(order.roofquery_order_id, template, { brand, details: order.order_details || {} })
-      : await rq.fetchFile(order.roofquery_order_id, kind, { brand });
+      : await rq.fetchFile(order.roofquery_order_id, kind, { brand, esxPaid: !!order.esx_purchased });
     const content = Buffer.from(await res.arrayBuffer());
     const street = String(order.address || '').split(',')[0].replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40);
     const filename = template ? `RS-${order.report_number}_${template}.pdf` : `RS-${order.report_number}${street ? '_' + street : ''}.${kind}`;
@@ -327,6 +357,9 @@ export async function esxPaid(orderId, paymentId, receiptUrl, priceCents) {
   const claimed = await db.update('report_orders', { id: eq(order.id), esx_purchased: eq(false) }, patch);
   if (!claimed.length) return order;
   const saved = claimed[0];
+  // Add it to the RoofQuery order now, so it's ready with the report (a download adds it too, if this fails).
+  // Not placed yet: the order goes to RoofQuery with the ESX included.
+  if (saved.roofquery_order_id) await rq.addEsx(saved.roofquery_order_id).catch((e) => console.error('[roofquery] adding ESX to RS-' + saved.report_number, e.code || '', e.message));
   try {
     const who = await recipient(saved);
     if (who) {

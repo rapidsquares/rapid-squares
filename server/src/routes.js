@@ -544,7 +544,7 @@ export function registerRoutes(r) {
     let up;
     // Date of Loss without a date can't be made (an old emailed link, say): show the report page instead.
     if (stormTemplate === 'date_of_loss' && !(o.order_details && o.order_details.date_of_loss)) { res.writeHead(303, { Location: `${config.appUrl}/storm-report.html?id=${o.id}` }); return res.end(); }
-    try { up = stormTemplate ? await roofquery.fetchStormPdf(o.roofquery_order_id, stormTemplate, { brand, details: o.order_details || {} }) : await roofquery.fetchFile(o.roofquery_order_id, kind, { brand }); }
+    try { up = stormTemplate ? await roofquery.fetchStormPdf(o.roofquery_order_id, stormTemplate, { brand, details: o.order_details || {} }) : await roofquery.fetchFile(o.roofquery_order_id, kind, { brand, esxPaid: !!o.esx_purchased }); }
     catch (e) {
       if (e.status === 409) fail(409, 'not_ready', 'This report is being updated. Try again in a few minutes.');
       fail(502, 'download_failed', 'The file couldn\u2019t be downloaded right now. Try again in a minute.');

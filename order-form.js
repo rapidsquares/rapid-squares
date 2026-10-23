@@ -325,7 +325,7 @@
   // One line under each report's name.
   var BLURB = {
     storm_report: 'Hail, wind and tornado history for the last 5 years. 5 PDFs, ready in seconds.',
-    certified_residential: 'Squares and an estimated pitch for each building. About an hour.',
+    certified_residential: 'Squares and an estimated pitch for each building. Under 30 minutes.',
     premium_residential: 'Full measurement report with the roof sketch. Under 2 hours.',
     commercial: 'Every building on the property measured.'
   };

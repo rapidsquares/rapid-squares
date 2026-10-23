@@ -65,7 +65,9 @@ export function addressParts(order) {
 }
 
 // ---------- ordering ----------
-export async function placeOrder(order) {
+// key: the Idempotency-Key for this try (a new one after RoofQuery refused the last). brand: the company's
+// brand profile, which the order keeps for good.
+export async function placeOrder(order, { key, brand } = {}) {
   const { parts, missing } = addressParts(order);
   if (missing.length) throw new RqError(400, 'ADDRESS_INCOMPLETE', `The address is missing its ${missing.join(', ')}.`);
   const body = {
@@ -73,29 +75,31 @@ export async function placeOrder(order) {
     latitude: order.lat, longitude: order.lon,
     // What to measure, as chosen when ordering (older orders: commercial measures every building).
     scope: (order.order_details && order.order_details.scope) || (order.report_type === 'commercial' ? 'all_structures' : rq.scope),
-    reportType: REPORT_TYPE[order.report_type] || 'residential',
-    reportName: 'RS-' + order.report_number
+    reportType: REPORT_TYPE[order.report_type] || 'residential'
   };
+  // The ESX is part of the order when it was bought with it (Rapid Squares never has one).
+  if (body.reportType !== 'rapid_squares') body.esx = !!order.esx_purchased;
+  if (brand) body.brand = brand;
   // Optional job details from the order form. The claim number also names the ESX file.
+  // (Client details stay with us: RoofQuery no longer takes them.)
   const d = order.order_details || {};
   if (d.claim) body.claim = d.claim;
   if (d.notes) body.notes = d.notes;
-  const [first, ...rest] = String(d.client_name || '').split(/\s+/).filter(Boolean);
-  const client = { firstName: first, lastName: rest.join(' ') || undefined, email: d.client_email, phone: d.client_phone };
-  if (Object.values(client).some(Boolean)) body.clientInfo = Object.fromEntries(Object.entries(client).filter(([, v]) => v).map(([k, v]) => [k, String(v).slice(0, 200)]));
-  return json('POST', '/api/v1/reports/orders', { body, idempotencyKey: 'rs-order-' + order.id });
+  return json('POST', '/api/v1/reports/orders', { body, idempotencyKey: key || 'rs-order-' + order.id });
 }
+// Adds the Xactimate ESX to an order already placed. Safe to call twice: RoofQuery charges once.
+export const addEsx = (rqId) => json('POST', `/api/v1/reports/orders/${encodeURIComponent(rqId)}/esx`);
 // Storm Report (open beta): hail, wind and tornado history. The response is the finished report.
 export const STORM_TEMPLATES = { weather_history: 'Weather History', hail_verification: 'Hail Verification', wind_verification: 'Wind Verification', date_of_loss: 'Date of Loss', homeowner: 'Homeowner Storm Summary' };
-export async function placeStorm(order) {
+export async function placeStorm(order, { key } = {}) {
   const { parts, missing } = addressParts(order);
   if (missing.length) throw new RqError(400, 'ADDRESS_INCOMPLETE', `The address is missing its ${missing.join(', ')}.`);
   // Date of loss, claim, insured name and notes are asked per PDF download instead (see fetchStormPdf).
   const body = {
-    country: parts.country, street: parts.street, city: parts.city, state: parts.state, postalCode: parts.postalCode,
+    reportType: 'storm', country: parts.country, street: parts.street, city: parts.city, state: parts.state, postalCode: parts.postalCode,
     latitude: order.lat, longitude: order.lon, reportName: 'RS-' + order.report_number
   };
-  return json('POST', '/api/v1/storm/orders', { body, idempotencyKey: 'rs-storm-' + order.id });
+  return json('POST', '/api/v1/reports/orders', { body, idempotencyKey: key || 'rs-storm-' + order.id });
 }
 // One PDF, with this download's details (date of loss, claim number, insured name, notes).
 export async function fetchStormPdf(rqId, template, { brand, details = {} } = {}) {
@@ -105,7 +109,7 @@ export async function fetchStormPdf(rqId, template, { brand, details = {} } = {}
   if (details.insured_name) body.insuredName = details.insured_name;
   if (details.notes) body.notes = details.notes;
   // POST takes the same parameters as a JSON body, so long notes never hit a URL length limit.
-  return api('POST', `/api/v1/storm/orders/${encodeURIComponent(rqId)}/pdf`, { body, auth: false });
+  return api('POST', `/api/v1/reports/orders/${encodeURIComponent(rqId)}/pdf`, { body, auth: false });
 }
 // One roof drawing: target is 'all' or a building number; type is lengths, area or pitch.
 // SVG, because RoofQuery's PNGs currently come out with blank boxes where the numbers should be.
@@ -128,7 +132,7 @@ export async function rapidOutlines(rqId) {
   })).filter((b) => b.outlines.length);
   return { width, height, buildings };
 }
-export const fetchStormMap = (rqId) => api('GET', `/api/v1/storm/orders/${encodeURIComponent(rqId)}/map.png`, { auth: false });
+export const fetchStormMap = (rqId) => api('GET', `/api/v1/reports/orders/${encodeURIComponent(rqId)}/map.png`, { auth: false });
 export const getOrder = (rqId) => json('GET', `/api/v1/reports/orders/${encodeURIComponent(rqId)}/status`);
 export const identity = () => json('GET', '/api/v1/identity');
 // Instant Query (beta): roof outlines, pitch and area for every building at a point, plus storm history.
@@ -137,11 +141,19 @@ export const instantQuery = (lat, lon) => json('POST', '/api/v1/instant-query', 
 export const webhooks = () => json('GET', '/api/v1/webhooks');
 
 // ---------- files (these RoofQuery routes take no key: the order id is the credential) ----------
-export async function fetchFile(rqId, kind, { brand } = {}) {
+// The PDF prints the brand the order was placed with; `brand` only applies to orders from before 22 Oct 2026.
+// esxPaid: the roofer asked for the ESX and paid for it. Only then, if RoofQuery's order doesn't have it yet,
+// is it added (RoofQuery charges us for that upgrade).
+export async function fetchFile(rqId, kind, { brand, esxPaid = false } = {}) {
   const qs = new URLSearchParams();
   if (kind === 'pdf') { qs.set('download', '1'); if (brand) qs.set('brand', brand); }
-  const q = qs.toString();
-  return api('GET', `/api/v1/reports/orders/${encodeURIComponent(rqId)}/${kind}${q ? '?' + q : ''}`, { auth: false });
+  const q = qs.toString(), get = () => api('GET', `/api/v1/reports/orders/${encodeURIComponent(rqId)}/${kind}${q ? '?' + q : ''}`, { auth: false });
+  try { return await get(); }
+  catch (e) {
+    if (kind !== 'esx' || e.code !== 'ESX_NOT_PURCHASED' || !esxPaid) throw e;
+    await addEsx(rqId);
+    return get();
+  }
 }
 
 // ---------- brand profiles: one per company, so PDFs carry the company's own name, logo and colors ----------
@@ -150,8 +162,10 @@ function brandFields(c) {
   const hex = (v) => (/^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(String(v || '').trim()) ? String(v).trim() : undefined);
   const color = hex(c.brand_color), textColor = hex(c.brand_text_color) || '#FFFFFF'; // header text defaults to white
   return {
-    name: cut(`${c.name} · ${c.id.slice(0, 8)}`, 80), companyName: cut(c.name, 80), address: cut(c.address, 160),
-    publicPhone: cut(c.phone, 32), publicEmail: cut(c.email, 160), brandColor: color, brandTextColor: textColor
+    companyName: cut(c.name, 80), address: cut(c.address, 160), licenseNumber: cut(c.license_number, 40),
+    publicPhone: cut(c.phone, 32), publicEmail: cut(c.email, 160), brandColor: color, brandTextColor: textColor,
+    // Never printed: who RoofQuery reaches if they need to ask about a property.
+    contactEmail: cut(c.email, 160), contactPhone: cut(c.phone, 32)
   };
 }
 // Returns the company's brand profile id, creating or updating it when the branding changed.
