@@ -72,15 +72,21 @@
             <tr><th scope="col">Report</th><th scope="col">With a subscription</th><th scope="col">Without</th><th scope="col"><span class="sr">Order</span></th></tr>
           </thead>
           <tbody>
+          <tr class="lp-pt-soonrow">
+            <th scope="row"><b>Instant Squares <span class="lp-pt-tag">Coming soon</span></b><span>Roof size and pitch instantly. Unlimited lookups.</span></th>
+            <td class="lp-pt-sub" data-label="With a subscription"><b class="lp-pt-incl">Included</b></td>
+            <td class="lp-pt-reg" data-label="Without"><span>Subscribers only</span></td>
+            <td class="lp-pt-go"><button type="button" class="btn btn-outline" disabled>Soon</button></td>
+          </tr>
           <tr>
-            <th scope="row"><b>Storm Report</b><span>Hail, wind and tornado history for the last 5 years. 5 PDFs, ready in seconds.</span></th>
-            <td class="lp-pt-sub" data-label="With a subscription"><b data-price="storm_report" data-sub>$3</b></td>
-            <td class="lp-pt-reg" data-label="Without"><span data-price="storm_report">$5</span></td>
+            <th scope="row"><b>Certified Rapid Squares</b><span>Squares and pitch for each building. Under 30 minutes.</span></th>
+            <td class="lp-pt-sub" data-label="With a subscription"><b data-price="certified_residential" data-sub>$5</b></td>
+            <td class="lp-pt-reg" data-label="Without"><span data-price="certified_residential">$8</span></td>
             <td class="lp-pt-go"><a href="order.html" class="btn btn-outline">Order</a></td>
           </tr>
           <tr class="lp-pt-main">
             <th scope="row"><b>Premium Residential</b><span>Full measurement report and roof sketch. Under 2 hours.</span></th>
-            <td class="lp-pt-sub" data-label="With a subscription"><b data-price="premium_residential" data-sub>$8</b></td>
+            <td class="lp-pt-sub" data-label="With a subscription"><b data-price="premium_residential" data-sub>$7</b></td>
             <td class="lp-pt-reg" data-label="Without"><span data-price="premium_residential">$12</span></td>
             <td class="lp-pt-go"><a href="order.html" class="btn btn-primary">Order</a></td>
           </tr>
@@ -91,16 +97,10 @@
             <td class="lp-pt-go"><a href="order.html" class="btn btn-outline">Order</a></td>
           </tr>
           <tr>
-            <th scope="row"><b>Certified Rapid Squares</b><span>Squares and pitch for each building. Under 30 minutes.</span></th>
-            <td class="lp-pt-sub" data-label="With a subscription"><b data-price="certified_residential" data-sub>$5</b></td>
-            <td class="lp-pt-reg" data-label="Without"><span data-price="certified_residential">$8</span></td>
+            <th scope="row"><b>Storm Report</b><span>Hail, wind and tornado history for the last 5 years. 5 PDFs, ready in seconds.</span></th>
+            <td class="lp-pt-sub" data-label="With a subscription"><b data-price="storm_report" data-sub>Free</b></td>
+            <td class="lp-pt-reg" data-label="Without"><span data-price="storm_report">$5</span></td>
             <td class="lp-pt-go"><a href="order.html" class="btn btn-outline">Order</a></td>
-          </tr>
-          <tr class="lp-pt-soonrow">
-            <th scope="row"><b>Instant Squares <span class="lp-pt-tag">Coming soon</span></b><span>Roof size and pitch instantly. Unlimited lookups.</span></th>
-            <td class="lp-pt-sub" data-label="With a subscription"><b class="lp-pt-incl">Included</b></td>
-            <td class="lp-pt-reg" data-label="Without"><span>Subscribers only</span></td>
-            <td class="lp-pt-go"><button type="button" class="btn btn-outline" disabled>Soon</button></td>
           </tr>
           </tbody>
         </table>
@@ -202,7 +202,8 @@
       document.querySelectorAll('[data-price]').forEach(function (n) {
         var id = n.getAttribute('data-price');
         if (id === 'esx') { if (r.esx_price_cents != null) n.textContent = money(r.esx_price_cents); return; }
-        var p = byId[id]; if (p) n.textContent = money(n.hasAttribute('data-sub') ? p.subscriber_price_cents : p.price_cents);
+        var p = byId[id], c = p && (n.hasAttribute('data-sub') ? p.subscriber_price_cents : p.price_cents);
+        if (p) n.textContent = c ? money(c) : 'Free';
       });
       var free = r.signup_free_reports || 0;
       document.querySelectorAll('[data-free-n]').forEach(function (n) { n.textContent = free; });

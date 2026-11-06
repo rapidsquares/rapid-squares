@@ -126,9 +126,9 @@ create table if not exists public.products (
 );
 insert into public.products (id, label, price_cents, subscriber_price_cents, esx_addon_allowed, available, delivery_minutes, sort) values
   ('certified_residential', 'Certified Residential Rapid Squares',  800,  500, false, true,   30, 1),
-  ('premium_residential',   'Premium Residential Report',          1200,  800, true,  true,  120, 2),
+  ('premium_residential',   'Premium Residential Report',          1200,  700, true,  true,  120, 2),
   ('commercial',            'Commercial Report',                   3000, 2500, true,  true,  null, 3),
-  ('storm_report',          'Storm Report',                         500,  300, false, true,  0,    4),
+  ('storm_report',          'Storm Report',                         500,    0, false, true,  0,    4),
   ('esx_addon',             'ESX file (Xactimate)',                 500,  500, false, true,  null, 9)
 on conflict (id) do update set
   label = excluded.label, price_cents = excluded.price_cents, subscriber_price_cents = excluded.subscriber_price_cents,

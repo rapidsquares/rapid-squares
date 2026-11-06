@@ -17,9 +17,9 @@
   var ALL_PERMS = ['orders.create', 'orders.view_all', 'orders.download', 'branding.edit', 'billing.manage', 'users.manage'];
   var PRODUCTS = {
     certified_residential: { label: 'Certified Residential Rapid Squares', price: 800, subscriber_price: 500, available: true, esx: false, delivery_minutes: 30 },
-    premium_residential: { label: 'Premium Residential Report', price: 1200, subscriber_price: 800, available: true, esx: true, delivery_minutes: 120 },
+    premium_residential: { label: 'Premium Residential Report', price: 1200, subscriber_price: 700, available: true, esx: true, delivery_minutes: 120 },
     commercial: { label: 'Commercial Report', price: 3000, subscriber_price: 2500, available: true, esx: true, delivery_minutes: null },
-    storm_report: { label: 'Storm Report', price: 500, subscriber_price: 300, available: true, esx: false, delivery_minutes: 0 }
+    storm_report: { label: 'Storm Report', price: 500, subscriber_price: 0, available: true, esx: false, delivery_minutes: 0 }
   };
   // What a Storm Report looks like (sample data; a live one comes from RoofQuery).
   var SAMPLE_STORM = {

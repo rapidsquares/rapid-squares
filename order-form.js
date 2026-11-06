@@ -346,10 +346,12 @@
       if (free) { now.appendChild(el('s', null, money(catalog.subscribed ? p.subscriber_price_cents : p.price_cents))); now.appendChild(document.createTextNode('Free')); }
       // Free account: the usual price greyed out, then $0.00.
       else if (catalog.free_account) { now.appendChild(el('s', null, money(p.price_cents))); now.appendChild(document.createTextNode(money(0))); }
+      // Free with a subscription (Storm Reports): the usual price crossed out.
+      else if (catalog.subscribed && !p.subscriber_price_cents) { now.appendChild(el('s', null, money(p.price_cents))); now.appendChild(document.createTextNode('Free')); }
       else now.textContent = money(priceFor(p));
       price.appendChild(now);
       // Subscribers see only their price; everyone else also sees what a subscription would cost.
-      if (!catalog.subscribed && !free) price.appendChild(el('span', 'opt-sub', money(p.subscriber_price_cents) + ' with subscription'));
+      if (!catalog.subscribed && !free) price.appendChild(el('span', 'opt-sub', (p.subscriber_price_cents ? money(p.subscriber_price_cents) : 'Free') + ' with subscription'));
       top.appendChild(name); top.appendChild(price);
       main.appendChild(top);
       main.appendChild(el('span', 'hint', p.available ? (BLURB[p.id] || '') : 'Not available to order yet'));
@@ -432,6 +434,7 @@
     $('od-total').textContent = money(t);
     var note = '';
     if (catalog.free_account) note = 'No charge on your account.';
+    else if (catalog.subscribed && t === 0 && current() && !current().subscriber_price_cents) note = 'Free with your subscription.';
     else if (usesFree()) note = 'Uses 1 of your free reports' + ($('od-esx').checked ? ', ESX file included.' : '.');
     else if (t > 0) note = RS.guest ? 'You’ll pay on Stripe’s secure page next, or with your saved card if you already have an account.' : (catalog.has_card === false ? 'You’ll add your card on Stripe’s secure page; it’s saved for next time.' : 'Charged to the card on file when you place the order.');
     $('od-note').textContent = note;

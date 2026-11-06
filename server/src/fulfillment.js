@@ -203,7 +203,7 @@ export async function tellPlaced(order, { customer = true } = {}) {
   try {
     const p = (await db.one('products', { id: eq(order.report_type) })) || { label: order.report_type };
     const label = p.label + (order.esx_purchased ? ' + ESX file' : '');
-    const total = order.used_free_report ? 'Free (one of your free reports)' : money(order.price_cents);
+    const total = order.used_free_report ? 'Free (one of your free reports)' : order.price_cents ? money(order.price_cents) : 'Free';
     const eta = p.delivery_minutes ? `\nUsually ready within ${p.delivery_minutes >= 60 ? Math.round(p.delivery_minutes / 60) + ' hour' + (p.delivery_minutes >= 120 ? 's' : '') : p.delivery_minutes + ' minutes'}.` : '';
     const who = customer ? await recipient(order) : null;
     if (who) {
@@ -279,7 +279,7 @@ async function tellReady(order) {
     const head = order.measurements && order.measurements.storm && order.measurements.storm.headline;
     const got = attachments.length ? `\n\nThe PDFs are attached${links.length ? '. These couldn\u2019t be attached; download them here:' : '.'}` : '\n\nDownload the PDFs:';
     // The only email for a storm report, so it carries the order details too.
-    const paid = `\n\nOrder: RS-${order.report_number}\nTotal: ${order.used_free_report ? 'Free' : money(order.price_cents || 0)}${order.receipt_url ? '\nReceipt: ' + order.receipt_url : ''}`;
+    const paid = `\n\nOrder: RS-${order.report_number}\nTotal: ${order.price_cents ? money(order.price_cents) : 'Free'}${order.receipt_url ? '\nReceipt: ' + order.receipt_url : ''}`;
     await email.send({ to: who.to, subject: `Your storm report RS-${order.report_number} is ready`, attachments,
       text: `Hi${first ? ' ' + first : ''},\n\nYour storm report for ${order.address} is ready.${head ? '\n\n' + head : ''}${paid}${got}${links.length ? '\n' + links.join('\n') : ''}\n\n${who.guest ? (links.length ? 'These links work for a year. Keep this email.' : 'Keep this email for your records.') : `See the full report, add a date of loss or claim number, and download every PDF: ${config.appUrl}/storm-report.html?id=${order.id}`}` });
     return;
