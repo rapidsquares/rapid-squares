@@ -4,6 +4,8 @@
 
 ## Reports
 
+- [Pricing](https://rapidsquares.com/pricing): every report's price, with and without a subscription, and the subscription plans.
+
 - [Premium Residential Roof Report](https://rapidsquares.com/residential-roof-report): a full aerial measurement of a house (and its detached garage, or every building): total area and roofing squares, the pitch of every face, every eave, rake, ridge, hip, valley and flashing length, a waste factor table from 0% to 24%, and length, area and pitch diagrams. Delivered in under 2 hours. $12, or $7 with a subscription; new accounts get their first Premium reports free. Optional Xactimate ESX file for $5.
 - [Rapid Squares](https://rapidsquares.com/rapid-squares): every building outlined on an aerial photo, with its roofing squares at an estimated pitch and at every pitch from 1/12 to 12/12, with 10%, 12% and 15% waste, plus footprint and perimeter. One-page PDF, delivered in under 30 minutes. $8, or $5 with a subscription. No ESX file.
 - [Commercial Roof Report](https://rapidsquares.com/commercial-roof-report): flat and low-slope roofs, every building on the property: total area and squares, parapet walls, eaves and wall flashing, pitch breakdown, waste factor table and diagrams. Usually delivered in about 8 hours. $30, or $25 with a subscription. Optional Xactimate ESX file for $5.
