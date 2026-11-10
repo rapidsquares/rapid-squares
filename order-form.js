@@ -539,6 +539,8 @@
   goTo('report');
   // Prefill from the landing page search: ?address=… (and &place=… when a Google suggestion was picked)
   var qs = new URLSearchParams(location.search), pre = qs.get('address'), preId = qs.get('place');
+  // From a report's own page: ?report=… picks that report once the list loads.
+  if (/^[a-z_]{3,40}$/.test(qs.get('report') || '') && !preselect) preselect = { report_type: qs.get('report') };
   if (pre && preId) { input.value = pre; choose({ label: pre, placeId: preId }); }
   else if (pre) { input.value = pre; if (RS.places.available) form.requestSubmit(); }
 })();

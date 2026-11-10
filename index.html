@@ -3,8 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Rapid Squares · Aerial Roof Reports</title>
-<meta name="description" content="Search any address, see the roof from above, and order an aerial roof measurement report. Premium reports are delivered in under 2 hours.">
+<title>Aerial Roof Measurement and Storm Reports | Rapid Squares</title>
+<meta name="description" content="Aerial roof measurement reports for any US or Canadian address: residential in under 2 hours, Rapid Squares in 30 minutes, commercial roofs and hail history.">
+<link rel="canonical" href="https://rapidsquares.com/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Rapid Squares">
+<meta property="og:title" content="Aerial roof reports, without the ladder">
+<meta property="og:description" content="Roof measurements, roofing squares and hail history for any address, delivered as a PDF with your branding.">
+<meta property="og:url" content="https://rapidsquares.com/">
+<meta property="og:image" content="https://rapidsquares.com/img/og-residential.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">[{"@context": "https://schema.org", "@type": "Organization", "name": "Rapid Squares", "url": "https://rapidsquares.com/", "logo": "https://rapidsquares.com/icon-512.png", "description": "Aerial roof measurement reports and hail and storm history reports for any address in the United States and Canada.", "contactPoint": {"@type": "ContactPoint", "contactType": "customer support", "email": "brett@rapidsquares.com"}}, {"@context": "https://schema.org", "@type": "WebSite", "name": "Rapid Squares", "url": "https://rapidsquares.com/"}, {"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "Do I need an account to order?", "acceptedAnswer": {"@type": "Answer", "text": "No. You can search an address and order as a guest; we email the report to you. A free account lets you try a subscription free for 30 days, keeps your order history, and lets you add your company branding and invite your team."}}, {"@type": "Question", "name": "What's in a report?", "acceptedAnswer": {"@type": "Answer", "text": "A Premium Residential report is a full report with a PDF and full sketch of the roof. You can add the Xactimate (ESX) file for $5."}}, {"@type": "Question", "name": "How fast will I get it?", "acceptedAnswer": {"@type": "Answer", "text": "Premium Residential reports are delivered in under 2 hours. Commercial reports are usually ready in about 8 hours."}}, {"@type": "Question", "name": "How much does it cost?", "acceptedAnswer": {"@type": "Answer", "text": "You see the exact price for each report type before you order. Subscribers get lower prices on every report, and you can try a subscription free for 30 days. After the trial it's $100 a month (or $1,000 a year) unless you cancel."}}, {"@type": "Question", "name": "Can my whole team use one account?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Invite your team, and choose who can order, who can see every report, and who can manage billing or the team."}}]}]</script>
 <link rel="preconnect" href="https://atlas.microsoft.com" crossorigin>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -24,7 +35,16 @@
     <span class="brand-sub">Aerial Roof Reports</span>
   </a>
   <nav class="lp-nav" aria-label="Primary">
-    <a href="#reports" class="lp-hide-sm">Our reports</a>
+    <details class="lp-menu">
+      <summary>Reports</summary>
+      <div class="lp-menu-list">
+        <a href="residential-roof-report"><b>Premium Residential</b><span>Full roof report in under 2 hours</span></a>
+        <a href="rapid-squares"><b>Rapid Squares</b><span>Squares at every pitch in under 30 minutes</span></a>
+        <a href="commercial-roof-report"><b>Commercial</b><span>Flat and low-slope roofs</span></a>
+        <a href="hail-storm-report"><b>Storm Report</b><span>Hail and wind history in seconds</span></a>
+        <a href="index.html#reports" class="lp-menu-all">All reports and prices</a>
+      </div>
+    </details>
     <a href="#faq" class="lp-hide-sm">FAQ</a>
     <a href="#contact" class="lp-hide-sm">Contact</a>
     <a href="signin.html" id="lp-account">Sign in</a>
@@ -37,7 +57,6 @@
   <section class="lp-hero" aria-labelledby="lp-h1">
     <div class="lp-wrap lp-hero-in">
       <div class="lp-hero-copy">
-        <p class="lp-eyebrow">Aerial roof measurements</p>
         <h1 id="lp-h1">Roof reports from above, without the ladder.</h1>
         <p class="lp-lede">Search any address, see the roof from the sky, and order a measurement report. Premium reports are delivered in under 2 hours.</p>
         <form class="lp-search" action="order.html" method="get" role="search">
@@ -79,25 +98,25 @@
             <td class="lp-pt-go"><button type="button" class="btn btn-outline" disabled>Soon</button></td>
           </tr>
           <tr>
-            <th scope="row"><b>Certified Rapid Squares</b><span>Squares and pitch for each building. Under 30 minutes.</span></th>
+            <th scope="row"><b><a href="rapid-squares">Certified Rapid Squares</a></b><span>Squares and pitch for each building. Under 30 minutes.</span></th>
             <td class="lp-pt-sub" data-label="With a subscription"><b data-price="certified_residential" data-sub>$5</b></td>
             <td class="lp-pt-reg" data-label="Without"><span data-price="certified_residential">$8</span></td>
             <td class="lp-pt-go"><a href="order.html" class="btn btn-outline">Order</a></td>
           </tr>
           <tr class="lp-pt-main">
-            <th scope="row"><b>Premium Residential</b><span>Full measurement report and roof sketch. Under 2 hours.</span></th>
+            <th scope="row"><b><a href="residential-roof-report">Premium Residential</a></b><span>Full measurement report and roof sketch. Under 2 hours.</span></th>
             <td class="lp-pt-sub" data-label="With a subscription"><b data-price="premium_residential" data-sub>$7</b></td>
             <td class="lp-pt-reg" data-label="Without"><span data-price="premium_residential">$12</span></td>
             <td class="lp-pt-go"><a href="order.html" class="btn btn-primary">Order</a></td>
           </tr>
           <tr>
-            <th scope="row"><b>Commercial</b><span>Every building on the property measured.</span></th>
+            <th scope="row"><b><a href="commercial-roof-report">Commercial</a></b><span>Every building on the property measured.</span></th>
             <td class="lp-pt-sub" data-label="With a subscription"><b data-price="commercial" data-sub>$25</b></td>
             <td class="lp-pt-reg" data-label="Without"><span data-price="commercial">$30</span></td>
             <td class="lp-pt-go"><a href="order.html" class="btn btn-outline">Order</a></td>
           </tr>
           <tr>
-            <th scope="row"><b>Storm Report</b><span>Hail, wind and tornado history for the last 5 years. 5 PDFs, ready in seconds.</span></th>
+            <th scope="row"><b><a href="hail-storm-report">Storm Report</a></b><span>Hail, wind and tornado history for the last 5 years. 5 PDFs, ready in seconds.</span></th>
             <td class="lp-pt-sub" data-label="With a subscription"><b data-price="storm_report" data-sub>Free</b></td>
             <td class="lp-pt-reg" data-label="Without"><span data-price="storm_report">$5</span></td>
             <td class="lp-pt-go"><a href="order.html" class="btn btn-outline">Order</a></td>
@@ -175,6 +194,10 @@
   <div class="lp-wrap lp-foot-in">
     <span>© <span id="lp-year">2026</span> Rapid Squares</span>
     <nav aria-label="Footer">
+      <a href="residential-roof-report">Premium Residential</a>
+      <a href="rapid-squares">Rapid Squares</a>
+      <a href="commercial-roof-report">Commercial</a>
+      <a href="hail-storm-report">Storm Report</a>
       <a href="order.html">Order a report</a>
       <a href="signin.html">Sign in</a>
       <a href="#faq">FAQ</a>
@@ -189,6 +212,7 @@
 <script src="auth.js"></script>
 <script src="places.js"></script>
 <script src="landing-search.js"></script>
+<script src="menu.js"></script>
 <script>
   // Signed-in visitors (or sample data) get a shortcut into the app instead of "Sign in".
   (function () {

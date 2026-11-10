@@ -1,0 +1,13 @@
+# Public pages are open to every crawler, AI search included. The signed-in app isn't for search.
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /files/
+Disallow: /webhooks/
+Disallow: /orders
+Disallow: /account
+Disallow: /report.html
+Disallow: /storm-report.html
+Disallow: /signin
+
+Sitemap: https://rapidsquares.com/sitemap.xml

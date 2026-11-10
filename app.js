@@ -347,7 +347,7 @@
     var side = document.querySelector('.app-side a[href="orders.html?order=1"]');
     var dlg = null, first = new URLSearchParams(location.search), src = 'order.html?embed=1';
     if (first.get('order') && can('orders.create')) {
-      ['address', 'resume'].forEach(function (k) { if (first.get(k)) src += '&' + k + '=' + encodeURIComponent(first.get(k)); });
+      ['address', 'resume', 'report'].forEach(function (k) { if (first.get(k)) src += '&' + k + '=' + encodeURIComponent(first.get(k)); });
       history.replaceState(null, '', location.pathname);
       setTimeout(open);
     }
@@ -1220,7 +1220,7 @@
   if (page === 'order' && !RS.embed) {
     // Signed-in people order from Home now; this page is only for visitors without an account.
     var fwd = new URLSearchParams(location.search), to = 'orders.html?order=1';
-    ['address', 'resume'].forEach(function (k) { if (fwd.get(k)) to += '&' + k + '=' + encodeURIComponent(fwd.get(k)); });
+    ['address', 'resume', 'report'].forEach(function (k) { if (fwd.get(k)) to += '&' + k + '=' + encodeURIComponent(fwd.get(k)); });
     location.replace(to);
     return;
   }

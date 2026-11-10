@@ -75,7 +75,8 @@ const MIME = {
   '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'application/javascript; charset=utf-8',
   '.json': 'application/json; charset=utf-8', '.webmanifest': 'application/manifest+json; charset=utf-8',
   '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp',
-  '.gif': 'image/gif', '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8', '.pdf': 'application/pdf'
+  '.gif': 'image/gif', '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8', '.pdf': 'application/pdf',
+  '.xml': 'application/xml; charset=utf-8'
 };
 // Folders and files in the repo that must never be served to browsers.
 const PRIVATE_TOP = new Set(['server', 'supabase', 'node_modules', 'package.json', 'package-lock.json']);
@@ -93,8 +94,10 @@ export async function serveStatic(req, res, siteDir, pathname) {
   if (rel === '') rel = 'index.html';
   const parts = rel.split('/');
   if (parts.some((p) => p === '..' || p.startsWith('.')) || PRIVATE_TOP.has(parts[0])) return false;
-  const full = path.resolve(siteDir, rel);
+  let full = path.resolve(siteDir, rel);
   if (!full.startsWith(siteDir + path.sep)) return false;
+  // Clean addresses for pages: /rapid-squares serves rapid-squares.html.
+  if (!path.extname(full)) full += '.html';
   const ext = path.extname(full).toLowerCase();
   if (PRIVATE_EXT.has(ext)) return false;
   let data, st;
